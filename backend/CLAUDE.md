@@ -4,7 +4,7 @@ Guidance for working in `backend/`. For the shared payment domain (aggregates, s
 
 ## Current implementation state
 
-The backend is still mostly at the Spring Initializr skeleton stage. `src/main/kotlin/paytech/practice/pay/PracticePayApplication.kt` (the root project) is the only hand-written application code so far. `modules:domain`, `modules:application`, and `db-core` are real Gradle subprojects (see `settings.gradle.kts`); the rest are still empty placeholders not wired in. Don't assume code exists in the placeholder folders; check before referencing them, and re-verify this layout before relying on it since it has already been restructured once:
+The backend is still mostly at the Spring Initializr skeleton stage. `src/main/kotlin/paytech/practice/pay/PracticePayApplication.kt` (the root project) is the only hand-written application code so far. `modules:domain`, `modules:application`, `db-core`, and `architecture-tests` are real Gradle subprojects (see `settings.gradle.kts`); the rest are still empty placeholders not wired in. Don't assume code exists in the placeholder folders; check before referencing them, and re-verify this layout before relying on it since it has already been restructured once:
 
 ```
 apps/               api-admin, api-merchant, api-payment, batch   (placeholder)
@@ -15,7 +15,7 @@ modules/
   infra-blockchain/  (placeholder)
   infra-persistence/ (placeholder)
 db-core/             real Gradle subproject — Flyway migrations + jOOQ codegen (see below)
-architecture-tests/  (placeholder)
+architecture-tests/  real Gradle subproject, test-only (no src/main) — ArchUnit rules over other modules' compiled classes
 ```
 
 The root project does not yet depend on `modules:application`, `modules:domain`, or `db-core` — nothing wires them into the running app yet.
@@ -42,7 +42,7 @@ gradlew.bat test --tests "*PracticePayApplicationTests.contextLoads"          # 
 - Spring context tests register `io.kotest.extensions.spring.SpringExtension` via `extensions(SpringExtension)` inside the spec body, alongside the usual `@SpringBootTest`/`@Import` annotations (see `PracticePayApplicationTests.kt`).
 - Mocking uses **MockK** (`io.mockk`), not Mockito.
 - Assertions use `kotest-assertions-core` (`shouldBe`, etc.).
-- Architecture rules (e.g. domain must not depend on Spring/jOOQ, the hexagonal layering below) are enforced with **ArchUnit** (`com.tngtech.archunit:archunit`), called from inside ordinary Kotest `test { }` blocks via `ClassFileImporter().importPackages(...)` + `.check(classes)` — not the separate `archunit-junit5` engine/`@AnalyzeClasses` style, to keep one test-writing convention (Kotest) for the whole project.
+- Architecture rules (e.g. domain must not depend on Spring/jOOQ, the hexagonal layering below) are enforced with **ArchUnit** (`com.tngtech.archunit:archunit`), called from inside ordinary Kotest `test { }` blocks via `ClassFileImporter().importPackages(...)` + `.check(classes)` — not the separate `archunit-junit5` engine/`@AnalyzeClasses` style, to keep one test-writing convention (Kotest) for the whole project. Cross-module rules (checking one module's compiled classes from outside it) live in `architecture-tests` (test-only Gradle subproject; the module(s) under test are added as `testImplementation` deps — see `DomainPurityTest`).
 
 ## Architecture (hexagonal)
 
