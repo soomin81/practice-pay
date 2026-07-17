@@ -5,6 +5,7 @@ import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import paytech.practice.pay.domain.merchant.MerchantId
+import paytech.practice.pay.domain.shared.EventId
 import paytech.practice.pay.domain.shared.HttpUrl
 import java.time.Instant
 

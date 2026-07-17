@@ -1,4 +1,4 @@
-package paytech.practice.pay.domain.webhook
+package paytech.practice.pay.domain.shared
 
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.FunSpec

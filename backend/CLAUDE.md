@@ -9,11 +9,11 @@ The backend is still mostly at the Spring Initializr skeleton stage. `src/main/k
 ```
 apps/               api-admin, api-merchant, api-payment, batch   (placeholder)
 modules/
-  application/       real Gradle subproject, depends on domain, no source yet
+  application/       real Gradle subproject, depends on domain; CreatePaymentUseCase (the payment-creation slice) + its outbound ports (see Architecture)
   common/            (placeholder)
-  domain/            real Gradle subproject, no dependencies; all 8 payment aggregates + Identity/API key aggregates (see Domain code conventions)
+  domain/            real Gradle subproject, no dependencies; all 8 payment aggregates + OutboxEvent + Identity/API key aggregates (see Domain code conventions)
   infra-blockchain/  (placeholder)
-  infra-persistence/ (placeholder)
+  infra-persistence/ (placeholder) — will implement modules:application's outbound ports with jOOQ
 db-core/             real Gradle subproject — Flyway migrations + jOOQ codegen (see below)
 architecture-tests/  real Gradle subproject, test-only (no src/main) — ArchUnit rules over other modules' compiled classes
 ```
@@ -61,9 +61,21 @@ Planned module layering (see `docs/architecture/persistence-jooq.md`): `domain` 
 - Every external system (blockchain RPC, exchange, webhook delivery) sits behind an outbound Port; adapters implement the port, never the reverse.
 - State-transition rules live on the domain aggregate itself, never in a Controller or Repository.
 
+### Application layer conventions (`modules:application`)
+
+Established by the first use case, `CreatePaymentUseCase` (`application.payment`) — follow this shape for future use cases:
+
+- **Outbound ports** live in `application.port.outbound` as plain Kotlin interfaces (or `fun interface` when the port has exactly one non-generic method, e.g. `IdGenerator`) — no Spring/jOOQ dependency, matching the domain-purity rule one layer up. One Command Repository port per aggregate (`save`/`findBy...`, matching "Command Repository는 Aggregate를 저장하고 복원한다"), plus supporting ports for cross-cutting concerns the use case needs but that aren't persistence (`ExchangeRateProvider`, `IdGenerator`, `TransactionManager`).
+- **`TransactionManager`** (`fun <T> runInTransaction(block: () -> T): T`) is how a use case satisfies a documented multi-aggregate transaction boundary (the "트랜잭션 경계" section of `docs/architecture/persistence-jooq.md`) without the application layer depending on Spring's `@Transactional` or knowing which persistence framework is behind it. Reuse this port for the other two documented boundaries (payment completion, exchange completion) when those use cases are built — don't invent a bespoke bundled-repository port per use case instead.
+- **A use case is a plain class with one `execute(command): result` method** — no separate inbound port interface, since nothing yet needs more than one implementation. `Command`/`Result` are small data classes named `<UseCaseName>Command`/`<UseCaseName>Result` in the same package. Returning an identifier (or other minimal data) from a creation command's `execute` is an accepted CQS exception at the use-case layer — the CQS rule above is about domain aggregate methods, not use-case entry points.
+- **Idempotency checks** (see "Idempotency keys" below) happen at the start of `execute`, before any port write — look up by the documented key and short-circuit with the existing result if found. This is a best-effort fast path, not the final guarantee; the DB's own `UNIQUE` constraint is still the last line of defense against a race between two concurrent requests.
+- Gaps `docs/` doesn't resolve yet (e.g. where a merchant's receiving wallet/network comes from) are taken as `Command` inputs for now rather than invented as new ports/tables — flagged in that `Command`'s KDoc so the simplification is easy to find and replace later.
+
 ## Domain code conventions
 
-All aggregates from `docs/domain/domain-model.md` are built: `Merchant`, `Payment`, `CheckoutSession`, `BlockchainTransaction`, `ExchangeOrder`, `SettlementReceivable`, `WebhookDelivery`, plus `PaymentQuote` and the identity/API key aggregates (`InternalUser`, `MerchantUser`, `AccountInvitation` in `domain.identity`; `MerchantApiKey` in `domain.apikey`). Follow the same shape for any future aggregate.
+All aggregates from `docs/domain/domain-model.md` are built: `Merchant`, `Payment`, `CheckoutSession`, `BlockchainTransaction`, `ExchangeOrder`, `SettlementReceivable`, `WebhookDelivery`, plus `PaymentQuote`, `OutboxEvent` (`domain.outbox`), and the identity/API key aggregates (`InternalUser`, `MerchantUser`, `AccountInvitation` in `domain.identity`; `MerchantApiKey` in `domain.apikey`). Follow the same shape for any future aggregate.
+
+`Merchant` and `OutboxEvent` aren't covered by `docs/domain/state-transitions.md` — both have their transitions inferred directly from the DB schema (CHECK constraints + column shape), with that reasoning recorded in the respective status enum's KDoc rather than added to `docs/domain/state-transitions.md` itself (that file reflects reviewed business rules, not implementation-inferred ones).
 
 - **Value Objects** wrap a single primitive as a Kotlin `@JvmInline value class`, validate in an `init { require(...) }` block, and carry KDoc explaining which DB column they map to and why the type exists (see `PaymentId`, `MerchantId`, `Money`, `TokenAmount`, `WalletAddress`, `Asset`, `BlockchainNetwork`, `MerchantOrderId`, `LoginId`, `Email`, `ApiKeyPrefix`, etc.). Reuse a VO across aggregates once a second one needs the identical concept (e.g. `WalletAddress`/`BlockchainNetwork`/`HttpUrl` live in `domain.shared`; `AccountStatus`/`LoginId`/`Email` live in `domain.identity` and are shared by `InternalUser` and `MerchantUser`) rather than duplicating it per-aggregate.
 - **Aggregates** expose a `private` constructor plus two companion factories: `create(...)` (or a more specifically named creation factory, e.g. `Merchant.create`, `MerchantUser.inviteInitialOwner`/`inviteSubAccount`, `InternalUser.bootstrap`/`invite`) for a brand-new instance (fixes the initial state and defaults nullable fields to `null`), and `reconstitute(...)` for rebuilding from persisted values (every field explicit). Never expose a public constructor that lets a caller assemble an aggregate in an inconsistent state.

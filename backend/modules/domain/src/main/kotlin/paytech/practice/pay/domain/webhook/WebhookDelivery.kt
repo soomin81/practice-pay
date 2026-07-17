@@ -1,6 +1,7 @@
 package paytech.practice.pay.domain.webhook
 
 import paytech.practice.pay.domain.merchant.MerchantId
+import paytech.practice.pay.domain.shared.EventId
 import paytech.practice.pay.domain.shared.HttpUrl
 import java.time.Instant
 
