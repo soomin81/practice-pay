@@ -11,7 +11,7 @@ apps/               api-admin, api-merchant, api-payment, batch   (placeholder)
 modules/
   application/       real Gradle subproject, depends on domain, no source yet
   common/            (placeholder)
-  domain/            real Gradle subproject, no dependencies; Payment aggregate + VOs (see Domain code conventions)
+  domain/            real Gradle subproject, no dependencies; all 8 payment aggregates + Identity/API key aggregates (see Domain code conventions)
   infra-blockchain/  (placeholder)
   infra-persistence/ (placeholder)
 db-core/             real Gradle subproject — Flyway migrations + jOOQ codegen (see below)
@@ -61,11 +61,14 @@ Planned module layering (see `docs/architecture/persistence-jooq.md`): `domain` 
 
 ## Domain code conventions
 
-Established while building `Payment` and its value objects in `modules/domain` — follow the same shape for the remaining aggregates (`Merchant`, `CheckoutSession`, `BlockchainTransaction`, `ExchangeOrder`, `SettlementReceivable`, `WebhookDelivery`).
+All aggregates from `docs/domain/domain-model.md` are built: `Merchant`, `Payment`, `CheckoutSession`, `BlockchainTransaction`, `ExchangeOrder`, `SettlementReceivable`, `WebhookDelivery`, plus `PaymentQuote` and the identity/API key aggregates (`InternalUser`, `MerchantUser`, `AccountInvitation` in `domain.identity`; `MerchantApiKey` in `domain.apikey`). Follow the same shape for any future aggregate.
 
-- **Value Objects** wrap a single primitive as a Kotlin `@JvmInline value class`, validate in an `init { require(...) }` block, and carry KDoc explaining which DB column they map to and why the type exists (see `PaymentId`, `MerchantId`, `Money`, `TokenAmount`, `WalletAddress`, `Asset`, `BlockchainNetwork`, `MerchantOrderId`).
-- **Aggregates** expose a `private` constructor plus two companion factories: `create(...)` for a brand-new instance (fixes the initial state, e.g. `PaymentStatus.CREATED`, and defaults nullable fields to `null`) and `reconstitute(...)` for rebuilding from persisted values (every field explicit). Never expose a public constructor that lets a caller assemble an aggregate in an inconsistent state.
-- **State-transition methods** are Commands (CQS): they validate the current state via a small private `checkTransition(allowed, target)` helper and throw `IllegalStateException` on an invalid transition, matching the signatures in `docs/domain/domain-model.md` exactly (don't add parameters the docs don't have, e.g. `fail()` takes only `reason` and `failedAt`, not a message).
+- **Value Objects** wrap a single primitive as a Kotlin `@JvmInline value class`, validate in an `init { require(...) }` block, and carry KDoc explaining which DB column they map to and why the type exists (see `PaymentId`, `MerchantId`, `Money`, `TokenAmount`, `WalletAddress`, `Asset`, `BlockchainNetwork`, `MerchantOrderId`, `LoginId`, `Email`, `ApiKeyPrefix`, etc.). Reuse a VO across aggregates once a second one needs the identical concept (e.g. `WalletAddress`/`BlockchainNetwork`/`HttpUrl` live in `domain.shared`; `AccountStatus`/`LoginId`/`Email` live in `domain.identity` and are shared by `InternalUser` and `MerchantUser`) rather than duplicating it per-aggregate.
+- **Aggregates** expose a `private` constructor plus two companion factories: `create(...)` (or a more specifically named creation factory, e.g. `Merchant.create`, `MerchantUser.inviteInitialOwner`/`inviteSubAccount`, `InternalUser.bootstrap`/`invite`) for a brand-new instance (fixes the initial state and defaults nullable fields to `null`), and `reconstitute(...)` for rebuilding from persisted values (every field explicit). Never expose a public constructor that lets a caller assemble an aggregate in an inconsistent state.
+- **State-transition methods** are Commands (CQS): they validate the current state via a small private `checkTransition(allowed, target)` helper and throw `IllegalStateException` on an invalid transition, matching the signatures in `docs/domain/domain-model.md` exactly where documented (don't add parameters the docs don't have, e.g. `fail()` takes only `reason` and `failedAt`, not a message). Where a doc doesn't cover an aggregate's transitions at all (`Merchant`, and everything under "Identity & access" beyond the shared `AccountStatus` flow), the transitions are inferred from the schema's status CHECK constraint and column shape, with that reasoning recorded in the enum's KDoc.
+- **Two deliberate exceptions to the create()/reconstitute() pattern**, both because the data shape doesn't support "new vs restored" as a meaningful distinction:
+  - `PaymentQuote` is a plain `data class` with a public constructor — it's an immutable snapshot (no `status`, no transition methods; the `payment_quote` table has no `updated_at`/`version` either).
+  - `AccountInvitation`'s transition methods (`expire()`, `revoke()`) take no timestamp parameter, unlike every other aggregate — the `account_invitation` table has no `updated_at`/`version` column to write one into.
 - **This is a learning project (학습용 프로젝트)**: KDoc and `require`/`check` validation messages in domain code are written in **Korean**, even though identifiers stay in English. Explain the *why* (DB mapping, business rule, scope limits like "EIP-55 checksum 검증은 하지 않는다"), not just what the code does.
 
 ## Idempotency keys
