@@ -50,3 +50,58 @@ Content-Type: application/json
   "loginId": "{{devLoginId}}",
   "password": ""
 }
+
+### 내부 운영자 발급 — SUPER_ADMIN 세션으로 호출한다(위 로그인 요청이 먼저 실행돼 있어야 한다).
+### 응답의 invitationToken은 이 응답에서만 원문으로 보인다(1회성) — DB에는 Hash만 저장된다.
+POST {{apiAdminBaseUrl}}/admin/internal-users
+Content-Type: application/json
+
+{
+  "loginId": "new-operator-{{$timestamp}}",
+  "email": "new-operator-{{$timestamp}}@example.com",
+  "userName": "새 운영자",
+  "role": "OPERATOR"
+}
+
+> {%
+    client.test("발급 성공 (201)", () => {
+        client.assert(response.status === 201, "예상: 201, 실제: " + response.status);
+    });
+    client.test("응답에 invitationToken이 있다", () => {
+        client.assert(!!response.body.invitationToken, "invitationToken이 비어 있음");
+    });
+    client.global.set("issuedLoginId", response.body.loginId);
+%}
+
+### 같은 loginId로 재발급 — 409여야 한다(uk_internal_user_login_id)
+POST {{apiAdminBaseUrl}}/admin/internal-users
+Content-Type: application/json
+
+{
+  "loginId": "{{issuedLoginId}}",
+  "email": "another-email@example.com",
+  "userName": "중복 로그인 아이디",
+  "role": "OPERATOR"
+}
+
+> {%
+    client.test("로그인 아이디 중복 (409)", () => {
+        client.assert(response.status === 409, "예상: 409, 실제: " + response.status);
+    });
+%}
+
+### 잘못된 role 문자열 — 400이어야 한다(InternalUserRole.valueOf 실패)
+POST {{apiAdminBaseUrl}}/admin/internal-users
+Content-Type: application/json
+
+{
+  "loginId": "role-check-{{$timestamp}}",
+  "email": "role-check-{{$timestamp}}@example.com",
+  "userName": "잘못된 역할",
+  "role": "NOT_A_ROLE"
+}
+
+### 세션 없이 호출 — SUPER_ADMIN 인증이 없으면 403이어야 한다
+### (IntelliJ HTTP Client는 쿠키를 환경 단위로 유지하므로, 이 요청만 따로 확인하려면
+### 새 사설 브라우징 세션이나 별도 환경에서 실행해야 한다 — 위 로그인을 먼저 실행한
+### 같은 세션에서는 이미 인증된 상태라 403을 재현하지 못한다.)

@@ -3,8 +3,13 @@ package paytech.practice.pay.api.admin.config
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import paytech.practice.pay.application.identity.AuthenticateInternalUserUseCase
+import paytech.practice.pay.application.identity.IssueInternalUserUseCase
+import paytech.practice.pay.application.port.outbound.AccountInvitationRepository
+import paytech.practice.pay.application.port.outbound.IdGenerator
 import paytech.practice.pay.application.port.outbound.InternalUserRepository
+import paytech.practice.pay.application.port.outbound.InvitationTokenHasher
 import paytech.practice.pay.application.port.outbound.PasswordEncoder
+import paytech.practice.pay.application.port.outbound.TransactionManager
 import java.time.Clock
 
 /**
@@ -26,6 +31,24 @@ class UseCaseConfiguration {
 		AuthenticateInternalUserUseCase(
 			internalUserRepository = internalUserRepository,
 			passwordEncoder = passwordEncoder,
+			clock = clock,
+		)
+
+	@Bean
+	fun issueInternalUserUseCase(
+		internalUserRepository: InternalUserRepository,
+		accountInvitationRepository: AccountInvitationRepository,
+		invitationTokenHasher: InvitationTokenHasher,
+		idGenerator: IdGenerator,
+		transactionManager: TransactionManager,
+		clock: Clock,
+	): IssueInternalUserUseCase =
+		IssueInternalUserUseCase(
+			internalUserRepository = internalUserRepository,
+			accountInvitationRepository = accountInvitationRepository,
+			invitationTokenHasher = invitationTokenHasher,
+			idGenerator = idGenerator,
+			transactionManager = transactionManager,
 			clock = clock,
 		)
 }

@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
+import paytech.practice.pay.api.admin.security.InternalUserPrincipal
 import paytech.practice.pay.application.identity.AuthenticateInternalUserCommand
 import paytech.practice.pay.application.identity.AuthenticateInternalUserUseCase
 import paytech.practice.pay.domain.identity.LoginId
@@ -45,7 +46,8 @@ class AdminLoginController(
 			)
 
 		val authorities = listOf(SimpleGrantedAuthority("ROLE_${result.role.name}"))
-		val authentication = UsernamePasswordAuthenticationToken(result.loginId.value, null, authorities)
+		val principal = InternalUserPrincipal(result.internalUserId, result.loginId, result.role)
+		val authentication = UsernamePasswordAuthenticationToken(principal, null, authorities)
 		val context = SecurityContextHolder.createEmptyContext()
 		context.authentication = authentication
 		SecurityContextHolder.setContext(context)

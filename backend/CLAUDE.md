@@ -13,9 +13,9 @@ apps/
                      CreatePaymentUseCase(POST /api/v1/payments)를 MerchantApiKey Bearer 인증으로 보호한다
                      (Apps 절 참고).
   api-admin/         실제 Gradle 서브프로젝트, 독립 배포 가능한 Spring Boot 앱 — webmvc + jooq + security,
-                     modules:application + modules:infra-persistence에 의존한다. AuthenticateInternalUserUseCase와
-                     그걸 노출하는 컨트롤러(POST /admin/login)가 있다(Apps 절 참고). 내부 운영자 발급 등
-                     나머지 흐름은 아직 Use Case가 없다.
+                     modules:application + modules:infra-persistence에 의존한다. AuthenticateInternalUserUseCase
+                     (POST /admin/login)와 IssueInternalUserUseCase(POST /admin/internal-users, SUPER_ADMIN 전용)가
+                     있다(Apps 절 참고). 초대 수락(활성화) 등 나머지 흐름은 아직 Use Case가 없다.
   api-merchant/      실제 Gradle 서브프로젝트, 독립 배포 가능한 Spring Boot 앱 — webmvc + jooq + security,
                      modules:application + modules:infra-persistence에 의존한다. AuthenticateMerchantUserUseCase와
                      그걸 노출하는 컨트롤러(POST /merchant/login)가 있다(Apps 절 참고). 가맹점 등록, 하위
@@ -23,7 +23,8 @@ apps/
   batch/             실제 Gradle 서브프로젝트, 독립 배포 가능한 Spring Boot 앱 — spring-boot-starter-batch,
                      웹 스타터 없음, 아직 정의된 Job 없음(예: 향후 OutboxEvent 발행 Worker의 자리)
 modules/
-  application/       실제 Gradle 서브프로젝트, domain에 의존; CreatePaymentUseCase(결제 생성 슬라이스) + 그 outbound port들(Architecture 참고)
+  application/       실제 Gradle 서브프로젝트, domain에 의존; CreatePaymentUseCase(결제 생성 슬라이스), Identity/API Key
+                     Use Case(Authenticate*/IssueInternalUser) + 그 outbound port들(Architecture 참고)
   common/            (Placeholder)
   domain/            실제 Gradle 서브프로젝트, 의존성 없음; 8개 결제 애그리게이트 전부 + OutboxEvent + Identity/API Key 애그리게이트(Domain code conventions 참고)
   infra-blockchain/  (Placeholder)
@@ -142,6 +143,21 @@ inbound adapter → application → domain ← outbound port ← outbound adapte
 - **`SecurityConfig`**: `/admin/login`만 인증 없이 열고 나머지는 인증을 요구한다. **알려진 gap: CSRF 보호를 꺼뒀다.** 세션 쿠키 인증에서 원래는 반드시 켜야 하지만, 이 학습용 MVP 단계에서는 아직 CSRF 토큰 발급/검증 흐름을 만들지 않았다 — 실제 프론트엔드가 이 API를 붙이기 전에 반드시 켜야 한다.
 - **`InternalUserRepositoryAdapter`**(`modules:infra-persistence`)는 `PaymentRepositoryAdapter`와 같은 모양·같은 낙관적 잠금 한계를 가진다(위 "영속성 Adapter 컨벤션" 참고) — `internal_user`도 `version` 컬럼이 있는데 도메인 `InternalUser`는 그걸 모른다.
 - **테스트**: `AuthenticateInternalUserUseCaseTest`(단위, 성공/미존재/오답/5회 오답 잠금/잠금 중 시도/잠금 만료 후 재시도/`INVITED` 계정을 전부 커버), `InternalUserRepositoryAdapterTest`(Testcontainers MySQL 통합), `AdminLoginControllerTest`(`@WebMvcTest(AdminLoginController::class)` + `@Import(SecurityConfig::class)` — 컨트롤러가 `SecurityContextRepository` Bean도 필요해서 `PaymentControllerTest`와 달리 `SecurityConfig`를 명시적으로 Import한다). 여기에 더해 실제 `bootRun` + `curl`로 BCrypt 해시를 미리 심어둔 테스트 계정을 상대로 로그인 성공(세션 쿠키 발급 확인) → 오답 5회 반복 → 잠김(`AccountLockedException`, DB의 `user_status=LOCKED` 확인)까지 수동으로 검증했다.
+
+### `api-admin`의 내부 운영자 발급 컨트롤러
+
+`POST /admin/internal-users`(`docs/architecture/identity-access-api-key.md`의 "3.3 발급 정책": "내부 운영자 계정은 SUPER_ADMIN만 발급할 수 있다")가 새 `IssueInternalUserUseCase`를 HTTP로 노출한다. `docs/`에 이 경로 자체가 정해져 있진 않아 `/admin/login`과 같은 리소스 계층에 `POST /api/v1/payments`와 같은 REST 관례로 새로 정했다.
+
+- **발급 = `InternalUser(INVITED)` + `AccountInvitation(PENDING)`을 한 트랜잭션으로.** `docs/database/database-design.md`의 가맹점 등록 트랜잭션 예시(`Merchant + MerchantUser(OWNER, INVITED) + AccountInvitation`)와 같은 모양이다 — `IssueInternalUserUseCase`가 `InternalUser.invite(...)`와 `AccountInvitation.forInternalUser(...)`를 만들어 `TransactionManager.runInTransaction { }` 안에서 함께 저장한다(`CreatePaymentUseCase`와 같은 다중 Aggregate 생성 패턴). **초대를 수락해 비밀번호를 설정하고 `INVITED → ACTIVE`로 전이하는 흐름(활성화)은 아직 없다** — 로그인 흐름이 발급보다 먼저 별도로 구현됐던 것과 같은 이유로, 활성화는 별개의 후속 작업이다.
+- **초대 Token은 저장하지 않고 Hash만 저장한다** — `AccountInvitation`의 KDoc과 그대로 일치한다. 원문 Token은 `IdGenerator.newId()`로 만든다(별도의 "랜덤 문자열 생성" Port를 새로 만들지 않고 기존 Port를 재사용했다). Hash는 새 Port `InvitationTokenHasher`(`hash`/`matches`, `ApiKeySecretHasher`와 완전히 같은 모양)로 만들고, `api-admin`의 `HmacInvitationTokenHasher`가 HMAC-SHA-256 + Pepper로 구현한다 — **API Key Pepper(`app.api-key.pepper`)와는 별도의 설정값(`app.invitation-token.pepper`)을 쓴다**, 한쪽 비밀값이 새도 다른 쪽까지 같이 위험해지지 않도록 하려는 의도적 분리다. `INVITATION_VALIDITY`(7일)는 `docs/`에 값이 없어 `CreatePaymentUseCase`의 `PAYMENT_VALIDITY`와 같은 성격의 MVP 상수로 고정했다. 응답의 `invitationToken`은 API Key 원문과 같은 규칙(`docs/`의 "6.4 저장 정책")으로 **이 응답에서만** 원문으로 보인다.
+- **`loginId`/`email` 중복은 사전에 막는다.** 둘 다 `internal_user`의 DB Unique 제약(`uk_internal_user_login_id`/`uk_internal_user_email`)이 걸려 있어, 체크 없이 두면 raw SQL 에러가 새 나간다 — `InternalUserRepository`에 (기존 `findByLoginId`에 더해) `findByEmail`을 추가해서 둘 다 사전 조회하고, 겹치면 `DuplicateInternalUserException`(409)을 던진다. `CreatePaymentUseCase`의 멱등성 체크와 같은 성격의 한계다(DB Unique 제약만큼 원자적이지 않다).
+- **호출자 식별을 위해 `InternalUserPrincipal`을 새로 도입했다.** `AdminLoginController`는 원래 `Authentication.principal`에 로그인 아이디 문자열만 심었는데, 발급 감사 정보(`createdByInternalUserId`)로 쓸 `InternalUserId`가 필요해서 `apps:api-payment`의 `ApiKeyPrincipal` 패턴을 그대로 가져와 `InternalUserPrincipal(internalUserId, loginId, role)`을 로그인 성공 시 principal로 심도록 `AdminLoginController`를 바꿨다. `InternalUserIssuanceController`는 `@AuthenticationPrincipal InternalUserPrincipal`로 발급자를 바로 받는다 — `PaymentController`가 `merchantId`를 요청 본문 대신 `ApiKeyPrincipal`에서 가져오는 것과 같은 이유다.
+- **`SecurityConfig`에 역할 기반 인가가 처음 등장했다.** `authorize("/admin/internal-users", hasRole("SUPER_ADMIN"))`를 `anyRequest`보다 먼저 추가했다(Spring Security는 먼저 매칭되는 규칙을 쓴다). `SUPER_ADMIN`이 아닌 인증된 세션이 호출하면 Spring Security 기본 `AccessDeniedHandler`가 403을 돌려준다 — `apps:api-payment`의 Scope 인가(`PaymentControllerTest`의 403 케이스)와 같은 수준으로, 커스텀 JSON 바디를 만들지 않는다. 세션이 아예 없으면(로그인 안 함) 이 앱은 커스텀 `AuthenticationEntryPoint`가 없어서 Spring Security 기본 동작대로 403이 돈다(실제 `bootRun` + `curl`로 확인) — `api-payment`가 `ApiKeyAuthenticationEntryPoint`로 401 JSON 바디를 통일한 것과 달리, `api-admin`은 아직 이 부분을 커스텀하지 않았다.
+- **예외 핸들러 이름을 바꿨다.** `AdminAuthExceptionHandler` → `AdminApiExceptionHandler`(로그인 전용이 아니게 됐으므로 `PaymentApiExceptionHandler`와 이름 패턴을 맞췄다) — `DuplicateInternalUserException`(409)과 `IllegalArgumentException`(400, Value Object `require()` 실패나 `InternalUserRole.valueOf()` 실패를 공통 처리, `PaymentApiExceptionHandler`와 완전히 같은 패턴)을 새로 추가했다.
+- **`IdGenerator`가 `api-admin`에 처음 필요해져서** `apps:api-payment`의 `UuidIdGenerator`를 그대로 복제해 `api-admin`의 `support` 패키지에도 만들었다(각 앱이 자기 `support` 패키지에 자체 구현을 갖는 기존 관례를 따랐다 — 공유 모듈로 옮기지 않았다).
+- **`AccountInvitationRepositoryAdapter`**(`modules:infra-persistence`)는 `account_invitation`에 `version` 컬럼이 없어서(`AccountInvitation`의 KDoc 참고) `InternalUserRepositoryAdapter`와 달리 낙관적 잠금 없이 단순 UPDATE로 상태 전이를 반영한다. 지금은 발급(INSERT)만 실제로 쓰이지만, Port 계약(`save`가 상태 전이도 반영해야 함)을 절반만 구현해 두지 않으려고 `accept`/`expire`/`revoke` 이후의 UPDATE 경로도 함께 만들어 뒀다(수락/만료/폐기 Use Case는 아직 없다).
+- **테스트**: `IssueInternalUserUseCaseTest`(단위, 정상 발급/로그인 아이디 중복/이메일 중복), `AccountInvitationRepositoryAdapterTest`+`InternalUserRepositoryAdapterTest`의 `findByEmail` 케이스(Testcontainers MySQL 통합), `InternalUserIssuanceControllerTest`(`@WebMvcTest` + `@Import(SecurityConfig::class)`, `PaymentControllerTest`의 `SecurityMockMvcRequestPostProcessors.authentication(...)` 패턴으로 `InternalUserPrincipal`을 주입해 `SUPER_ADMIN`/`OPERATOR` 인가까지 검증). 여기에 더해 실제 `bootRun` + `curl`로 SUPER_ADMIN 로그인 → 발급(201, `invitationToken` 확인, DB에 `internal_user`+`account_invitation` 행 생성 확인) → 중복 loginId/email(둘 다 409) → 세션 없음(403) → 잘못된 role(400)까지 검증한 뒤 DB 행을 정리했다.
+- **단위 테스트에서 걸린 함정: MockK의 `any()`가 값 클래스(Value Class)를 만들지 못할 수 있다.** `every { internalUserRepository.findByEmail(any()) } returns null`처럼 `Email` 타입 매개변수에 `any()`를 쓰면, MockK가 매처 서명을 만들려고 무작위 문자열로 `Email` 인스턴스를 생성하려 시도하는데 `Email`의 `init { require(value.contains("@")) }` 검증에 걸려 `IllegalArgumentException`이 난다(`LoginId`처럼 검증이 "공백 아님" 정도로 느슨한 값 클래스는 무작위 문자열이 통과해서 문제가 없다). 해결: `any()` 대신 실제 값(`findByEmail(EMAIL)`)으로 정확히 매칭한다 — 이런 종류의 값 클래스 매개변수에는 앞으로도 `any()`를 피한다.
 
 ### `api-merchant`의 가맹점 관리자 로그인 컨트롤러
 

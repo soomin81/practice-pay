@@ -71,6 +71,13 @@ class InternalUserRepositoryAdapter(
 			.fetchOne()
 			?.toDomain()
 
+	override fun findByEmail(email: Email): InternalUser? =
+		dsl
+			.selectFrom(INTERNAL_USER)
+			.where(INTERNAL_USER.EMAIL.eq(email.value))
+			.fetchOne()
+			?.toDomain()
+
 	private fun resolveInternalUserSeq(internalUserId: InternalUserId): Long =
 		dsl
 			.select(INTERNAL_USER.INTERNAL_USER_SEQ)
