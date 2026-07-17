@@ -4,7 +4,7 @@
 
 ## 현재 구현 상태
 
-`modules:domain`, `modules:application`, `modules:infra-persistence`, `modules:common`, `modules:infra-blockchain`, `db-core`, `architecture-tests`, 그리고 `apps:*` 4개 전부 실제 Gradle 서브프로젝트다(`settings.gradle.kts` 참고). `modules:common`/`modules:infra-blockchain`은 서브프로젝트로는 연결돼 있지만 아직 `src`가 비어 있다(빌드는 NO-SOURCE로 통과한다) — 실제로 필요해질 때까지 다른 모듈에 대한 의존성도 추가하지 않았다(아래 각 항목 참고). 빈 서브프로젝트에 코드가 있다고 가정하지 말고, 참조하기 전에 먼저 확인한다. 이 구조가 이미 여러 번 재편됐으니 의존하기 전에 다시 확인한다:
+`modules:domain`, `modules:application`, `modules:infra-persistence`, `modules:infra-blockchain`, `modules:common`, `db-core`, `architecture-tests`, 그리고 `apps:*` 4개 전부 실제 Gradle 서브프로젝트다(`settings.gradle.kts` 참고). `modules:common`만 아직 `src`가 비어 있다(빌드는 NO-SOURCE로 통과한다) — 실제로 필요해질 때까지 다른 모듈에 대한 의존성도 추가하지 않았다(아래 항목 참고). `modules:infra-blockchain`은 `Web3jBlockchainClient` Adapter가 있지만 **아직 어떤 앱도 이 모듈에 의존하지 않는다**(아래 "온체인 Adapter" 절 참고) — 빈 서브프로젝트나 아직 앱에 연결되지 않은 서브프로젝트에 코드/배선이 있다고 가정하지 말고, 참조하기 전에 먼저 확인한다. 이 구조가 이미 여러 번 재편됐으니 의존하기 전에 다시 확인한다:
 
 ```
 apps/
@@ -25,16 +25,16 @@ apps/
 modules/
   application/       실제 Gradle 서브프로젝트, domain에 의존; CreatePaymentUseCase(결제 생성 슬라이스), Identity/API Key
                      Use Case(Authenticate*/IssueInternalUser), BlockchainClient(온체인 조회 Port, 구현체는
-                     아직 없음) + 그 outbound port들(Architecture 참고)
+                     modules:infra-blockchain) + 그 outbound port들(Architecture 참고)
   common/            실제 Gradle 서브프로젝트, 의존성 없음, src 비어 있음 — 어떤 레이어에서도 쓸 수 있는 공용
                      유틸리티가 실제로 필요해질 때 채운다(순환 의존을 피하려고 지금은 어떤 modules:*도
                      참조하지 않는다)
   domain/            실제 Gradle 서브프로젝트, 의존성 없음; 8개 결제 애그리게이트 전부 + OutboxEvent + Identity/API Key 애그리게이트(Domain code conventions 참고)
-  infra-blockchain/  실제 Gradle 서브프로젝트, 의존성 없음, src 비어 있음 — modules:application의
-                     BlockchainClient Port(위 참고)를 구현할 자리(Base Sepolia 온체인 RPC 조회).
-                     web3j 같은 클라이언트 라이브러리 선택이 아직 없어서 domain/application
-                     의존성도 추가하지 않았다 — 실제 Adapter를 만들 때 infra-persistence의
-                     build.gradle.kts와 같은 모양으로 채운다(아래 "온체인 Adapter 설계" 참고).
+  infra-blockchain/  실제 Gradle 서브프로젝트, domain+application에 의존 — modules:application의
+                     BlockchainClient Port를 web3j로 구현하는 Web3jBlockchainClient가 있다
+                     (Base Sepolia RPC 조회, 아래 "온체인 Adapter" 참고). 아직 어떤 앱도 이
+                     모듈에 의존하지 않는다 — RPC URL 설정을 가진 application.yaml도, 이
+                     Port를 쓰는 Use Case도 없다.
   infra-persistence/ 실제 Gradle 서브프로젝트 — modules:application의 outbound port를 구현하는 jOOQ Repository Adapter(Architecture 참고)
 db-core/             실제 Gradle 서브프로젝트 — Flyway 마이그레이션 + jOOQ 코드 생성(아래 참고)
 architecture-tests/  실제 Gradle 서브프로젝트, 테스트 전용(src/main 없음) — 다른 모듈의 컴파일된 클래스에 대한 ArchUnit 규칙
@@ -104,15 +104,24 @@ inbound adapter → application → domain ← outbound port ← outbound adapte
 - **알려진 한계: `Payment`/`CheckoutSession`(`version` 낙관적 잠금 컬럼이 있는 두 애그리게이트)의 `save()`는 지금 진짜 낙관적 잠금 보호를 제공하지 않는다.** 도메인 애그리게이트는 `version` 필드를 갖고 있지 않다(영속성 관심사를 도메인 계층에 새지 않으려고 의도적으로 뺐다) — 그래서 Adapter는 UPDATE 직전에 DB의 현재 `version`을 다시 읽어 `current + 1`을 쓴다 — 이건 정확히 같은 Adapter 호출로의 동시 쓰기만 막을 뿐, "이 애그리게이트가 오래된 version에서 읽혔다"는 상황은 잡지 못한다. 기존 애그리게이트를 다시 저장하는 첫 상태 전이 Use Case가 생기면(Port를 통해 예상 version을 전달하거나, DB 쪽 `SELECT ... FOR UPDATE`를 전면적으로 쓰는 방향으로) 반드시 다시 검토한다 — 지금은 `CreatePaymentUseCase`만 `save()`를 부르고 항상 새 애그리게이트만 저장해서 이 한계가 실질적인 영향은 없다.
 - **테스트**: `infra-persistence`는 Mock이 아니라 실제 MySQL 통합 테스트를 쓴다 — 테스트 JVM 전체가 공유하는 Testcontainers MySQL 인스턴스(`PersistenceTestSupport`)를, `org.flywaydb.flyway` Gradle 플러그인이 아니라 `flyway-core` Java API로 직접(`Flyway.configure()...migrate()`) 마이그레이트한다(Gradle 9.5.1에서 깨진 건 그 플러그인이지 — 아래 "Database / jOOQ code generation" 참고 — 순수 Java 라이브러리 자체와는 무관하다). 테스트용 `DSLContext`는 Spring Boot의 `JooqAutoConfiguration`이 실제로 구성하는 방식과 똑같이(`DataSourceConnectionProvider` + `TransactionAwareDataSourceProxy` + `spring-boot-jooq` 모듈의 `org.springframework.boot.jooq.autoconfigure.SpringTransactionProvider` — Spring Boot 4.x가 jOOQ 자동 구성을 `spring-boot-autoconfigure`에서 이 전용 모듈로 옮겼다) 배선해서, `TransactionManagerAdapterTest`가 여러 Repository의 쓰기가 실제로 함께 롤백되는지까지 증명할 수 있다.
 
-### 온체인 Adapter 설계(`modules:infra-blockchain`) — Port만 있고 Adapter는 아직 없음
+### 온체인 Adapter(`modules:infra-blockchain`) — `Web3jBlockchainClient`
 
-`BlockchainClient`(`application.port.outbound`)가 첫 온체인 관련 Port다 — 특정 `TransactionHash`의 현재 상태(Receipt 성공 여부, Confirm 수, 디코딩된 ERC-20 `Transfer` 이벤트 목록)를 조회한다. **아직 이 Port를 구현하는 Adapter가 없다** — `modules:infra-blockchain`은 여전히 `src`가 비어 있다(위 모듈 트리 참고). Adapter를 실제로 만드는 건(web3j 같은 RPC 클라이언트 라이브러리 선택, `modules:infra-blockchain`의 `domain`/`application` 의존성 추가 등) 별도 후속 작업이다.
+`BlockchainClient`(`application.port.outbound`)의 실제 구현이다. web3j(`org.web3j:core:4.14.0`)로 Base Sepolia RPC를 직접 호출한다 — Base가 OP-Stack L2라 표준 EVM JSON-RPC(`eth_getTransactionReceipt`, `eth_blockNumber`, `eth_chainId`)만으로 충분했다. `@Component`(`Web3jBlockchainClient`) + `@Configuration`(`Web3jConfiguration`, `Web3j` Bean을 `app.blockchain.base-sepolia.rpc-url` 설정값으로 만든다) 두 클래스가 `infra.blockchain.web3j` 패키지에 있다 — `modules:infra-persistence`의 jOOQ Adapter와 같은 배선 방식(이 모듈에 의존하는 앱이 컴포넌트 스캔을 `infra.blockchain`까지 넓히기만 하면 된다). **아직 어떤 앱도 이 모듈에 의존하지 않는다** — `app.blockchain.base-sepolia.rpc-url`을 실제로 정의한 `application.yaml`이 없고, `UseCaseConfiguration`에서 `BlockchainClient`를 쓰는 Use Case도 아직 없다. 이 모듈이 실제 앱에 연결되는 건 그 Confirm Use Case가 생길 때다.
 
-- **"조회 대상은 항상 이미 알고 있는 Transaction Hash다" — 들어오는 전송을 감시(Watch)하는 Port가 아니다.** `BlockchainTransaction.create`가 `transactionHash`를 필수로 요구하고 최초 상태가 `SUBMITTED`인 것 자체가 근거다 — 체크아웃에서 고객 지갑이 전송을 브로드캐스트한 뒤 그 Hash가 `CheckoutSession`의 `PAYMENT_SUBMITTED` 단계를 통해 PG에 전달되는 흐름을 전제한다(`docs/`에 이 전달 경로 자체는 아직 명시돼 있지 않다 — `BlockchainTransaction`의 생성자 시그니처에서 추론한 설계 판단이다).
-- **Confirm은 반복 폴링을 전제로 설계했다.** `docs/database/database-design.md`의 "Confirm Worker: `transaction_status + updated_at`" 인덱스가 암시하는 대로, `apps:batch`(또는 앞으로 생길 Worker)가 `CONFIRMING` 상태인 `BlockchainTransaction`을 주기적으로 훑으며 `BlockchainClient.findTransaction`을 다시 호출해 `confirmationCount`를 갱신하고 임계치 도달 시 `confirm()`을 호출하는 그림이다. 그래서 `OnChainTransaction.confirmationCount`는 어댑터가 매 호출마다 "현재 블록 높이 - 거래가 포함된 블록 번호 + 1"로 계산해서 담아준다 — 호출부가 별도로 최신 블록 번호를 조회할 필요가 없다.
-- **Port는 순수한 온체인 사실만 돌려주고, 기대값과 일치하는지 판단하지 않는다.** `docs/domain/domain-model.md`의 `PaymentTransactionValidator`(Network/Chain ID/Contract/Wallet/Amount/Receipt/Confirm/중복 여부 검증)가 그 판단의 자리다 — `OnChainTransaction.tokenTransfers`를 하나로 좁히지 않고 리스트로 둔 것도 같은 이유다(한 Receipt에 ERC-20 `Transfer` 로그가 여럿 있을 수 있는데, 그중 "우리가 찾는 전송"을 고르는 것 자체가 검증 로직이다).
-- **`null`(거래를 아직 못 찾음)과 `BlockchainClientException`(RPC 호출 자체 실패)을 구분한다** — 전자는 다음 폴링을 기다리면 되는 정상적인 대기 상태고, 후자는 호출부가 재시도 여부를 판단해야 하는 일시적 실패다.
-- `chainId`를 `BlockchainNetwork`에서 유추하지 않고 매 조회마다 노드로부터 직접 받아 결과에 담는다 — RPC 엔드포인트가 잘못 설정된 경우(예: 실수로 다른 네트워크 노드를 가리킴)를 방어하기 위해서다.
+설계 판단(Port 자체의 근거는 `BlockchainClient`의 KDoc 참고, 여기는 Adapter 구현 판단만):
+
+- **"조회 대상은 항상 이미 알고 있는 Transaction Hash다" — 들어오는 전송을 감시(Watch)하지 않는다.** `BlockchainTransaction.create`가 `transactionHash`를 필수로 요구하는 것에서 추론했다(체크아웃에서 고객 지갑이 전송을 브로드캐스트한 뒤 그 Hash가 `CheckoutSession`의 `PAYMENT_SUBMITTED` 단계를 통해 PG에 전달되는 흐름을 전제 — `docs/`에 이 전달 경로 자체는 아직 명시돼 있지 않다).
+- **`findTransaction` 한 번에 RPC를 세 번 부른다**(`eth_getTransactionReceipt` → 있으면 `eth_blockNumber`/`eth_chainId`) — `confirmationCount`(현재 블록 높이 - 거래 블록 번호 + 1)를 어댑터가 계산해서 담아주므로 호출부는 최신 블록 번호를 따로 조회할 필요가 없다. 세 호출을 배치로 묶지 않은 건 MVP 단순화다.
+- **ERC-20 `Transfer` 이벤트는 web3j의 `EventEncoder.encode(...)`로 topic0을 계산해서 필터링한다** — `0xddf252ad...`를 하드코딩하지 않고 `Event("Transfer", [Address(indexed), Address(indexed), Uint256])` 정의로부터 계산한다. 실제 Base Sepolia RPC에 `eth_getLogs`로 조회해 값이 일치하는 것까지 확인했다(아래 "실제 RPC로 검증" 참고).
+- **어댑터는 순수한 온체인 사실만 돌려주고, 기대값과 일치하는지 판단하지 않는다** — `tokenTransfers`가 리스트인 이유(한 Receipt에 여러 `Transfer` 로그가 있을 수 있음)는 `BlockchainClient`의 KDoc 참고.
+- **`null`(아직 안 채굴됨)과 `BlockchainClientException`(RPC 호출 자체 실패 — `IOException` 또는 JSON-RPC `hasError()`)을 구분한다.**
+- **알려진 한계: MVP는 `BASE_SEPOLIA` 하나만 지원한다.** `Web3jConfiguration`이 `Web3j` Bean 하나만 만들어서, 다른 `BlockchainNetwork`로 호출하면 `Web3jBlockchainClient`가 `IllegalArgumentException`을 던진다. 다중 네트워크가 실제로 필요해지면 `BlockchainNetwork`별 `Web3j` Bean 맵으로 넓힌다.
+
+**실제 RPC로 검증(실 구현 후 반드시 필요했던 단계).** 유닛 테스트(MockK로 `Web3j`의 `Request`/`Response` 체인을 모킹, `Web3jBlockchainClientTest`)만으로는 web3j의 실제 응답 JSON 형태에 대한 가정이 맞는지 확인할 수 없어서, `https://sepolia.base.org`(Base Sepolia 공개 RPC)에 대고 실제 최근 블록의 진짜 Transaction Hash로 `Web3jBlockchainClient`를 직접 실행하는 임시 테스트를 한 번 돌렸다(커밋하지 않고 검증 후 삭제) —
+
+- `eth_chainId`가 `84532`(Base Sepolia의 실제 Chain ID)를 정확히 반환하는 것,
+- `EventEncoder.encode`로 계산한 topic0이 실제 `eth_getLogs` 응답의 `Transfer` 로그 topic0(`0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef`)과 정확히 일치하는 것을 확인했고,
+- **이 검증에서 실제 버그를 하나 잡았다**: `BigInteger.toLong()`은 값이 `Long` 범위를 넘으면 예외 없이 하위 64비트로 조용히 잘라버린다(음수로 뒤집힐 수도 있다) — 18-decimals ERC-20 토큰(대부분의 토큰, USDC의 6-decimals가 오히려 예외)의 전송량은 흔히 `Long.MAX_VALUE`를 넘어서, 실제 Base Sepolia 트랜잭션을 조회하자마자 `TokenAmount는 음수일 수 없습니다: -6446744073709551616` 같은 값으로 터졌다. `toTokenTransferOrNull`에서 `amount`가 `Long` 범위를 넘으면 그 로그 하나만 건너뛰도록 고쳤다(전체 조회를 실패시키지 않는다 — 같은 Receipt에 우리가 찾는 USDC 전송이 함께 있을 수 있어서). 이 사례를 `Web3jBlockchainClientTest`의 회귀 테스트로 남겨뒀다. **유닛 테스트만으로는 못 잡는, 실제 RPC로 검증해야만 드러나는 종류의 버그였다는 점에서 이 단계를 생략하면 안 된다는 근거로 남긴다.**
 
 ### Apps(`apps:api-payment`, `apps:api-admin`, `apps:api-merchant`, `apps:batch`)
 
