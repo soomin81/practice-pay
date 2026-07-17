@@ -73,6 +73,13 @@ class PaymentRepositoryAdapter(
 		}
 	}
 
+	override fun findById(paymentId: PaymentId): Payment? =
+		dsl
+			.selectFrom(PAYMENT)
+			.where(PAYMENT.PAYMENT_ID.eq(paymentId.value))
+			.fetchOne()
+			?.toDomain()
+
 	override fun findByMerchantOrderId(
 		merchantId: MerchantId,
 		merchantOrderId: MerchantOrderId,

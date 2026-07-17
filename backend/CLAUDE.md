@@ -23,9 +23,10 @@ apps/
   batch/             실제 Gradle 서브프로젝트, 독립 배포 가능한 Spring Boot 앱 — spring-boot-starter-batch,
                      웹 스타터 없음, 아직 정의된 Job 없음(예: 향후 OutboxEvent 발행 Worker의 자리)
 modules/
-  application/       실제 Gradle 서브프로젝트, domain에 의존; CreatePaymentUseCase(결제 생성 슬라이스), Identity/API Key
-                     Use Case(Authenticate*/IssueInternalUser), BlockchainClient(온체인 조회 Port, 구현체는
-                     modules:infra-blockchain) + 그 outbound port들(Architecture 참고)
+  application/       실제 Gradle 서브프로젝트, domain에 의존; CreatePaymentUseCase(결제 생성 슬라이스),
+                     ConfirmBlockchainTransactionUseCase(감지·Confirm 슬라이스) + PaymentTransactionValidator,
+                     Identity/API Key Use Case(Authenticate*/IssueInternalUser), BlockchainClient(온체인 조회
+                     Port, 구현체는 modules:infra-blockchain) + 그 outbound port들(Architecture 참고)
   common/            실제 Gradle 서브프로젝트, 의존성 없음, src 비어 있음 — 어떤 레이어에서도 쓸 수 있는 공용
                      유틸리티가 실제로 필요해질 때 채운다(순환 의존을 피하려고 지금은 어떤 modules:*도
                      참조하지 않는다)
@@ -122,6 +123,21 @@ inbound adapter → application → domain ← outbound port ← outbound adapte
 - `eth_chainId`가 `84532`(Base Sepolia의 실제 Chain ID)를 정확히 반환하는 것,
 - `EventEncoder.encode`로 계산한 topic0이 실제 `eth_getLogs` 응답의 `Transfer` 로그 topic0(`0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef`)과 정확히 일치하는 것을 확인했고,
 - **이 검증에서 실제 버그를 하나 잡았다**: `BigInteger.toLong()`은 값이 `Long` 범위를 넘으면 예외 없이 하위 64비트로 조용히 잘라버린다(음수로 뒤집힐 수도 있다) — 18-decimals ERC-20 토큰(대부분의 토큰, USDC의 6-decimals가 오히려 예외)의 전송량은 흔히 `Long.MAX_VALUE`를 넘어서, 실제 Base Sepolia 트랜잭션을 조회하자마자 `TokenAmount는 음수일 수 없습니다: -6446744073709551616` 같은 값으로 터졌다. `toTokenTransferOrNull`에서 `amount`가 `Long` 범위를 넘으면 그 로그 하나만 건너뛰도록 고쳤다(전체 조회를 실패시키지 않는다 — 같은 Receipt에 우리가 찾는 USDC 전송이 함께 있을 수 있어서). 이 사례를 `Web3jBlockchainClientTest`의 회귀 테스트로 남겨뒀다. **유닛 테스트만으로는 못 잡는, 실제 RPC로 검증해야만 드러나는 종류의 버그였다는 점에서 이 단계를 생략하면 안 된다는 근거로 남긴다.**
+
+### "BlockchainTransaction 감지·Confirm" Use Case(`ConfirmBlockchainTransactionUseCase`)
+
+`docs/architecture/mvp-scope.md`의 전체 흐름 중 `USDC 전송 → BlockchainTransaction 감지 및 Confirm → Payment SUCCEEDED → 결제 완료 페이지와 Webhook` 구간과, `docs/architecture/persistence-jooq.md`가 정의한 "결제 완료" 트랜잭션 경계(`BlockchainTransaction + Payment SUCCEEDED + OutboxEvent`)를 구현한다. `CreatePaymentUseCase`와 같은 자리(`application.payment`)에 있다 — Payment 생명주기를 이어가는 Use Case라서다.
+
+- **이미 존재하는 `BlockchainTransaction` 하나를 대상으로 한 폴링 한 번이다.** `BlockchainTransaction`을 처음 만드는 것(고객이 제출한 Transaction Hash를 `SUBMITTED`로 기록하는 것)은 이 Use Case의 범위 밖이다 — 별도 Use Case가 필요하고 아직 없다. 이 Use Case 자체도 반복하지 않는다 — `docs/database/database-design.md`의 "Confirm Worker" 인덱스가 암시하는 대로, 향후 `apps:batch`의 Worker가 대상 목록을 뽑아 하나씩 호출하는 것을 전제로 설계했다(그 Worker도 범위 밖).
+- **상태 전이는 한 번의 실행 안에서 여러 단계를 연달아 지나갈 수 있다.** `SUBMITTED`인 채로 폴링했는데 이미 필요한 Confirm 수를 넘겼으면, 한 번의 호출로 `detect()` → `startConfirming()` → `recordConfirmation()` → `confirm()`까지 이어진다(각 Aggregate 메서드의 `checkTransition`이 순서를 그대로 강제하니 안전하다). `BlockchainTransaction.detect()`가 호출되는 바로 그 순간 `Payment.startConfirmation()`도 함께 호출한다 — `Payment.startConfirmation`의 KDoc이 "온체인 거래가 감지되어 Confirm 대기 상태로 전이한다"고 명시하므로, 검증 통과 여부와 무관하게 "감지" 자체가 이 전이의 조건이라고 해석했다.
+- **새 Domain Service `PaymentTransactionValidator`를 `modules:domain`이 아니라 `modules:application`에 뒀다.** `docs/domain/domain-model.md`는 "Domain Service"로 분류하지만(Network/Chain ID/Contract/Wallet/Amount/Receipt 검증), 검증 대상인 `OnChainTransaction`이 `BlockchainClient` Port(`modules:application`)의 반환 타입이라 의존 방향상(`application → domain`만 가능) `modules:domain`에 둘 수 없다. 도메인 순수성 원칙(부수효과 없는 순수 함수, Spring/jOOQ 미의존)은 그대로 지키고 물리적 위치만 옮겼다 — `PaymentTransactionValidator.kt`의 KDoc에 이 판단 이유를 그대로 남겼다. `modules:domain`에 미러 타입을 새로 만들어 순수성을 지키는 대안도 검토했지만, `OnChainTransaction`/`OnChainTokenTransfer`가 이미 Port 경계에 맞게 설계돼 있어서 중복 타입을 만드는 비용이 더 크다고 판단했다.
+- **검증하지 않는 것 둘**: Confirm 수 부족은 실패가 아니라 "다음 폴링을 기다리는 정상 대기"라 `PaymentTransactionValidator`가 아니라 이 Use Case가 직접 `confirmationCount`를 비교해서 처리한다. 중복 Transaction Hash 여부는 `uk_blockchain_network_hash` Unique 제약이 `BlockchainTransaction` 생성 시점에 이미 보장했다고 보고 여기서 다시 확인하지 않는다(그 생성 Use Case는 범위 밖이라 이 Use Case가 참조할 근거 데이터도 없다).
+- **`Payment`는 허용 Contract 주소를 갖고 있지 않다** — `Asset`(예: `USDC`)은 순수 표시용 코드일 뿐 Contract 주소와 무관하다(`Asset.kt`의 KDoc: "Token Symbol만으로 자산을 판단하지 않는다"). 그래서 `ConfirmBlockchainTransactionUseCase.EXPECTED_TOKEN_CONTRACT_ADDRESSES`가 네트워크별 허용 USDC Contract 주소를 상수로 갖는다 — `docs/`에 값이 없어 `CreatePaymentUseCase`의 `TOKEN_DECIMALS`와 같은 성격의 MVP 상수다. Base Sepolia 값(`0x036CbD53842c5426634e7929541eC2318f3dCF7e`)은 Circle 공식 문서(`developers.circle.com/stablecoins/usdc-contract-addresses`)에서 그대로 가져왔다.
+- **`WalletAddress`/`ContractAddress` 비교는 대소문자를 무시한다.** 두 Value Object 모두 EIP-55 Checksum 검증을 하지 않고(`WalletAddress.kt`의 KDoc) `equals`가 문자열 그대로 비교라, 그대로 `==`로 비교하면 같은 주소인데 대소문자가 다르다는 이유로 검증에 실패할 수 있다 — `PaymentTransactionValidator`는 `.value.equals(..., ignoreCase = true)`로 비교한다.
+- **`BlockchainTransactionRepository` Port를 새로 만들었다**(`save`/`findById`만 — 지금 필요한 것만). `PaymentRepository`에도 `findById`를 추가했다(기존엔 `findByMerchantOrderId`뿐이었다 — 이 Use Case가 `BlockchainTransaction.paymentId`로 `Payment`를 찾아야 해서 필요해졌다).
+- **`BlockchainTransactionRepositoryAdapter`**(`modules:infra-persistence`)는 `PaymentRepositoryAdapter`와 같은 모양·같은 낙관적 잠금 한계를 가진다.
+- **성공 시에만 `OutboxEvent`를 남긴다** — `docs/architecture/persistence-jooq.md`가 명시한 "결제 완료" 경계(`BlockchainTransaction + Payment SUCCEEDED + OutboxEvent`)가 `Payment SUCCEEDED`를 특정하고 있어서, 실패 경로(`payment.fail()`)에서는 Webhook용 `OutboxEvent`를 만들지 않는다 — 가맹점에게 실패도 알려주는 게 더 나을 수 있지만, 문서에 없는 걸 새로 만들지 않는 쪽을 택했다(알려진 gap으로 남긴다).
+- **테스트**: `PaymentTransactionValidatorTest`(단위, 정상/Receipt 실패/Network 불일치/Contract 불허/Wallet 불일치/Amount 부족/대소문자 무시/초과 금액 케이스), `ConfirmBlockchainTransactionUseCaseTest`(단위, 미검출/Confirm 부족/즉시 Confirm 완료/재개된 CONFIRMING 폴링/Receipt 실패/검증 실패/존재하지 않는 ID/이미 종료 상태), `BlockchainTransactionRepositoryAdapterTest` + `PaymentRepositoryAdapterTest`의 `findById` 케이스(Testcontainers MySQL 통합).
 
 ### Apps(`apps:api-payment`, `apps:api-admin`, `apps:api-merchant`, `apps:batch`)
 

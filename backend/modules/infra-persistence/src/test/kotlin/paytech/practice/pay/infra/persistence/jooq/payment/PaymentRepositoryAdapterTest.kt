@@ -78,4 +78,19 @@ class PaymentRepositoryAdapterTest :
 
 			adapter.findByMerchantOrderId(merchantId, MerchantOrderId("no-such-order")).shouldBeNull()
 		}
+
+		test("save inserts a new Payment and findById round-trips it") {
+			val merchantId = MerchantId(insertTestMerchant())
+			val payment = newPayment(merchantId)
+
+			adapter.save(payment)
+			val found = adapter.findById(payment.id)
+
+			found.shouldNotBeNull()
+			found.id shouldBe payment.id
+		}
+
+		test("findById returns null when no such payment exists") {
+			adapter.findById(PaymentId("pay_no-such-payment")).shouldBeNull()
+		}
 	})
