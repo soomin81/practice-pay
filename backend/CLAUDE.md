@@ -24,17 +24,17 @@ apps/
                      웹 스타터 없음, 아직 정의된 Job 없음(예: 향후 OutboxEvent 발행 Worker의 자리)
 modules/
   application/       실제 Gradle 서브프로젝트, domain에 의존; CreatePaymentUseCase(결제 생성 슬라이스), Identity/API Key
-                     Use Case(Authenticate*/IssueInternalUser) + 그 outbound port들(Architecture 참고)
+                     Use Case(Authenticate*/IssueInternalUser), BlockchainClient(온체인 조회 Port, 구현체는
+                     아직 없음) + 그 outbound port들(Architecture 참고)
   common/            실제 Gradle 서브프로젝트, 의존성 없음, src 비어 있음 — 어떤 레이어에서도 쓸 수 있는 공용
                      유틸리티가 실제로 필요해질 때 채운다(순환 의존을 피하려고 지금은 어떤 modules:*도
                      참조하지 않는다)
   domain/            실제 Gradle 서브프로젝트, 의존성 없음; 8개 결제 애그리게이트 전부 + OutboxEvent + Identity/API Key 애그리게이트(Domain code conventions 참고)
-  infra-blockchain/  실제 Gradle 서브프로젝트, 의존성 없음, src 비어 있음 — modules:infra-persistence가 결제
-                     흐름의 영속성 쪽 outbound Port를 구현하는 것과 같은 자리에서, Base Sepolia 온체인
-                     조회(BlockchainTransaction 감지·Confirm)를 구현할 자리다. modules:application에 아직
-                     그 Port가 없어서 domain/application 의존성도, 온체인 클라이언트 라이브러리도 아직
-                     추가하지 않았다 — 그 Use Case가 생기면 infra-persistence의 build.gradle.kts와 같은
-                     모양으로 채운다.
+  infra-blockchain/  실제 Gradle 서브프로젝트, 의존성 없음, src 비어 있음 — modules:application의
+                     BlockchainClient Port(위 참고)를 구현할 자리(Base Sepolia 온체인 RPC 조회).
+                     web3j 같은 클라이언트 라이브러리 선택이 아직 없어서 domain/application
+                     의존성도 추가하지 않았다 — 실제 Adapter를 만들 때 infra-persistence의
+                     build.gradle.kts와 같은 모양으로 채운다(아래 "온체인 Adapter 설계" 참고).
   infra-persistence/ 실제 Gradle 서브프로젝트 — modules:application의 outbound port를 구현하는 jOOQ Repository Adapter(Architecture 참고)
 db-core/             실제 Gradle 서브프로젝트 — Flyway 마이그레이션 + jOOQ 코드 생성(아래 참고)
 architecture-tests/  실제 Gradle 서브프로젝트, 테스트 전용(src/main 없음) — 다른 모듈의 컴파일된 클래스에 대한 ArchUnit 규칙
@@ -103,6 +103,16 @@ inbound adapter → application → domain ← outbound port ← outbound adapte
 - 도메인에 대응 값이 없는 컬럼(`payment.order_currency`, `payment_quote.quote_currency`)은 Adapter 경계에서 `"KRW"` 리터럴로 하드코딩해서 채운다 — 이 코드베이스 전체에서 `Money`가 암묵적으로 항상 KRW를 뜻하는 것과 같은 맥락이다(MVP는 KRW→USDC 한 쌍만 지원).
 - **알려진 한계: `Payment`/`CheckoutSession`(`version` 낙관적 잠금 컬럼이 있는 두 애그리게이트)의 `save()`는 지금 진짜 낙관적 잠금 보호를 제공하지 않는다.** 도메인 애그리게이트는 `version` 필드를 갖고 있지 않다(영속성 관심사를 도메인 계층에 새지 않으려고 의도적으로 뺐다) — 그래서 Adapter는 UPDATE 직전에 DB의 현재 `version`을 다시 읽어 `current + 1`을 쓴다 — 이건 정확히 같은 Adapter 호출로의 동시 쓰기만 막을 뿐, "이 애그리게이트가 오래된 version에서 읽혔다"는 상황은 잡지 못한다. 기존 애그리게이트를 다시 저장하는 첫 상태 전이 Use Case가 생기면(Port를 통해 예상 version을 전달하거나, DB 쪽 `SELECT ... FOR UPDATE`를 전면적으로 쓰는 방향으로) 반드시 다시 검토한다 — 지금은 `CreatePaymentUseCase`만 `save()`를 부르고 항상 새 애그리게이트만 저장해서 이 한계가 실질적인 영향은 없다.
 - **테스트**: `infra-persistence`는 Mock이 아니라 실제 MySQL 통합 테스트를 쓴다 — 테스트 JVM 전체가 공유하는 Testcontainers MySQL 인스턴스(`PersistenceTestSupport`)를, `org.flywaydb.flyway` Gradle 플러그인이 아니라 `flyway-core` Java API로 직접(`Flyway.configure()...migrate()`) 마이그레이트한다(Gradle 9.5.1에서 깨진 건 그 플러그인이지 — 아래 "Database / jOOQ code generation" 참고 — 순수 Java 라이브러리 자체와는 무관하다). 테스트용 `DSLContext`는 Spring Boot의 `JooqAutoConfiguration`이 실제로 구성하는 방식과 똑같이(`DataSourceConnectionProvider` + `TransactionAwareDataSourceProxy` + `spring-boot-jooq` 모듈의 `org.springframework.boot.jooq.autoconfigure.SpringTransactionProvider` — Spring Boot 4.x가 jOOQ 자동 구성을 `spring-boot-autoconfigure`에서 이 전용 모듈로 옮겼다) 배선해서, `TransactionManagerAdapterTest`가 여러 Repository의 쓰기가 실제로 함께 롤백되는지까지 증명할 수 있다.
+
+### 온체인 Adapter 설계(`modules:infra-blockchain`) — Port만 있고 Adapter는 아직 없음
+
+`BlockchainClient`(`application.port.outbound`)가 첫 온체인 관련 Port다 — 특정 `TransactionHash`의 현재 상태(Receipt 성공 여부, Confirm 수, 디코딩된 ERC-20 `Transfer` 이벤트 목록)를 조회한다. **아직 이 Port를 구현하는 Adapter가 없다** — `modules:infra-blockchain`은 여전히 `src`가 비어 있다(위 모듈 트리 참고). Adapter를 실제로 만드는 건(web3j 같은 RPC 클라이언트 라이브러리 선택, `modules:infra-blockchain`의 `domain`/`application` 의존성 추가 등) 별도 후속 작업이다.
+
+- **"조회 대상은 항상 이미 알고 있는 Transaction Hash다" — 들어오는 전송을 감시(Watch)하는 Port가 아니다.** `BlockchainTransaction.create`가 `transactionHash`를 필수로 요구하고 최초 상태가 `SUBMITTED`인 것 자체가 근거다 — 체크아웃에서 고객 지갑이 전송을 브로드캐스트한 뒤 그 Hash가 `CheckoutSession`의 `PAYMENT_SUBMITTED` 단계를 통해 PG에 전달되는 흐름을 전제한다(`docs/`에 이 전달 경로 자체는 아직 명시돼 있지 않다 — `BlockchainTransaction`의 생성자 시그니처에서 추론한 설계 판단이다).
+- **Confirm은 반복 폴링을 전제로 설계했다.** `docs/database/database-design.md`의 "Confirm Worker: `transaction_status + updated_at`" 인덱스가 암시하는 대로, `apps:batch`(또는 앞으로 생길 Worker)가 `CONFIRMING` 상태인 `BlockchainTransaction`을 주기적으로 훑으며 `BlockchainClient.findTransaction`을 다시 호출해 `confirmationCount`를 갱신하고 임계치 도달 시 `confirm()`을 호출하는 그림이다. 그래서 `OnChainTransaction.confirmationCount`는 어댑터가 매 호출마다 "현재 블록 높이 - 거래가 포함된 블록 번호 + 1"로 계산해서 담아준다 — 호출부가 별도로 최신 블록 번호를 조회할 필요가 없다.
+- **Port는 순수한 온체인 사실만 돌려주고, 기대값과 일치하는지 판단하지 않는다.** `docs/domain/domain-model.md`의 `PaymentTransactionValidator`(Network/Chain ID/Contract/Wallet/Amount/Receipt/Confirm/중복 여부 검증)가 그 판단의 자리다 — `OnChainTransaction.tokenTransfers`를 하나로 좁히지 않고 리스트로 둔 것도 같은 이유다(한 Receipt에 ERC-20 `Transfer` 로그가 여럿 있을 수 있는데, 그중 "우리가 찾는 전송"을 고르는 것 자체가 검증 로직이다).
+- **`null`(거래를 아직 못 찾음)과 `BlockchainClientException`(RPC 호출 자체 실패)을 구분한다** — 전자는 다음 폴링을 기다리면 되는 정상적인 대기 상태고, 후자는 호출부가 재시도 여부를 판단해야 하는 일시적 실패다.
+- `chainId`를 `BlockchainNetwork`에서 유추하지 않고 매 조회마다 노드로부터 직접 받아 결과에 담는다 — RPC 엔드포인트가 잘못 설정된 경우(예: 실수로 다른 네트워크 노드를 가리킴)를 방어하기 위해서다.
 
 ### Apps(`apps:api-payment`, `apps:api-admin`, `apps:api-merchant`, `apps:batch`)
 
