@@ -74,3 +74,5 @@ MVP includes SUPER_ADMIN bootstrap, internal user issuance/login, merchant regis
 Before implementing domain/state/DB/API/architecture work, check the relevant doc in `docs/` (see "Documentation" above) — it is authoritative. When a change touches domain rules, state machines, the DB schema, an API, or the architecture, update implementation, docs, migrations, and tests together in the same change — don't let `docs/` drift from code.
 
 This repo is also used by other coding agents (e.g. Codex) against the same `docs/` source of truth — keep any agent-facing conventions consistent with what's documented, rather than inventing conflicting local rules.
+
+Git commit messages are written in Korean (subject and body) — consistent with this being a learning project where KDoc and validation messages in code are also Korean (see `backend/CLAUDE.md`). Code identifiers, file paths, and technical terms inside a commit message stay in English as normal; only the prose is Korean.
