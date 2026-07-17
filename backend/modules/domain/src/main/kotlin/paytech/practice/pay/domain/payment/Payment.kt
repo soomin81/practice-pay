@@ -3,6 +3,7 @@ package paytech.practice.pay.domain.payment
 import java.time.Instant
 import paytech.practice.pay.domain.merchant.MerchantId
 import paytech.practice.pay.domain.shared.Asset
+import paytech.practice.pay.domain.shared.BlockchainNetwork
 import paytech.practice.pay.domain.shared.Money
 import paytech.practice.pay.domain.shared.TokenAmount
 import paytech.practice.pay.domain.shared.WalletAddress
