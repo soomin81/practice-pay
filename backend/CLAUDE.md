@@ -1,163 +1,163 @@
 # CLAUDE.md (backend)
 
-Guidance for working in `backend/`. For the shared payment domain (aggregates, state machines, MVP scope) see the root `../CLAUDE.md` — this file covers backend implementation conventions only.
+`backend/`에서 작업할 때의 지침이다. 공통 결제 도메인(애그리게이트, 상태 머신, MVP 범위)은 루트 `../CLAUDE.md`를 참고한다 — 이 문서는 백엔드 구현 컨벤션만 다룬다.
 
-## Current implementation state
+## 현재 구현 상태
 
-`modules:domain`, `modules:application`, `modules:infra-persistence`, `db-core`, `architecture-tests`, and all four `apps:*` are real Gradle subprojects (see `settings.gradle.kts`); the rest are still empty placeholders not wired in. Don't assume code exists in the placeholder folders; check before referencing them, and re-verify this layout before relying on it since it has already been restructured more than once:
+`modules:domain`, `modules:application`, `modules:infra-persistence`, `db-core`, `architecture-tests`, 그리고 `apps:*` 4개 전부 실제 Gradle 서브프로젝트다(`settings.gradle.kts` 참고). 나머지는 아직 비어 있는 Placeholder로, 아무것도 연결돼 있지 않다. Placeholder 폴더에 코드가 있다고 가정하지 말고, 참조하기 전에 먼저 확인한다. 이 구조가 이미 여러 번 재편됐으니 의존하기 전에 다시 확인한다:
 
 ```
 apps/
-  api-payment/       real Gradle subproject, independently deployable Spring Boot app (own main class, own port) —
-                     webmvc + jooq + depends on modules:application + modules:infra-persistence. The only app with
-                     a real Use Case behind it so far (CreatePaymentUseCase); no controller wired to it yet.
-  api-admin/         real Gradle subproject, independently deployable Spring Boot app — webmvc + security,
-                     depends on modules:domain only (no InternalUser Use Case exists yet, so no jOOQ/DataSource either)
-  api-merchant/      real Gradle subproject, independently deployable Spring Boot app — same shape as api-admin,
-                     for MerchantUser/MerchantApiKey flows once those Use Cases exist
-  batch/             real Gradle subproject, independently deployable Spring Boot app — spring-boot-starter-batch,
-                     no web starter, no Job defined yet (future home for e.g. an OutboxEvent publisher worker)
+  api-payment/       실제 Gradle 서브프로젝트, 독립 배포 가능한 Spring Boot 앱(자체 메인 클래스, 자체 포트) —
+                     webmvc + jooq이고 modules:application + modules:infra-persistence에 의존한다. 지금까지
+                     실제 Use Case(CreatePaymentUseCase)가 있는 유일한 앱이며, 아직 연결된 컨트롤러는 없다.
+  api-admin/         실제 Gradle 서브프로젝트, 독립 배포 가능한 Spring Boot 앱 — webmvc + security,
+                     modules:domain에만 의존한다(InternalUser Use Case가 아직 없어서 jOOQ/DataSource도 없다)
+  api-merchant/      실제 Gradle 서브프로젝트, 독립 배포 가능한 Spring Boot 앱 — api-admin과 동일한 모양,
+                     MerchantUser/MerchantApiKey 흐름의 Use Case가 생기면 그때를 위한 것
+  batch/             실제 Gradle 서브프로젝트, 독립 배포 가능한 Spring Boot 앱 — spring-boot-starter-batch,
+                     웹 스타터 없음, 아직 정의된 Job 없음(예: 향후 OutboxEvent 발행 Worker의 자리)
 modules/
-  application/       real Gradle subproject, depends on domain; CreatePaymentUseCase (the payment-creation slice) + its outbound ports (see Architecture)
-  common/            (placeholder)
-  domain/            real Gradle subproject, no dependencies; all 8 payment aggregates + OutboxEvent + Identity/API key aggregates (see Domain code conventions)
-  infra-blockchain/  (placeholder)
-  infra-persistence/ real Gradle subproject — jOOQ Repository Adapters implementing modules:application's outbound ports (see Architecture)
-db-core/             real Gradle subproject — Flyway migrations + jOOQ codegen (see below)
-architecture-tests/  real Gradle subproject, test-only (no src/main) — ArchUnit rules over other modules' compiled classes
+  application/       실제 Gradle 서브프로젝트, domain에 의존; CreatePaymentUseCase(결제 생성 슬라이스) + 그 outbound port들(Architecture 참고)
+  common/            (Placeholder)
+  domain/            실제 Gradle 서브프로젝트, 의존성 없음; 8개 결제 애그리게이트 전부 + OutboxEvent + Identity/API Key 애그리게이트(Domain code conventions 참고)
+  infra-blockchain/  (Placeholder)
+  infra-persistence/ 실제 Gradle 서브프로젝트 — modules:application의 outbound port를 구현하는 jOOQ Repository Adapter(Architecture 참고)
+db-core/             실제 Gradle 서브프로젝트 — Flyway 마이그레이션 + jOOQ 코드 생성(아래 참고)
+architecture-tests/  실제 Gradle 서브프로젝트, 테스트 전용(src/main 없음) — 다른 모듈의 컴파일된 클래스에 대한 ArchUnit 규칙
 ```
 
-**The root project has no code of its own.** It was originally a Spring Initializr skeleton app (`PracticePayApplication.kt`, deleted) that became redundant once `apps/api-payment` took over as the real payment-API deployable — it was removed rather than kept as a duplicate. `backend/build.gradle.kts` now only holds the cross-cutting `allprojects {}` block (ktlint + `repositories {}` applied to every subproject); it doesn't apply the Kotlin or Spring Boot plugins to itself. Don't add source under `backend/src/` — add it to the relevant `apps:*` or `modules:*` subproject instead.
+**루트 프로젝트에는 자체 코드가 없다.** 원래 Spring Initializr 스켈레톤 앱(`PracticePayApplication.kt`, 삭제됨)이었는데, `apps/api-payment`가 실제 결제 API 배포 단위 역할을 넘겨받으면서 중복이 됐다 — 그래서 중복으로 남겨두지 않고 삭제했다. `backend/build.gradle.kts`는 이제 모든 서브프로젝트에 적용되는 횡단 관심사 `allprojects {}` 블록(ktlint + `repositories {}`)만 갖고 있다 — 루트 프로젝트 자체에는 Kotlin이나 Spring Boot 플러그인을 적용하지 않는다. `backend/src/` 아래에 소스를 추가하지 말고, 해당하는 `apps:*` 또는 `modules:*` 서브프로젝트에 추가한다.
 
-## Commands
+## 명령어
 
-Run from `backend/` (Windows: use `gradlew.bat`; the wrapper script `gradlew` is also present for POSIX shells). There's no single root app to build/run anymore — target the specific subproject:
+`backend/`에서 실행한다(Windows: `gradlew.bat` 사용, POSIX 셸용 래퍼 스크립트 `gradlew`도 있다). 더 이상 빌드/실행할 단일 루트 앱이 없다 — 특정 서브프로젝트를 지정한다:
 
 ```
-gradlew.bat build                                        # full build, every subproject (compiles + runs tests)
-gradlew.bat :apps:api-payment:bootRun                     # run a specific app locally (needs MySQL — see below)
-gradlew.bat test                                          # run all tests, every subproject
-gradlew.bat :apps:api-payment:test --tests "*PaymentApiApplicationTests.contextLoads"   # single test method, one subproject
-gradlew.bat ktlintCheck                                   # lint every module (also runs as part of `check`/`build`)
-gradlew.bat ktlintFormat                                  # auto-fix every module in place
+gradlew.bat build                                        # 전체 빌드, 모든 서브프로젝트(컴파일 + 테스트 실행)
+gradlew.bat :apps:api-payment:bootRun                     # 특정 앱을 로컬에서 실행(MySQL 필요 — 아래 참고)
+gradlew.bat test                                          # 전체 테스트, 모든 서브프로젝트
+gradlew.bat :apps:api-payment:test --tests "*PaymentApiApplicationTests.contextLoads"   # 단일 테스트 메서드, 서브프로젝트 하나
+gradlew.bat ktlintCheck                                   # 모든 모듈 Lint(`check`/`build`의 일부로도 실행됨)
+gradlew.bat ktlintFormat                                  # 모든 모듈 자동 포맷
 ```
 
-- Local MySQL: `compose.yaml` defines a `mysql:latest` service for `docker compose up`, seeded with database `stablecoin_payment` (matches the schema — see "Database / jOOQ code generation" below). `apps:api-payment`'s tests instead use Testcontainers automatically (its own `TestcontainersConfiguration.kt` boots a MySQL container via `@ServiceConnection`); `apps:api-admin`/`apps:api-merchant`/`apps:batch` don't touch a database yet, so their tests need neither.
-- Toolchain: Java 25, Kotlin 2.3.21, Spring Boot 4.1.0 (per `apps:*`/`db-core`/`modules:infra-persistence` subproject — the root project itself no longer applies either the Kotlin or Spring Boot plugin).
-- Lint/format: **ktlint** via the `org.jlleitschuh.gradle.ktlint` plugin (14.2.0), applied to every module (including the phantom `:modules` parent Gradle creates for the hierarchical `modules:domain`/`modules:application` includes) via `allprojects {}` in the root `build.gradle.kts` — the one deliberate exception to this project's "duplicate small config per module" style, since ktlint config never varies per module. `backend/.editorconfig` pins `indent_style = tab` (this project's existing convention) so ktlint doesn't force a reformat to spaces. `ktlintCheck` already runs as part of `check`/`build`, so a green build implies lint-clean code. `db-core/build.gradle.kts` excludes `generated-src` (jOOQ-generated code, never hand-edited) from linting and adds an explicit `dependsOn("jooqCodegen")` on the ktlint tasks that read it, since Gradle's task-input validation requires a declared dependency on whatever produces a directory a task reads.
+- 로컬 MySQL: `compose.yaml`이 `docker compose up`용 `mysql:latest` 서비스를 정의하고, `stablecoin_payment` DB로 시딩된다(스키마와 일치 — 아래 "Database / jOOQ code generation" 참고). `apps:api-payment`의 테스트는 대신 Testcontainers를 자동으로 쓴다(자체 `TestcontainersConfiguration.kt`가 `@ServiceConnection`으로 MySQL 컨테이너를 띄운다); `apps:api-admin`/`apps:api-merchant`/`apps:batch`는 아직 DB를 건드리지 않아서 둘 다 필요 없다.
+- 툴체인: Java 25, Kotlin 2.3.21, Spring Boot 4.1.0(각 `apps:*`/`db-core`/`modules:infra-persistence` 서브프로젝트 기준 — 루트 프로젝트 자체는 더 이상 Kotlin이나 Spring Boot 플러그인을 적용하지 않는다).
+- Lint/포맷: **ktlint**를 `org.jlleitschuh.gradle.ktlint` 플러그인(14.2.0)으로 모든 모듈에 적용한다(계층형 `modules:domain`/`modules:application` include를 위해 Gradle이 만드는 Phantom 부모 `:modules`도 포함) — 루트 `build.gradle.kts`의 `allprojects {}`를 통해서다. ktlint 설정이 모듈마다 달라질 이유가 없어서, 이 프로젝트의 "모듈마다 작은 설정을 중복한다"는 스타일의 유일한 예외다. `backend/.editorconfig`가 `indent_style = tab`을 고정해서(이 프로젝트의 기존 컨벤션) ktlint가 스페이스로 강제 포맷하지 않게 한다. `ktlintCheck`는 이미 `check`/`build`의 일부로 실행되므로, 빌드가 성공하면 Lint도 깨끗하다는 뜻이다. `db-core/build.gradle.kts`는 `generated-src`(jOOQ가 생성한 코드, 직접 수정하지 않음)를 Lint 대상에서 제외하고, 그걸 읽는 ktlint 태스크에 명시적으로 `dependsOn("jooqCodegen")`을 추가한다 — Gradle의 태스크 입력 검증이, 어떤 디렉토리를 읽는 태스크라면 그 디렉토리를 만드는 태스크에 대한 의존성 선언을 요구하기 때문이다.
 
-## Testing
+## 테스트
 
-- Test framework is **Kotest** (`FunSpec` style) — not JUnit5's `@Test`/`kotlin-test`. `gradlew.bat test` picks up Kotest specs automatically through `kotest-runner-junit5` on the JUnit Platform (`useJUnitPlatform()` is already set), no extra config needed.
-- Spring context tests register `io.kotest.extensions.spring.SpringExtension` via `extensions(SpringExtension)` inside the spec body, alongside the usual `@SpringBootTest`/`@Import` annotations (see `apps/api-payment/src/test/kotlin/paytech/practice/pay/api/payment/PaymentApiApplicationTests.kt`).
-- Mocking uses **MockK** (`io.mockk`), not Mockito.
-- Assertions use `kotest-assertions-core` (`shouldBe`, etc.).
-- Architecture rules (e.g. domain must not depend on Spring/jOOQ, the hexagonal layering below) are enforced with **ArchUnit** (`com.tngtech.archunit:archunit`), called from inside ordinary Kotest `test { }` blocks via `ClassFileImporter().importPackages(...)` + `.check(classes)` — not the separate `archunit-junit5` engine/`@AnalyzeClasses` style, to keep one test-writing convention (Kotest) for the whole project. Cross-module rules (checking one module's compiled classes from outside it) live in `architecture-tests` (test-only Gradle subproject; the module(s) under test are added as `testImplementation` deps — see `DomainPurityTest`).
+- 테스트 프레임워크는 **Kotest**(`FunSpec` 스타일)다 — JUnit5의 `@Test`/`kotlin-test`가 아니다. `gradlew.bat test`는 JUnit Platform 위의 `kotest-runner-junit5`를 통해 Kotest Spec을 자동으로 수집한다(`useJUnitPlatform()`이 이미 설정돼 있음, 추가 설정 불필요).
+- Spring 컨텍스트 테스트는 Spec 본문 안에서 `extensions(SpringExtension)`으로 `io.kotest.extensions.spring.SpringExtension`을 등록하고, 평소처럼 `@SpringBootTest`/`@Import` 애노테이션도 함께 쓴다(`apps/api-payment/src/test/kotlin/paytech/practice/pay/api/payment/PaymentApiApplicationTests.kt` 참고).
+- Mocking은 Mockito가 아니라 **MockK**(`io.mockk`)를 쓴다.
+- Assertion은 `kotest-assertions-core`(`shouldBe` 등)를 쓴다.
+- 아키텍처 규칙(예: domain이 Spring/jOOQ에 의존하지 않는다, 아래의 헥사고날 계층 구조)은 **ArchUnit**(`com.tngtech.archunit:archunit`)으로 강제한다 — 별도의 `archunit-junit5` 엔진/`@AnalyzeClasses` 스타일이 아니라, 평범한 Kotest `test { }` 블록 안에서 `ClassFileImporter().importPackages(...)` + `.check(classes)`를 호출하는 방식이다. 프로젝트 전체가 하나의 테스트 작성 컨벤션(Kotest)을 유지하기 위해서다. 모듈 간 규칙(한 모듈의 컴파일된 클래스를 외부에서 검사)은 `architecture-tests`(테스트 전용 Gradle 서브프로젝트; 검사 대상 모듈을 `testImplementation` 의존성으로 추가한다 — `DomainPurityTest` 참고)에 둔다.
 
-## Architecture (hexagonal)
+## 아키텍처(헥사고날)
 
 ```
 inbound adapter → application → domain ← outbound port ← outbound adapter
 ```
 
-Planned module layering (see `docs/architecture/persistence-jooq.md`): `domain` → `application` → `adapter/outbound/persistence/jooq` → `generated-src/jooq`.
+계획된 모듈 계층(`docs/architecture/persistence-jooq.md` 참고): `domain` → `application` → `adapter/outbound/persistence/jooq` → `generated-src/jooq`.
 
-- Domain code must not depend on Spring, jOOQ, an HTTP client, or any blockchain SDK — it depends on nothing but plain Kotlin.
-- Aggregates reference other aggregates by ID, never by object reference.
-- **CQS (Command Query Separation)** at the method level: a method either changes state and returns nothing (a Command — e.g. `Payment.ready()`, `submit()`, `succeed()`) or returns data without side effects (a Query — e.g. reading `payment.status`), never both. Don't add a method that mutates state and also hands back a computed result.
-- **CQRS at the persistence level**: Command repositories store/restore whole aggregates; complex reads go through dedicated jOOQ projections instead of the aggregate repository — see Persistence conventions.
-- Every external system (blockchain RPC, exchange, webhook delivery) sits behind an outbound Port; adapters implement the port, never the reverse.
-- State-transition rules live on the domain aggregate itself, never in a Controller or Repository.
+- 도메인 코드는 Spring, jOOQ, HTTP 클라이언트, 어떤 블록체인 SDK에도 의존하지 않는다 — 순수 Kotlin 외에는 아무것도 의존하지 않는다.
+- 애그리게이트는 다른 애그리게이트를 항상 ID로만 참조하고, 객체 참조로는 참조하지 않는다.
+- **CQS(Command Query Separation)**를 메서드 단위로 지킨다: 메서드는 상태를 바꾸고 아무것도 반환하지 않거나(Command — 예: `Payment.ready()`, `submit()`, `succeed()`), 부수효과 없이 데이터를 반환하거나(Query — 예: `payment.status` 조회) 둘 중 하나이지, 둘 다는 아니다. 상태를 바꾸면서 계산된 결과까지 돌려주는 메서드는 추가하지 않는다.
+- **영속성 레벨의 CQRS**: Command Repository는 애그리게이트 전체를 저장·복원하고, 복잡한 조회는 애그리게이트 Repository 대신 전용 jOOQ Projection을 거친다 — Persistence conventions 참고.
+- 외부 시스템(블록체인 RPC, 거래소, Webhook 전송)은 전부 outbound Port 뒤에 둔다 — Adapter가 Port를 구현하고, 그 반대는 없다.
+- 상태 전이 규칙은 도메인 애그리게이트 자신에게만 있다 — Controller나 Repository에는 없다.
 
-### Application layer conventions (`modules:application`)
+### 애플리케이션 계층 컨벤션(`modules:application`)
 
-Established by the first use case, `CreatePaymentUseCase` (`application.payment`) — follow this shape for future use cases:
+첫 Use Case인 `CreatePaymentUseCase`(`application.payment`)로 확립됐다 — 앞으로의 Use Case도 이 모양을 따른다:
 
-- **Outbound ports** live in `application.port.outbound` as plain Kotlin interfaces (or `fun interface` when the port has exactly one non-generic method, e.g. `IdGenerator`) — no Spring/jOOQ dependency, matching the domain-purity rule one layer up. One Command Repository port per aggregate (`save`/`findBy...`, matching "Command Repository는 Aggregate를 저장하고 복원한다"), plus supporting ports for cross-cutting concerns the use case needs but that aren't persistence (`ExchangeRateProvider`, `IdGenerator`, `TransactionManager`).
-- **`TransactionManager`** (`fun <T> runInTransaction(block: () -> T): T`) is how a use case satisfies a documented multi-aggregate transaction boundary (the "트랜잭션 경계" section of `docs/architecture/persistence-jooq.md`) without the application layer depending on Spring's `@Transactional` or knowing which persistence framework is behind it. Reuse this port for the other two documented boundaries (payment completion, exchange completion) when those use cases are built — don't invent a bespoke bundled-repository port per use case instead.
-- **A use case is a plain class with one `execute(command): result` method** — no separate inbound port interface, since nothing yet needs more than one implementation. `Command`/`Result` are small data classes named `<UseCaseName>Command`/`<UseCaseName>Result` in the same package. Returning an identifier (or other minimal data) from a creation command's `execute` is an accepted CQS exception at the use-case layer — the CQS rule above is about domain aggregate methods, not use-case entry points.
-- **Idempotency checks** (see "Idempotency keys" below) happen at the start of `execute`, before any port write — look up by the documented key and short-circuit with the existing result if found. This is a best-effort fast path, not the final guarantee; the DB's own `UNIQUE` constraint is still the last line of defense against a race between two concurrent requests.
-- Gaps `docs/` doesn't resolve yet (e.g. where a merchant's receiving wallet/network comes from) are taken as `Command` inputs for now rather than invented as new ports/tables — flagged in that `Command`'s KDoc so the simplification is easy to find and replace later.
+- **Outbound Port**는 `application.port.outbound`에 순수 Kotlin 인터페이스로 둔다(Port의 메서드가 제네릭이 아닌 것 하나뿐이면 `fun interface`, 예: `IdGenerator`) — Spring/jOOQ 의존성이 없다는 점에서 한 계층 위의 도메인 순수성 규칙과 같다. 애그리게이트당 Command Repository Port 하나(`save`/`findBy...`, "Command Repository는 Aggregate를 저장하고 복원한다"는 원칙과 일치), 그리고 영속성이 아니지만 Use Case에 필요한 횡단 관심사를 위한 보조 Port(`ExchangeRateProvider`, `IdGenerator`, `TransactionManager`)를 둔다.
+- **`TransactionManager`**(`fun <T> runInTransaction(block: () -> T): T`)는 Use Case가 애플리케이션 계층에서 Spring의 `@Transactional`에 의존하거나 어떤 영속성 프레임워크가 뒤에 있는지 몰라도, 문서화된 여러 애그리게이트에 걸친 트랜잭션 경계(`docs/architecture/persistence-jooq.md`의 "트랜잭션 경계" 절)를 만족시키는 방법이다. 나머지 두 개의 문서화된 경계(결제 완료, 환전 완료)를 위한 Use Case를 만들 때도 이 Port를 재사용한다 — Use Case마다 별도의 묶음 Repository Port를 새로 만들지 않는다.
+- **Use Case는 `execute(command): result` 메서드 하나만 있는 평범한 클래스다** — 아직 구현이 하나 이상 필요한 경우가 없어서 별도의 inbound Port 인터페이스는 두지 않는다. `Command`/`Result`는 같은 패키지에 `<UseCaseName>Command`/`<UseCaseName>Result`로 이름 붙인 작은 데이터 클래스다. 생성 Command의 `execute`가 식별자(또는 그 밖의 최소한의 데이터)를 반환하는 건 Use Case 레벨에서 허용되는 CQS 예외다 — 위의 CQS 규칙은 도메인 애그리게이트 메서드에 대한 것이지 Use Case 진입점에 대한 것이 아니다.
+- **멱등성 체크**(아래 "Idempotency keys" 참고)는 Port에 아무것도 쓰기 전에 `execute` 시작 지점에서 한다 — 문서화된 키로 조회해서 이미 있으면 그 결과로 바로 반환한다. 이건 최선을 다하는 빠른 경로일 뿐 최종 보증이 아니다 — 동시 요청 사이의 경합을 막는 최후의 방어선은 여전히 DB 자체의 `UNIQUE` 제약이다.
+- `docs/`가 아직 풀지 않은 빈틈(예: 가맹점의 수취 지갑/네트워크가 어디서 오는지)은 지금은 새 Port/테이블을 만들어내지 않고 `Command`의 입력값으로 받는다 — 나중에 쉽게 찾아 바꿀 수 있도록 그 `Command`의 KDoc에 이 단순화를 표시해둔다.
 
-### Persistence adapter conventions (`modules:infra-persistence`)
+### 영속성 Adapter 컨벤션(`modules:infra-persistence`)
 
-Established implementing the payment-creation slice's ports (`infra.persistence.jooq`, one subpackage per aggregate, e.g. `infra.persistence.jooq.payment`) — follow this shape for future adapters:
+결제 생성 슬라이스의 Port를 구현하면서 확립됐다(`infra.persistence.jooq`, 애그리게이트당 서브패키지 하나, 예: `infra.persistence.jooq.payment`) — 앞으로의 Adapter도 이 모양을 따른다:
 
-- Adapters are `@Repository`/`@Component` classes constructor-injected with a single `DSLContext`, so no manual bean wiring is needed inside the module itself — an app depending on `modules:infra-persistence` just needs its `@SpringBootApplication` component scan to actually reach `infra.persistence.jooq` (see the `apps/*` subsection below; `api-payment` depends on this module but doesn't widen its scan yet, so these beans aren't picked up there today).
-- **jOOQ's generated table classes collide by name with several domain aggregates** (`Payment`, `Merchant`, `CheckoutSession`, `PaymentQuote`, `OutboxEvent` all exist as both a `paytech.practice.pay.dbcore.jooq.tables.*` class and a `paytech.practice.pay.domain.*` class). Every adapter resolves this the same way: import only the table's singleton constant via its companion (`import ...tables.Payment.Companion.PAYMENT`), never the table class itself — the class is never referenced by name, so there's nothing to collide with the domain import.
-- `Instant` ↔ `LocalDateTime` conversion for `DATETIME(6)` UTC columns goes through the shared `toUtcLocalDateTime()`/`toUtcInstant()` extensions in `infra.persistence.jooq.InstantMapping.kt` — don't hand-roll `ZoneOffset.UTC` conversions per adapter.
-- Columns with no domain equivalent (`payment.order_currency`, `payment_quote.quote_currency`) are filled with the hardcoded literal `"KRW"` at the adapter boundary — consistent with `Money` implicitly always meaning KRW everywhere else in this codebase (MVP only supports the KRW→USDC pair).
-- **Known gap: `save()` on `Payment`/`CheckoutSession` (the two aggregates with a `version` optimistic-lock column) does not provide real optimistic-lock protection today.** The domain aggregates don't carry a `version` field (kept out deliberately to avoid leaking a persistence concern into the domain layer), so the adapter re-reads the current DB `version` immediately before updating and uses `current + 1` — this only guards against literal concurrent writes to the exact same adapter call, not "the aggregate was loaded from a stale version." Revisit this (most likely by threading an expected-version through the port, or fully embracing DB-side `SELECT ... FOR UPDATE`) when the first state-transition use case that re-saves an existing aggregate is built — today only `CreatePaymentUseCase` calls `save()`, and it always saves brand-new aggregates, so the gap has no live impact yet.
-- **Testing**: `infra-persistence` has real MySQL integration tests (not mocks) — a Testcontainers MySQL instance shared across the test JVM run (`PersistenceTestSupport`), migrated with the `flyway-core` Java API directly (`Flyway.configure()...migrate()`), not the `org.flywaydb.flyway` Gradle plugin (that plugin is what's broken on Gradle 9.5.1 — see "Database / jOOQ code generation" below — the plain Java library has nothing to do with that breakage). The test `DSLContext` is wired exactly like Spring Boot's own `JooqAutoConfiguration` would (`DataSourceConnectionProvider` + `TransactionAwareDataSourceProxy` + `org.springframework.boot.jooq.autoconfigure.SpringTransactionProvider`, from the `spring-boot-jooq` module — Spring Boot 4.x moved jOOQ autoconfiguration out of `spring-boot-autoconfigure` into this dedicated module), so `TransactionManagerAdapterTest` can prove multi-repository writes actually roll back together.
+- Adapter는 `DSLContext` 하나를 생성자로 주입받는 `@Repository`/`@Component` 클래스다 — 모듈 자체 안에서는 수동 Bean 배선이 필요 없다. `modules:infra-persistence`에 의존하는 앱은 자신의 `@SpringBootApplication` 컴포넌트 스캔이 실제로 `infra.persistence.jooq`까지 닿게만 하면 된다(아래 `apps/*` 절 참고 — `api-payment`가 이 모듈에 의존하지만 아직 스캔 범위를 넓히지 않아서, 지금은 이 Bean들이 그쪽에서 인식되지 않는다).
+- **jOOQ가 생성한 테이블 클래스가 여러 도메인 애그리게이트와 이름이 겹친다**(`Payment`, `Merchant`, `CheckoutSession`, `PaymentQuote`, `OutboxEvent` 모두 `paytech.practice.pay.dbcore.jooq.tables.*` 클래스와 `paytech.practice.pay.domain.*` 클래스 양쪽에 존재한다). 모든 Adapter가 같은 방식으로 푼다: 테이블 클래스 자체가 아니라 그 Companion을 거쳐 싱글턴 상수만 import한다(`import ...tables.Payment.Companion.PAYMENT`) — 클래스 자체를 이름으로 참조하지 않으니 도메인 import와 겹칠 게 없다.
+- `DATETIME(6)` UTC 컬럼에 대한 `Instant` ↔ `LocalDateTime` 변환은 `infra.persistence.jooq.InstantMapping.kt`의 공유 `toUtcLocalDateTime()`/`toUtcInstant()` 확장 함수를 거친다 — Adapter마다 `ZoneOffset.UTC` 변환을 직접 만들지 않는다.
+- 도메인에 대응 값이 없는 컬럼(`payment.order_currency`, `payment_quote.quote_currency`)은 Adapter 경계에서 `"KRW"` 리터럴로 하드코딩해서 채운다 — 이 코드베이스 전체에서 `Money`가 암묵적으로 항상 KRW를 뜻하는 것과 같은 맥락이다(MVP는 KRW→USDC 한 쌍만 지원).
+- **알려진 한계: `Payment`/`CheckoutSession`(`version` 낙관적 잠금 컬럼이 있는 두 애그리게이트)의 `save()`는 지금 진짜 낙관적 잠금 보호를 제공하지 않는다.** 도메인 애그리게이트는 `version` 필드를 갖고 있지 않다(영속성 관심사를 도메인 계층에 새지 않으려고 의도적으로 뺐다) — 그래서 Adapter는 UPDATE 직전에 DB의 현재 `version`을 다시 읽어 `current + 1`을 쓴다 — 이건 정확히 같은 Adapter 호출로의 동시 쓰기만 막을 뿐, "이 애그리게이트가 오래된 version에서 읽혔다"는 상황은 잡지 못한다. 기존 애그리게이트를 다시 저장하는 첫 상태 전이 Use Case가 생기면(Port를 통해 예상 version을 전달하거나, DB 쪽 `SELECT ... FOR UPDATE`를 전면적으로 쓰는 방향으로) 반드시 다시 검토한다 — 지금은 `CreatePaymentUseCase`만 `save()`를 부르고 항상 새 애그리게이트만 저장해서 이 한계가 실질적인 영향은 없다.
+- **테스트**: `infra-persistence`는 Mock이 아니라 실제 MySQL 통합 테스트를 쓴다 — 테스트 JVM 전체가 공유하는 Testcontainers MySQL 인스턴스(`PersistenceTestSupport`)를, `org.flywaydb.flyway` Gradle 플러그인이 아니라 `flyway-core` Java API로 직접(`Flyway.configure()...migrate()`) 마이그레이트한다(Gradle 9.5.1에서 깨진 건 그 플러그인이지 — 아래 "Database / jOOQ code generation" 참고 — 순수 Java 라이브러리 자체와는 무관하다). 테스트용 `DSLContext`는 Spring Boot의 `JooqAutoConfiguration`이 실제로 구성하는 방식과 똑같이(`DataSourceConnectionProvider` + `TransactionAwareDataSourceProxy` + `spring-boot-jooq` 모듈의 `org.springframework.boot.jooq.autoconfigure.SpringTransactionProvider` — Spring Boot 4.x가 jOOQ 자동 구성을 `spring-boot-autoconfigure`에서 이 전용 모듈로 옮겼다) 배선해서, `TransactionManagerAdapterTest`가 여러 Repository의 쓰기가 실제로 함께 롤백되는지까지 증명할 수 있다.
 
-### Apps (`apps:api-payment`, `apps:api-admin`, `apps:api-merchant`, `apps:batch`)
+### Apps(`apps:api-payment`, `apps:api-admin`, `apps:api-merchant`, `apps:batch`)
 
-Each is an **independently deployable Spring Boot application** — its own `build.gradle.kts` applying the `org.springframework.boot` plugin, its own `@SpringBootApplication` main class, its own `application.yaml`, its own port — not just a package inside one shared app. This was a deliberate choice (confirmed with the user over the alternative of a modular monolith) precisely because the four apps serve different audiences (payment API for merchants' servers, admin console for internal staff, merchant console, and offline batch jobs) that may need to scale, deploy, and fail independently later — following through on that choice is also why the original Spring-Initializr root app (which duplicated `api-payment`'s role) was deleted rather than kept as a redundant fifth deployable.
+각각 **독립적으로 배포 가능한 Spring Boot 애플리케이션**이다 — 자체 `build.gradle.kts`(`org.springframework.boot` 플러그인 적용), 자체 `@SpringBootApplication` 메인 클래스, 자체 `application.yaml`, 자체 포트를 가진다 — 하나의 공유 앱 안의 패키지가 아니다. 이건 의도적인 선택이었다(모듈러 모놀리스 대안을 두고 사용자와 확인함) — 정확히는 네 앱이 서로 다른 대상(가맹점 서버를 향한 결제 API, 내부 직원용 관리 콘솔, 가맹점 콘솔, 오프라인 배치 Job)을 상대해서 나중에 독립적으로 스케일·배포·장애가 나야 할 수 있어서다 — 이 선택을 끝까지 따른 결과로, `api-payment`와 역할이 겹치던 원래 Spring-Initializr 루트 앱도 다섯 번째 중복 배포 단위로 남겨두지 않고 삭제했다.
 
-- **Dependencies are scoped to what each app actually does today, not what it will eventually do.** `api-payment` is the only one with a real Use Case behind it (`CreatePaymentUseCase`) so it's the only one with `modules:application`/`modules:infra-persistence`/`spring-boot-starter-jooq`/a `DataSource` wired; `api-admin`/`api-merchant` only depend on `modules:domain` (their Identity/API-key aggregates exist, but no Use Case does yet) plus `webmvc`+`security` for their eventual login endpoints; `batch` only has `spring-boot-starter-batch`, no web starter. Widen a given app's dependencies only when a real Use Case needs them, not preemptively.
-- **Ports**: `api-payment` 8081, `api-admin` 8082, `api-merchant` 8083; `batch` has no `server.port` (not a web app — `spring-boot-starter-batch` without a web starter backs off its web server autoconfiguration, and its `BatchAutoConfiguration` itself backs off with no `DataSource` bean present, so it currently boots as a plain non-web, job-less app).
-- **Component scanning**: `@SpringBootApplication`'s default scan base package is the main class's own package and its sub-packages. `api-payment`'s main class lives in `paytech.practice.pay.api.payment`, which is a *sibling* of `modules:infra-persistence`'s adapters (`paytech.practice.pay.infra.persistence.jooq`), not an ancestor — so those `@Repository` beans are **not** picked up yet. Once a real controller needs them, either move to a shared root package prefix or set `@SpringBootApplication(scanBasePackages = [...])` explicitly; don't assume adding the Gradle dependency alone wires the beans in.
-- `api-payment`'s `application.yaml` points `spring.datasource.*` directly at the same local dev MySQL `db-core`/`compose.yaml` already use (`localhost:3306/stablecoin_payment`, `root`/`verysecret`) rather than relying on `spring-boot-docker-compose` auto-detection — that mechanism looks for a `compose.yaml` in the running app's own working directory (`apps/api-payment/`), not `backend/`, so it wouldn't find the shared one without extra path configuration.
-- Tests all follow the same shape (`@SpringBootTest` + Kotest `SpringExtension`, one `contextLoads` test per app — see "Testing" above); `api-payment` additionally imports a `TestcontainersConfiguration` since it has a `DataSource` to satisfy, the other three don't need one yet.
+- **의존성은 각 앱이 지금 실제로 하는 일에만 맞춘다 — 나중에 할 일까지 미리 넣지 않는다.** `api-payment`만 실제 Use Case(`CreatePaymentUseCase`)가 있어서 `modules:application`/`modules:infra-persistence`/`spring-boot-starter-jooq`/`DataSource`가 연결된 유일한 앱이다. `api-admin`/`api-merchant`는 `modules:domain`에만 의존한다(Identity/API Key 애그리게이트는 있지만 아직 Use Case가 없다) — 나중에 로그인 엔드포인트를 위한 `webmvc`+`security`도 갖고 있다. `batch`는 `spring-boot-starter-batch`만 있고 웹 스타터는 없다. 실제 Use Case가 필요로 할 때만 그 앱의 의존성을 넓히고, 미리 넓히지 않는다.
+- **포트**: `api-payment` 8081, `api-admin` 8082, `api-merchant` 8083; `batch`는 `server.port`가 없다(웹 앱이 아니다 — 웹 스타터 없는 `spring-boot-starter-batch`는 웹 서버 자동 구성을 스스로 끄고, `DataSource` Bean이 없으면 `BatchAutoConfiguration` 자체도 물러나서, 지금은 그냥 웹도 Job도 없는 앱으로 부팅된다).
+- **컴포넌트 스캔**: `@SpringBootApplication`의 기본 스캔 범위는 메인 클래스 자신의 패키지와 그 하위 패키지다. `api-payment`의 메인 클래스는 `paytech.practice.pay.api.payment`에 있는데, 이건 `modules:infra-persistence`의 Adapter(`paytech.practice.pay.infra.persistence.jooq`)와 *형제* 관계이지 상위가 아니다 — 그래서 그 `@Repository` Bean들이 아직 인식되지 않는다. 실제 컨트롤러가 그것들을 필요로 하게 되면, 공유 루트 패키지 접두어로 옮기거나 `@SpringBootApplication(scanBasePackages = [...])`을 명시적으로 설정한다 — Gradle 의존성을 추가하는 것만으로 Bean이 연결된다고 가정하지 않는다.
+- `api-payment`의 `application.yaml`은 `spring-boot-docker-compose` 자동 감지에 기대지 않고 `spring.datasource.*`를 `db-core`/`compose.yaml`이 이미 쓰는 것과 같은 로컬 개발 MySQL로 직접 가리킨다(`localhost:3306/stablecoin_payment`, `root`/`verysecret`) — 그 자동 감지 메커니즘은 실행 중인 앱 자신의 작업 디렉토리(`apps/api-payment/`)에서 `compose.yaml`을 찾지, `backend/`에서 찾지 않아서, 추가 경로 설정 없이는 공유 파일을 찾지 못한다.
+- 테스트는 전부 같은 모양을 따른다(`@SpringBootTest` + Kotest `SpringExtension`, 앱마다 `contextLoads` 테스트 하나 — 위 "테스트" 참고). `api-payment`는 만족시켜야 할 `DataSource`가 있어서 `TestcontainersConfiguration`도 추가로 import하고, 나머지 셋은 아직 필요 없다.
 
-## Domain code conventions
+## 도메인 코드 컨벤션
 
-All aggregates from `docs/domain/domain-model.md` are built: `Merchant`, `Payment`, `CheckoutSession`, `BlockchainTransaction`, `ExchangeOrder`, `SettlementReceivable`, `WebhookDelivery`, plus `PaymentQuote`, `OutboxEvent` (`domain.outbox`), and the identity/API key aggregates (`InternalUser`, `MerchantUser`, `AccountInvitation` in `domain.identity`; `MerchantApiKey` in `domain.apikey`). Follow the same shape for any future aggregate.
+`docs/domain/domain-model.md`의 애그리게이트가 전부 만들어졌다: `Merchant`, `Payment`, `CheckoutSession`, `BlockchainTransaction`, `ExchangeOrder`, `SettlementReceivable`, `WebhookDelivery`, 그리고 `PaymentQuote`, `OutboxEvent`(`domain.outbox`), Identity/API Key 애그리게이트(`domain.identity`의 `InternalUser`, `MerchantUser`, `AccountInvitation`; `domain.apikey`의 `MerchantApiKey`). 앞으로의 애그리게이트도 같은 모양을 따른다.
 
-`Merchant` and `OutboxEvent` aren't covered by `docs/domain/state-transitions.md` — both have their transitions inferred directly from the DB schema (CHECK constraints + column shape), with that reasoning recorded in the respective status enum's KDoc rather than added to `docs/domain/state-transitions.md` itself (that file reflects reviewed business rules, not implementation-inferred ones).
+`Merchant`와 `OutboxEvent`는 `docs/domain/state-transitions.md`에 없다 — 둘 다 DB 스키마(CHECK 제약과 컬럼 구조)에서 직접 상태 전이를 추론했고, 그 근거를 각 상태 Enum의 KDoc에 남겼다 — `docs/domain/state-transitions.md` 자체에는 추가하지 않았다(그 문서는 검토된 비즈니스 규칙을 담는 곳이지 구현하며 추론한 내용을 담는 곳이 아니다).
 
-- **Value Objects** wrap a single primitive as a Kotlin `@JvmInline value class`, validate in an `init { require(...) }` block, and carry KDoc explaining which DB column they map to and why the type exists (see `PaymentId`, `MerchantId`, `Money`, `TokenAmount`, `WalletAddress`, `Asset`, `BlockchainNetwork`, `MerchantOrderId`, `LoginId`, `Email`, `ApiKeyPrefix`, etc.). Reuse a VO across aggregates once a second one needs the identical concept (e.g. `WalletAddress`/`BlockchainNetwork`/`HttpUrl` live in `domain.shared`; `AccountStatus`/`LoginId`/`Email` live in `domain.identity` and are shared by `InternalUser` and `MerchantUser`) rather than duplicating it per-aggregate.
-- **Aggregates** expose a `private` constructor plus two companion factories: `create(...)` (or a more specifically named creation factory, e.g. `Merchant.create`, `MerchantUser.inviteInitialOwner`/`inviteSubAccount`, `InternalUser.bootstrap`/`invite`) for a brand-new instance (fixes the initial state and defaults nullable fields to `null`), and `reconstitute(...)` for rebuilding from persisted values (every field explicit). Never expose a public constructor that lets a caller assemble an aggregate in an inconsistent state.
-- **State-transition methods** are Commands (CQS): they validate the current state via a small private `checkTransition(allowed, target)` helper and throw `IllegalStateException` on an invalid transition, matching the signatures in `docs/domain/domain-model.md` exactly where documented (don't add parameters the docs don't have, e.g. `fail()` takes only `reason` and `failedAt`, not a message). Where a doc doesn't cover an aggregate's transitions at all (`Merchant`, and everything under "Identity & access" beyond the shared `AccountStatus` flow), the transitions are inferred from the schema's status CHECK constraint and column shape, with that reasoning recorded in the enum's KDoc.
-- **Two deliberate exceptions to the create()/reconstitute() pattern**, both because the data shape doesn't support "new vs restored" as a meaningful distinction:
-  - `PaymentQuote` is a plain `data class` with a public constructor — it's an immutable snapshot (no `status`, no transition methods; the `payment_quote` table has no `updated_at`/`version` either).
-  - `AccountInvitation`'s transition methods (`expire()`, `revoke()`) take no timestamp parameter, unlike every other aggregate — the `account_invitation` table has no `updated_at`/`version` column to write one into.
-- **This is a learning project (학습용 프로젝트)**: KDoc and `require`/`check` validation messages in domain code are written in **Korean**, even though identifiers stay in English. Explain the *why* (DB mapping, business rule, scope limits like "EIP-55 checksum 검증은 하지 않는다"), not just what the code does.
+- **Value Object**는 Kotlin `@JvmInline value class`로 원시값 하나를 감싸고, `init { require(...) }` 블록에서 검증하며, 어떤 DB 컬럼에 대응하는지와 그 타입이 왜 존재하는지 설명하는 KDoc을 단다(`PaymentId`, `MerchantId`, `Money`, `TokenAmount`, `WalletAddress`, `Asset`, `BlockchainNetwork`, `MerchantOrderId`, `LoginId`, `Email`, `ApiKeyPrefix` 등 참고). 같은 개념이 두 번째로 필요해지면 애그리게이트마다 중복시키지 말고 VO를 재사용한다(예: `WalletAddress`/`BlockchainNetwork`/`HttpUrl`은 `domain.shared`에, `AccountStatus`/`LoginId`/`Email`은 `domain.identity`에 있고 `InternalUser`와 `MerchantUser`가 공유한다).
+- **애그리게이트**는 `private` 생성자와 Companion 팩토리 둘을 노출한다: 완전히 새 인스턴스를 위한 `create(...)`(또는 더 구체적인 이름의 생성 팩토리, 예: `Merchant.create`, `MerchantUser.inviteInitialOwner`/`inviteSubAccount`, `InternalUser.bootstrap`/`invite` — 초기 상태를 고정하고 Nullable 필드를 기본값 `null`로 둔다), 저장된 값으로부터 복원하는 `reconstitute(...)`(모든 필드를 명시적으로 받는다). 호출부가 일관되지 않은 상태로 애그리게이트를 조립할 수 있는 공개 생성자는 절대 노출하지 않는다.
+- **상태 전이 메서드**는 Command다(CQS): 작은 private `checkTransition(allowed, target)` 헬퍼로 현재 상태를 검증하고, 잘못된 전이면 `IllegalStateException`을 던진다 — 문서화된 곳에서는 `docs/domain/domain-model.md`의 시그니처를 정확히 따른다(문서에 없는 파라미터를 추가하지 않는다, 예: `fail()`은 `reason`과 `failedAt`만 받지 메시지는 받지 않는다). 문서가 애그리게이트의 전이를 전혀 다루지 않는 경우(`Merchant`, 그리고 공유되는 `AccountStatus` 흐름을 넘어서는 "Identity & access" 전반)에는 스키마의 status CHECK 제약과 컬럼 구조에서 전이를 추론하고, 그 근거를 Enum의 KDoc에 남긴다.
+- **create()/reconstitute() 패턴의 의도적인 예외 두 가지** — 둘 다 데이터 형태 자체가 "새로 만든 것"과 "복원한 것"의 의미 있는 구분을 지원하지 않기 때문이다:
+  - `PaymentQuote`는 공개 생성자를 가진 평범한 `data class`다 — 불변 스냅샷이라서다(`status`도, 전이 메서드도 없다; `payment_quote` 테이블에도 `updated_at`/`version`이 없다).
+  - `AccountInvitation`의 전이 메서드(`expire()`, `revoke()`)는 다른 모든 애그리게이트와 달리 타임스탬프 파라미터를 받지 않는다 — `account_invitation` 테이블에 그걸 쓸 `updated_at`/`version` 컬럼이 없어서다.
+- **이건 학습용 프로젝트다**: 식별자는 영문을 유지하지만, 도메인 코드의 KDoc과 `require`/`check` 검증 메시지는 **한글**로 쓴다. 무엇을 하는지가 아니라 *왜*(DB 매핑, 비즈니스 규칙, "EIP-55 checksum 검증은 하지 않는다" 같은 범위 제한)를 설명한다.
 
-## Idempotency keys
+## 멱등성 키
 
-Each of these enforces uniqueness/idempotency on the given key(s) — use them, don't invent parallel dedup logic:
+각각이 주어진 키(들)에 대해 유일성/멱등성을 강제한다 — 이걸 쓰고, 별도의 중복 제거 로직을 새로 만들지 않는다:
 
 | Entity | Key |
 |---|---|
-| Payment creation | `merchant_seq + merchant_order_id` |
+| Payment 생성 | `merchant_seq + merchant_order_id` |
 | BlockchainTransaction | `network_code + transaction_hash` |
 | ExchangeOrder | `client_order_id` |
 | SettlementReceivable | `payment_seq` |
 | WebhookDelivery | `event_id + merchant_seq` |
 | OutboxEvent | `event_id` |
-| InternalUser | `login_id` (also separately unique: `email`) |
-| MerchantUser | `merchant_seq + login_id` (also separately unique: `merchant_seq + email`) |
+| InternalUser | `login_id`(별도로 `email`도 유일) |
+| MerchantUser | `merchant_seq + login_id`(별도로 `merchant_seq + email`도 유일) |
 | AccountInvitation | `token_hash` |
 | MerchantApiKey | `key_prefix` |
 
-## Database / jOOQ code generation
+## Database / jOOQ 코드 생성
 
-`db-core` owns the DB schema and generates jOOQ Kotlin code from a real MySQL instance. It is a real Gradle subproject using the **official** `org.jooq.jooq-codegen-gradle` plugin (jOOQ core is 3.21.5 via the Spring Boot 4.1.0 BOM; the codegen plugin's latest published release is 3.20.3 — a known one-minor-version lag between the plugin and jOOQ core, not a mismatch you introduced).
+`db-core`가 DB 스키마를 소유하고 실제 MySQL 인스턴스로부터 jOOQ Kotlin 코드를 생성한다. **공식** `org.jooq.jooq-codegen-gradle` 플러그인을 쓰는 실제 Gradle 서브프로젝트다(jOOQ Core는 Spring Boot 4.1.0 BOM을 통해 3.21.5이고, Codegen 플러그인의 최신 배포 버전은 3.20.3이다 — 플러그인과 jOOQ Core 사이에 마이너 버전 하나가 뒤처지는 건 알려진 사실이지 여러분이 만든 불일치가 아니다).
 
-Workflow (from `backend/`):
+작업 흐름(`backend/`에서):
 
 ```
-docker compose up -d                                    # starts MySQL (db: stablecoin_payment, root pw: verysecret)
+docker compose up -d                                    # MySQL 시작(DB: stablecoin_payment, root 비밀번호: verysecret)
 docker exec -i backend-mysql-1 mysql --default-character-set=utf8mb4 -uroot -pverysecret stablecoin_payment < db-core/src/main/resources/db/migration/V1__init_schema.sql
 docker exec -i backend-mysql-1 mysql --default-character-set=utf8mb4 -uroot -pverysecret stablecoin_payment < db-core/src/main/resources/db/migration/V2__seed_dev_data.sql
 docker exec -i backend-mysql-1 mysql --default-character-set=utf8mb4 -uroot -pverysecret stablecoin_payment < db-core/src/main/resources/db/migration/V3__add_identity_access_and_merchant_api_key.sql
-gradlew.bat :db-core:jooqCodegen                          # generates into db-core/build/generated-src/jooq/main (gitignored, not committed)
-gradlew.bat :db-core:build                                 # jooqCodegen runs first (wired via compileKotlin.dependsOn), then compiles
+gradlew.bat :db-core:jooqCodegen                          # db-core/build/generated-src/jooq/main에 생성(gitignore 대상, 커밋하지 않음)
+gradlew.bat :db-core:build                                 # jooqCodegen이 먼저 실행되고(compileKotlin.dependsOn으로 연결), 그다음 컴파일된다
 ```
 
-- **Migrations are applied manually for now, not via the Flyway Gradle plugin.** The official `org.flywaydb.flyway` plugin (latest published: 11.8.2) still calls the Gradle API `JavaPluginConvention`, which was removed in Gradle 9 — its tasks fail outright on this project's Gradle 9.5.1 (unresolved upstream: https://github.com/flyway/flyway/issues/3798). The migration files under `db-core/src/main/resources/db/migration/` are still plain, correctly-numbered Flyway-format SQL (`V1__init_schema.sql`, `V2__seed_dev_data.sql`, `V3__add_identity_access_and_merchant_api_key.sql`) — once the app module gets a real `DataSource`, Spring Boot's own Flyway autoconfiguration (`spring-boot-starter-flyway`, independent of this Gradle plugin) will apply them automatically. Re-check whether a newer `flyway-gradle-plugin` fixes this before assuming it's still broken.
-- **Always pass `--default-character-set=utf8mb4` when applying a migration via the `mysql` CLI.** Without it, the CLI's default `latin1` client charset silently mangles the Korean `COMMENT`/seed text on the way into MySQL (the corruption happens on write, not on jOOQ's read side — this bit us once already; the DB had to be dropped and re-seeded to fix it).
-- The `jooq { configuration { jdbc { url = ... } } }` URL also carries `useUnicode=true&characterEncoding=UTF-8` as cheap extra insurance for the codegen connection itself.
-- `compileKotlin` does not automatically depend on `jooqCodegen`, and the official plugin does not automatically add its output directory to the Kotlin source set — both are wired explicitly in `db-core/build.gradle.kts` (`tasks.named("compileKotlin") { dependsOn("jooqCodegen") }` + `sourceSets { main { kotlin { srcDir(...) } } }`). Don't assume a fresh official-plugin setup wires these for you.
-- Generated code lives under package `paytech.practice.pay.dbcore.jooq` and must only be consumed inside future persistence adapters (`modules/infra-persistence`), per the Persistence conventions below — never from `domain`/`application`.
-- `jooqCodegen` prints (harmless) `Ambiguous key name` warnings for `internal_user` and `merchant_user` — both tables have more than one FK back to themselves/each other (`created_by_internal_user_seq`, `invited_by_internal_user_seq`, `invited_by_merchant_user_seq`), so jOOQ can't auto-name every implicit-join convenience accessor uniquely. The build still succeeds and the generated `Table`/`Record` classes are unaffected; only some optional path-navigation sugar methods are skipped.
+- **마이그레이션은 지금 Flyway Gradle 플러그인이 아니라 수동으로 적용한다.** 공식 `org.flywaydb.flyway` 플러그인(최신 배포: 11.8.2)이 Gradle 9에서 제거된 Gradle API `JavaPluginConvention`을 여전히 호출해서, 이 프로젝트의 Gradle 9.5.1에서는 태스크가 그대로 실패한다(업스트림 미해결: https://github.com/flyway/flyway/issues/3798). `db-core/src/main/resources/db/migration/` 아래의 마이그레이션 파일들은 여전히 평범하고 번호가 올바르게 매겨진 Flyway 형식 SQL이다(`V1__init_schema.sql`, `V2__seed_dev_data.sql`, `V3__add_identity_access_and_merchant_api_key.sql`) — 앱 모듈이 실제 `DataSource`를 갖게 되면 Spring Boot 자체의 Flyway 자동 구성(`spring-boot-starter-flyway`, 이 Gradle 플러그인과 무관함)이 자동으로 적용해줄 것이다. 여전히 깨져 있다고 가정하기 전에 더 최신 `flyway-gradle-plugin`이 고쳐졌는지 다시 확인한다.
+- **`mysql` CLI로 마이그레이션을 적용할 때는 항상 `--default-character-set=utf8mb4`를 넘긴다.** 넘기지 않으면 CLI의 기본 `latin1` 클라이언트 문자셋이 MySQL로 들어가는 한글 `COMMENT`/시드 텍스트를 조용히 깨뜨린다(손상은 jOOQ가 읽을 때가 아니라 쓸 때 일어난다 — 이미 한 번 겪었고, DB를 지우고 다시 시딩해야 했다).
+- `jooq { configuration { jdbc { url = ... } } }`의 URL에도 Codegen 커넥션 자체를 위한 값싼 추가 보험으로 `useUnicode=true&characterEncoding=UTF-8`을 붙여둔다.
+- `compileKotlin`은 자동으로 `jooqCodegen`에 의존하지 않고, 공식 플러그인도 자신의 출력 디렉토리를 Kotlin 소스셋에 자동으로 추가하지 않는다 — 둘 다 `db-core/build.gradle.kts`에서 명시적으로 연결했다(`tasks.named("compileKotlin") { dependsOn("jooqCodegen") }` + `sourceSets { main { kotlin { srcDir(...) } } }`). 새로 공식 플러그인을 설정하면 이게 자동으로 연결된다고 가정하지 않는다.
+- 생성된 코드는 `paytech.practice.pay.dbcore.jooq` 패키지 아래에 있고, 아래 Persistence conventions에 따라 향후 영속성 Adapter(`modules/infra-persistence`) 안에서만 써야 한다 — `domain`/`application`에서는 절대 쓰지 않는다.
+- `jooqCodegen`은 `internal_user`와 `merchant_user`에 대해 (무해한) `Ambiguous key name` 경고를 출력한다 — 두 테이블 모두 자기 자신/서로에게 FK가 여러 개 걸려 있어서(`created_by_internal_user_seq`, `invited_by_internal_user_seq`, `invited_by_merchant_user_seq`), jOOQ가 모든 암묵적 Join 편의 접근자에 유일한 이름을 자동으로 붙이지 못한다. 빌드는 여전히 성공하고 생성된 `Table`/`Record` 클래스에도 영향이 없다 — 몇몇 선택적인 경로 탐색 편의 메서드만 생략될 뿐이다.
 
-## Persistence conventions (once implemented)
+## Persistence 컨벤션(구현되면)
 
-- MySQL 8.x, jOOQ only — **no JPA/Hibernate**. Generated jOOQ records are used only inside persistence adapters, never leaked to domain/application layers, and are converted via an explicit Mapper between Record and domain object (no implicit/reflective mapping).
-- Command repositories store/restore whole aggregates; complex reads go through dedicated jOOQ projection queries instead of the aggregate repository.
-- Optimistic locking: mutable-aggregate tables carry `version BIGINT`; UPDATEs condition on id + expected current status + expected version.
-- Type mapping: KRW → `BIGINT`/`Money`, USDC → minor-unit `BIGINT`/`TokenAmount` (e.g. `72.992701 USDC = 72,992,701`), rates → `DECIMAL(24,12)`/`BigDecimal`, timestamps → `DATETIME(6)` UTC, status columns → `VARCHAR` backed by Kotlin enums (never MySQL `ENUM`, never `FLOAT`/`DOUBLE` for money or rates).
-- Key transaction boundaries: payment creation groups `Payment + PaymentQuote + CheckoutSession + OutboxEvent`; payment completion groups `BlockchainTransaction + Payment(SUCCEEDED) + OutboxEvent`; exchange completion groups `ExchangeOrder(COMPLETED) + SettlementReceivable(READY) + OutboxEvent`.
-- Async side effects (webhooks, events) go through the transactional outbox pattern (`outbox_event` table) rather than direct publish-in-transaction.
+- MySQL 8.x, jOOQ만 사용 — **JPA/Hibernate는 쓰지 않는다**. 생성된 jOOQ Record는 영속성 Adapter 내부에서만 쓰고 domain/application 계층으로 새어나가지 않으며, Record와 도메인 객체 사이는 명시적인 Mapper로 변환한다(암묵적/리플렉션 매핑 없음).
+- Command Repository는 애그리게이트 전체를 저장·복원하고, 복잡한 조회는 애그리게이트 Repository 대신 전용 jOOQ Projection 쿼리를 거친다.
+- 낙관적 잠금: 변경 가능한 애그리게이트의 테이블은 `version BIGINT`를 갖고, UPDATE는 ID + 예상 현재 상태 + 예상 version을 조건으로 건다.
+- 타입 매핑: KRW → `BIGINT`/`Money`, USDC → Minor Unit `BIGINT`/`TokenAmount`(예: `72.992701 USDC = 72,992,701`), 환율 → `DECIMAL(24,12)`/`BigDecimal`, 타임스탬프 → `DATETIME(6)` UTC, 상태 컬럼 → Kotlin Enum이 뒷받침하는 `VARCHAR`(MySQL `ENUM`은 절대 쓰지 않고, 금액이나 환율에 `FLOAT`/`DOUBLE`도 절대 쓰지 않는다).
+- 주요 트랜잭션 경계: 결제 생성은 `Payment + PaymentQuote + CheckoutSession + OutboxEvent`를 묶고, 결제 완료는 `BlockchainTransaction + Payment(SUCCEEDED) + OutboxEvent`를 묶고, 환전 완료는 `ExchangeOrder(COMPLETED) + SettlementReceivable(READY) + OutboxEvent`를 묶는다.
+- 비동기 부수효과(Webhook, 이벤트)는 트랜잭션 내 직접 발행이 아니라 Transactional Outbox 패턴(`outbox_event` 테이블)을 거친다.
