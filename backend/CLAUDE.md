@@ -11,7 +11,7 @@ apps/               api-admin, api-merchant, api-payment, batch   (placeholder)
 modules/
   application/       real Gradle subproject, depends on domain, no source yet
   common/            (placeholder)
-  domain/            real Gradle subproject, no dependencies; Money/PaymentId/MerchantId VOs
+  domain/            real Gradle subproject, no dependencies; Payment aggregate + VOs (see Domain code conventions)
   infra-blockchain/  (placeholder)
   infra-persistence/ (placeholder)
 db-core/             real Gradle subproject — Flyway migrations + jOOQ codegen (see below)
@@ -54,9 +54,19 @@ Planned module layering (see `docs/architecture/persistence-jooq.md`): `domain` 
 
 - Domain code must not depend on Spring, jOOQ, an HTTP client, or any blockchain SDK — it depends on nothing but plain Kotlin.
 - Aggregates reference other aggregates by ID, never by object reference.
-- Command and Query responsibilities are separated (command repositories mutate/restore aggregates; reads go through dedicated jOOQ projections — see Persistence conventions).
+- **CQS (Command Query Separation)** at the method level: a method either changes state and returns nothing (a Command — e.g. `Payment.ready()`, `submit()`, `succeed()`) or returns data without side effects (a Query — e.g. reading `payment.status`), never both. Don't add a method that mutates state and also hands back a computed result.
+- **CQRS at the persistence level**: Command repositories store/restore whole aggregates; complex reads go through dedicated jOOQ projections instead of the aggregate repository — see Persistence conventions.
 - Every external system (blockchain RPC, exchange, webhook delivery) sits behind an outbound Port; adapters implement the port, never the reverse.
 - State-transition rules live on the domain aggregate itself, never in a Controller or Repository.
+
+## Domain code conventions
+
+Established while building `Payment` and its value objects in `modules/domain` — follow the same shape for the remaining aggregates (`Merchant`, `CheckoutSession`, `BlockchainTransaction`, `ExchangeOrder`, `SettlementReceivable`, `WebhookDelivery`).
+
+- **Value Objects** wrap a single primitive as a Kotlin `@JvmInline value class`, validate in an `init { require(...) }` block, and carry KDoc explaining which DB column they map to and why the type exists (see `PaymentId`, `MerchantId`, `Money`, `TokenAmount`, `WalletAddress`, `Asset`, `BlockchainNetwork`, `MerchantOrderId`).
+- **Aggregates** expose a `private` constructor plus two companion factories: `create(...)` for a brand-new instance (fixes the initial state, e.g. `PaymentStatus.CREATED`, and defaults nullable fields to `null`) and `reconstitute(...)` for rebuilding from persisted values (every field explicit). Never expose a public constructor that lets a caller assemble an aggregate in an inconsistent state.
+- **State-transition methods** are Commands (CQS): they validate the current state via a small private `checkTransition(allowed, target)` helper and throw `IllegalStateException` on an invalid transition, matching the signatures in `docs/domain/domain-model.md` exactly (don't add parameters the docs don't have, e.g. `fail()` takes only `reason` and `failedAt`, not a message).
+- **This is a learning project (학습용 프로젝트)**: KDoc and `require`/`check` validation messages in domain code are written in **Korean**, even though identifiers stay in English. Explain the *why* (DB mapping, business rule, scope limits like "EIP-55 checksum 검증은 하지 않는다"), not just what the code does.
 
 ## Idempotency keys
 
