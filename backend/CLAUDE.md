@@ -4,10 +4,19 @@ Guidance for working in `backend/`. For the shared payment domain (aggregates, s
 
 ## Current implementation state
 
-The backend is still mostly at the Spring Initializr skeleton stage. `src/main/kotlin/paytech/practice/pay/PracticePayApplication.kt` (the root project) is the only hand-written application code so far. `modules:domain`, `modules:application`, `modules:infra-persistence`, `db-core`, and `architecture-tests` are real Gradle subprojects (see `settings.gradle.kts`); the rest are still empty placeholders not wired in. Don't assume code exists in the placeholder folders; check before referencing them, and re-verify this layout before relying on it since it has already been restructured once:
+`modules:domain`, `modules:application`, `modules:infra-persistence`, `db-core`, `architecture-tests`, and all four `apps:*` are real Gradle subprojects (see `settings.gradle.kts`); the rest are still empty placeholders not wired in. Don't assume code exists in the placeholder folders; check before referencing them, and re-verify this layout before relying on it since it has already been restructured more than once:
 
 ```
-apps/               api-admin, api-merchant, api-payment, batch   (placeholder)
+apps/
+  api-payment/       real Gradle subproject, independently deployable Spring Boot app (own main class, own port) —
+                     webmvc + jooq + depends on modules:application + modules:infra-persistence. The only app with
+                     a real Use Case behind it so far (CreatePaymentUseCase); no controller wired to it yet.
+  api-admin/         real Gradle subproject, independently deployable Spring Boot app — webmvc + security,
+                     depends on modules:domain only (no InternalUser Use Case exists yet, so no jOOQ/DataSource either)
+  api-merchant/      real Gradle subproject, independently deployable Spring Boot app — same shape as api-admin,
+                     for MerchantUser/MerchantApiKey flows once those Use Cases exist
+  batch/             real Gradle subproject, independently deployable Spring Boot app — spring-boot-starter-batch,
+                     no web starter, no Job defined yet (future home for e.g. an OutboxEvent publisher worker)
 modules/
   application/       real Gradle subproject, depends on domain; CreatePaymentUseCase (the payment-creation slice) + its outbound ports (see Architecture)
   common/            (placeholder)
@@ -18,7 +27,7 @@ db-core/             real Gradle subproject — Flyway migrations + jOOQ codegen
 architecture-tests/  real Gradle subproject, test-only (no src/main) — ArchUnit rules over other modules' compiled classes
 ```
 
-The root project does not yet depend on `modules:application`, `modules:domain`, `modules:infra-persistence`, or `db-core` — nothing wires them into the running app yet (no Spring component scan will find `infra-persistence`'s `@Repository` beans until it does).
+**The root project (`src/main/kotlin/paytech/practice/pay/PracticePayApplication.kt`) is now redundant with `apps/api-payment`** — both are independently bootable Spring Boot apps, and the root one predates the `apps:*` split (it's the original Spring Initializr skeleton, still carrying the full unsplit dependency list: webmvc, jooq, security, validation, restclient, batch, all at once). It hasn't been removed or repurposed — that's a deliberate choice not to delete working code/tests without being asked, not an oversight. Decide (and ask if unclear) whether to delete it, or keep it as a single "everything" dev convenience app, before adding more real logic to either it or `apps:api-payment`.
 
 ## Commands
 
@@ -75,12 +84,22 @@ Established by the first use case, `CreatePaymentUseCase` (`application.payment`
 
 Established implementing the payment-creation slice's ports (`infra.persistence.jooq`, one subpackage per aggregate, e.g. `infra.persistence.jooq.payment`) — follow this shape for future adapters:
 
-- Adapters are `@Repository`/`@Component` classes constructor-injected with a single `DSLContext`, so they only need to be added to `modules:infra-persistence`'s dependencies and left for Spring's component scan to pick up once a future app module wires this module in — no manual bean wiring inside the module itself.
+- Adapters are `@Repository`/`@Component` classes constructor-injected with a single `DSLContext`, so no manual bean wiring is needed inside the module itself — an app depending on `modules:infra-persistence` just needs its `@SpringBootApplication` component scan to actually reach `infra.persistence.jooq` (see the `apps/*` subsection below; `api-payment` depends on this module but doesn't widen its scan yet, so these beans aren't picked up there today).
 - **jOOQ's generated table classes collide by name with several domain aggregates** (`Payment`, `Merchant`, `CheckoutSession`, `PaymentQuote`, `OutboxEvent` all exist as both a `paytech.practice.pay.dbcore.jooq.tables.*` class and a `paytech.practice.pay.domain.*` class). Every adapter resolves this the same way: import only the table's singleton constant via its companion (`import ...tables.Payment.Companion.PAYMENT`), never the table class itself — the class is never referenced by name, so there's nothing to collide with the domain import.
 - `Instant` ↔ `LocalDateTime` conversion for `DATETIME(6)` UTC columns goes through the shared `toUtcLocalDateTime()`/`toUtcInstant()` extensions in `infra.persistence.jooq.InstantMapping.kt` — don't hand-roll `ZoneOffset.UTC` conversions per adapter.
 - Columns with no domain equivalent (`payment.order_currency`, `payment_quote.quote_currency`) are filled with the hardcoded literal `"KRW"` at the adapter boundary — consistent with `Money` implicitly always meaning KRW everywhere else in this codebase (MVP only supports the KRW→USDC pair).
 - **Known gap: `save()` on `Payment`/`CheckoutSession` (the two aggregates with a `version` optimistic-lock column) does not provide real optimistic-lock protection today.** The domain aggregates don't carry a `version` field (kept out deliberately to avoid leaking a persistence concern into the domain layer), so the adapter re-reads the current DB `version` immediately before updating and uses `current + 1` — this only guards against literal concurrent writes to the exact same adapter call, not "the aggregate was loaded from a stale version." Revisit this (most likely by threading an expected-version through the port, or fully embracing DB-side `SELECT ... FOR UPDATE`) when the first state-transition use case that re-saves an existing aggregate is built — today only `CreatePaymentUseCase` calls `save()`, and it always saves brand-new aggregates, so the gap has no live impact yet.
 - **Testing**: `infra-persistence` has real MySQL integration tests (not mocks) — a Testcontainers MySQL instance shared across the test JVM run (`PersistenceTestSupport`), migrated with the `flyway-core` Java API directly (`Flyway.configure()...migrate()`), not the `org.flywaydb.flyway` Gradle plugin (that plugin is what's broken on Gradle 9.5.1 — see "Database / jOOQ code generation" below — the plain Java library has nothing to do with that breakage). The test `DSLContext` is wired exactly like Spring Boot's own `JooqAutoConfiguration` would (`DataSourceConnectionProvider` + `TransactionAwareDataSourceProxy` + `org.springframework.boot.jooq.autoconfigure.SpringTransactionProvider`, from the `spring-boot-jooq` module — Spring Boot 4.x moved jOOQ autoconfiguration out of `spring-boot-autoconfigure` into this dedicated module), so `TransactionManagerAdapterTest` can prove multi-repository writes actually roll back together.
+
+### Apps (`apps:api-payment`, `apps:api-admin`, `apps:api-merchant`, `apps:batch`)
+
+Each is an **independently deployable Spring Boot application** — its own `build.gradle.kts` applying the `org.springframework.boot` plugin, its own `@SpringBootApplication` main class, its own `application.yaml`, its own port — not just a package inside one shared app. This was a deliberate choice (confirmed with the user over the alternative of a modular monolith sharing the existing root app) precisely because the four apps serve different audiences (payment API for merchants' servers, admin console for internal staff, merchant console, and offline batch jobs) that may need to scale, deploy, and fail independently later.
+
+- **Dependencies are scoped to what each app actually does today, not what it will eventually do** — don't copy the root project's full Spring-Initializr dependency list into every app. `api-payment` is the only one with a real Use Case behind it (`CreatePaymentUseCase`) so it's the only one with `modules:application`/`modules:infra-persistence`/`spring-boot-starter-jooq`/a `DataSource` wired; `api-admin`/`api-merchant` only depend on `modules:domain` (their Identity/API-key aggregates exist, but no Use Case does yet) plus `webmvc`+`security` for their eventual login endpoints; `batch` only has `spring-boot-starter-batch`, no web starter. Widen a given app's dependencies only when a real Use Case needs them, not preemptively.
+- **Ports**: `api-payment` 8081, `api-admin` 8082, `api-merchant` 8083; `batch` has no `server.port` (not a web app — `spring-boot-starter-batch` without a web starter backs off its web server autoconfiguration, and its `BatchAutoConfiguration` itself backs off with no `DataSource` bean present, so it currently boots as a plain non-web, job-less app).
+- **Component scanning**: `@SpringBootApplication`'s default scan base package is the main class's own package and its sub-packages. `api-payment`'s main class lives in `paytech.practice.pay.api.payment`, which is a *sibling* of `modules:infra-persistence`'s adapters (`paytech.practice.pay.infra.persistence.jooq`), not an ancestor — so those `@Repository` beans are **not** picked up yet. Once a real controller needs them, either move to a shared root package prefix or set `@SpringBootApplication(scanBasePackages = [...])` explicitly; don't assume adding the Gradle dependency alone wires the beans in.
+- `api-payment`'s `application.yaml` points `spring.datasource.*` directly at the same local dev MySQL `db-core`/`compose.yaml` already use (`localhost:3306/stablecoin_payment`, `root`/`verysecret`) rather than relying on `spring-boot-docker-compose` auto-detection — the app's working directory (`apps/api-payment/`) isn't where `compose.yaml` lives, so the auto-detection root's `developmentOnly("org.springframework.boot:spring-boot-docker-compose")` relies on wouldn't find it without extra path configuration.
+- Tests mirror the root project's existing pattern (`@SpringBootTest` + Kotest `SpringExtension`, one `contextLoads` test per app); `api-payment` additionally imports a `TestcontainersConfiguration` (identical shape to the root project's) since it has a `DataSource` to satisfy, the other three don't need one yet.
 
 ## Domain code conventions
 

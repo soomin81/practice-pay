@@ -1,0 +1,6 @@
+spring:
+  application:
+    name: api-admin
+
+server:
+  port: 8082
