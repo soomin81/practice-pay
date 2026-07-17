@@ -9,9 +9,9 @@
 ```
 apps/
   api-payment/       실제 Gradle 서브프로젝트, 독립 배포 가능한 Spring Boot 앱(자체 메인 클래스, 자체 포트) —
-                     webmvc + jooq이고 modules:application + modules:infra-persistence에 의존한다. 지금까지
-                     실제 Use Case(CreatePaymentUseCase)와 그걸 노출하는 컨트롤러(POST /api/v1/payments)가
-                     있는 유일한 앱이다(Apps 절 참고). MerchantApiKey 인증은 아직 없다.
+                     webmvc + jooq + security이고 modules:application + modules:infra-persistence에 의존한다.
+                     CreatePaymentUseCase(POST /api/v1/payments)를 MerchantApiKey Bearer 인증으로 보호한다
+                     (Apps 절 참고).
   api-admin/         실제 Gradle 서브프로젝트, 독립 배포 가능한 Spring Boot 앱 — webmvc + jooq + security,
                      modules:application + modules:infra-persistence에 의존한다. AuthenticateInternalUserUseCase와
                      그걸 노출하는 컨트롤러(POST /admin/login)가 있다(Apps 절 참고). 내부 운영자 발급 등
@@ -113,8 +113,21 @@ inbound adapter → application → domain ← outbound port ← outbound adapte
 - **`UseCaseConfiguration`**: `CreatePaymentUseCase`는 `modules:application`에 있고 그 모듈은 Spring에 의존하지 않아서 `@Component`를 직접 달 수 없다 — 그래서 이 `@Configuration` 클래스가 outbound port Bean들을 주입받아 `@Bean` 메서드로 대신 조립한다. 앞으로 Use Case가 늘어나면 이 클래스에 `@Bean` 메서드를 추가한다(Use Case 하나마다 별도 Configuration 클래스를 만들 필요는 없다).
 - **`IdGenerator`/`ExchangeRateProvider`의 구현이 없었다** — 둘 다 영속성 관심사가 아니라서 `modules:infra-persistence`가 구현하지 않았다. `support.UuidIdGenerator`(UUID 기반)와 `support.FakeExchangeRateProvider`(고정 환율, `docs/decisions/ADR-004-fake-exchange.md`의 Fake Exchange를 대표)를 이 앱 안에 직접 만들어 채웠다 — 둘 다 다른 앱이 필요로 하게 되면 그때 공유 위치로 옮길 수 있는, 지금은 이 정도로 충분한 임시 구현이라고 KDoc에 명시했다.
 - **`PaymentApiExceptionHandler`**(`@RestControllerAdvice`)가 `application`/`domain` 예외를 HTTP 상태로 옮긴다: `MerchantNotFoundException` → 404, `MerchantCannotAcceptPaymentsException` → 409, Value Object의 `init { require(...) }` 검증 실패(`IllegalArgumentException`) → 400, `@Valid` 실패(`MethodArgumentNotValidException`) → 400. 이 매핑은 inbound Adapter의 책임이다 — Use Case나 Value Object는 HTTP를 전혀 모른다.
-- **알려진 gap: `MerchantApiKey` 인증이 아직 없다.** `CreatePaymentRequest`는 인증된 API Key 컨텍스트에서 가맹점을 알아내는 대신 `merchantId`를 요청 본문에 직접 받는다 — API Key 인증(`docs/architecture/identity-access-api-key.md`의 "6.3 인증 방식") Use Case가 생기면 이 필드는 제거해야 한다.
+- **`merchantId`는 요청 본문이 아니라 인증된 `MerchantApiKey`에서 온다** — 아래 "`api-payment`의 API Key 인증" 참고. 처음 이 컨트롤러를 만들 때는 API Key 인증이 없어서 `merchantId`를 요청 본문에 직접 받는 임시 gap이 있었는데, 이제 해소됐다.
 - **테스트**: `PaymentControllerTest`는 `@WebMvcTest(PaymentController::class)`로 웹 계층만 띄운다(DB 없음) — `CreatePaymentUseCase`는 `com.ninja-squad:springmockk`의 `@MockkBean`으로 Mock했다(위 "테스트" 참고). `@Autowired` 필드 주입이 필요해서 이 파일만 `FunSpec() { init { ... } }` 형태를 쓴다. 여기에 더해 실제 `bootRun` + `curl`로 시딩된 `mrc_test_001` 가맹점을 상대로 결제 생성 → 멱등 재요청(같은 `paymentId` 반환, 중복 행 없음) → DB 직접 조회까지 한 번 수동으로 검증했다(자동화된 테스트로 남기지는 않음).
+
+### `api-payment`의 API Key 인증
+
+`docs/architecture/identity-access-api-key.md`의 "6.4 저장 정책" 권장 흐름을 그대로 구현한다: `Authorization: Bearer sk_test_<prefixToken>_<secret>` 수신 → Prefix 추출 → Prefix로 후보 Key 조회 → 전체 Key를 서버 측 Pepper와 함께 해시 → `secret_hash` 비교 → 상태·환경·Merchant 상태 확인 → `last_used_at` 갱신. `AuthenticateInternalUserUseCase`/`AuthenticateMerchantUserUseCase`(자격증명 검증 → 신원 반환)와 같은 모양이지만, 로그인이 아니라 **보호된 요청마다** 실행된다는 점이 다르다 — 실패 잠금도 없다(사람이 타이핑하는 비밀번호가 아니라서).
+
+- **API Key 형식**: `key_prefix`(예: `sk_test_ab12cd34`, `ApiKeyPrefix`의 KDoc 예시) 뒤에 `_<secret>`을 붙인 게 전체 Key다. `AuthenticateApiKeyUseCase.extractPrefix`는 `_`로 최대 4조각까지만 자른다(`split(limit = 4)`) — `secret`이 `_`를 포함해도 깨지지 않는다.
+- **`ApiKeySecretHasher`를 `PasswordEncoder`와 의도적으로 분리했다** — 사람 비밀번호는 BCrypt 같은 느린 적응형 해시가 맞지만, API Key는 매 요청 검증이라 그럴 필요가 없다. 문서가 명시한 대로 `apps:api-payment`의 `HmacApiKeySecretHasher`가 HMAC-SHA-256 + 서버 측 Pepper로 구현한다. Pepper는 `application.yaml`의 `app.api-key.pepper`에서 오고, 지금 값은 `db-core`의 `verysecret` DB 비밀번호와 같은 성격의 로컬 개발용 평문 placeholder다 — 실제 배포 전 환경변수/Secret Manager로 옮겨야 한다. 해시 비교는 타이밍 공격을 막기 위해 `String.equals` 대신 `MessageDigest.isEqual`(상수 시간 비교)로 한다.
+- **`MerchantApiKeyRepositoryAdapter`(`modules:infra-persistence`)는 이 프로젝트에서 처음으로 자식 컬렉션 테이블을 다루는 Adapter다.** `MerchantApiKey.scopes`는 `merchant_api_key_scope`(복합 PK, 자기 생명주기 없는 값 컬렉션)에 저장된다. 도메인에 Scope를 바꾸는 메서드가 없어서(발급 시 정해지면 끝) `save`의 INSERT 경로에서만 Scope 행을 쓰고, UPDATE 경로(`revoke`/`expire`/`recordUsage`)는 건드리지 않는다.
+- **인증은 Filter가 한다, 컨트롤러가 아니다.** `ApiKeyAuthenticationFilter`(`OncePerRequestFilter`)가 `Authorization` 헤더를 읽어 매 요청 `AuthenticateApiKeyUseCase`를 부르고, 성공하면 이번 요청의 `SecurityContext`에 `UsernamePasswordAuthenticationToken(principal = ApiKeyPrincipal(merchantId, merchantApiKeyId), authorities = ["SCOPE_<ApiKeyScope>", ...])`를 심는다. 실패해도 예외를 던지지 않고 `SecurityContext`만 비운 채 다음 필터로 넘긴다 — 그 뒤 `authorizeHttpRequests`가 401/403을 결정한다.
+- **`SecurityConfig`**: `POST /api/v1/payments`에 `hasAuthority("SCOPE_PAYMENT_CREATE")`를 요구한다. `SessionCreationPolicy.STATELESS`로 세션을 아예 안 만든다 — `apps:api-admin`/`apps:api-merchant`의 세션 쿠키 로그인과 근본적으로 다른 인증 방식이라서다. **여기서 CSRF를 끄는 건 admin/merchant처럼 "아직 안 켠 gap"이 아니라 애초에 필요 없다** — CSRF는 브라우저가 쿠키를 자동으로 실어 보내는 상황을 노리는 공격인데, 이 앱은 세션 쿠키를 쓰지 않는 순수 Bearer 토큰 인증이라 공격 대상 자체가 성립하지 않는다.
+- **`ApiKeyAuthenticationEntryPoint`**가 인증 실패 401 응답을 `PaymentApiExceptionHandler`와 같은 `ErrorResponse` JSON 형식으로 통일한다 — 없으면 Spring Security 기본 엔트리 포인트가 다른 형식을 준다.
+- **`PaymentController`는 `merchantId`를 `@AuthenticationPrincipal ApiKeyPrincipal`에서 받는다** — 요청 본문에는 더 이상 없다.
+- **테스트**: `AuthenticateApiKeyUseCaseTest`(단위, 정상/형식 오류/Prefix 미존재/Secret 불일치/폐기/만료/`LIVE` 환경/Merchant 상태 불가를 전부 커버), `MerchantApiKeyRepositoryAdapterTest`(Testcontainers MySQL 통합, Scope 왕복까지 확인), `PaymentControllerTest`는 `@Import(SecurityConfig::class)`로 실제 인가 규칙까지 검증한다(`SecurityMockMvcRequestPostProcessors.authentication(...)`으로 `Authentication`을 직접 주입 — `authenticateApiKeyUseCase`는 `SecurityConfig`의 Bean 그래프를 만족시키기 위한 Mock일 뿐 실제로 호출되지 않는다). 여기에 더해 실제 `bootRun` + `curl`로 HMAC 해시를 미리 심어둔 테스트 Key를 상대로 헤더 없음(401) → Secret 틀림(401) → 정상 Key로 결제 생성(201, `last_used_at` 갱신 확인)까지 수동으로 검증했다.
 
 **Spring Boot 4.1 / Jackson 3.x로 넘어오며 자주 걸리는 패키지 함정 두 가지**(둘 다 `apps:api-payment`에서 처음 부딪혔다):
 - `ObjectMapper`는 `com.fasterxml.jackson.databind`가 아니라 **`tools.jackson.databind`**에 있다 — Jackson 3.x부터 그룹 ID/패키지가 `tools.jackson`으로 바뀌었다(`jackson-module-kotlin`도 `tools.jackson.module:jackson-module-kotlin`). 이 프로젝트의 루트 `build.gradle.kts` 의존성 목록에 이미 그 흔적이 있다.

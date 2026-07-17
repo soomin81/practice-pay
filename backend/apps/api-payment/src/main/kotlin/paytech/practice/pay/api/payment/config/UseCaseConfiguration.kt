@@ -2,10 +2,13 @@ package paytech.practice.pay.api.payment.config
 
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import paytech.practice.pay.application.apikey.AuthenticateApiKeyUseCase
 import paytech.practice.pay.application.payment.CreatePaymentUseCase
+import paytech.practice.pay.application.port.outbound.ApiKeySecretHasher
 import paytech.practice.pay.application.port.outbound.CheckoutSessionRepository
 import paytech.practice.pay.application.port.outbound.ExchangeRateProvider
 import paytech.practice.pay.application.port.outbound.IdGenerator
+import paytech.practice.pay.application.port.outbound.MerchantApiKeyRepository
 import paytech.practice.pay.application.port.outbound.MerchantRepository
 import paytech.practice.pay.application.port.outbound.OutboxEventRepository
 import paytech.practice.pay.application.port.outbound.PaymentQuoteRepository
@@ -25,6 +28,20 @@ import java.time.Clock
 class UseCaseConfiguration {
 	@Bean
 	fun clock(): Clock = Clock.systemUTC()
+
+	@Bean
+	fun authenticateApiKeyUseCase(
+		merchantApiKeyRepository: MerchantApiKeyRepository,
+		merchantRepository: MerchantRepository,
+		apiKeySecretHasher: ApiKeySecretHasher,
+		clock: Clock,
+	): AuthenticateApiKeyUseCase =
+		AuthenticateApiKeyUseCase(
+			merchantApiKeyRepository = merchantApiKeyRepository,
+			merchantRepository = merchantRepository,
+			apiKeySecretHasher = apiKeySecretHasher,
+			clock = clock,
+		)
 
 	@Bean
 	fun createPaymentUseCase(

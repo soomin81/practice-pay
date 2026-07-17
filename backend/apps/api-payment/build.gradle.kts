@@ -22,6 +22,7 @@ dependencies {
 
 	implementation("org.springframework.boot:spring-boot-starter-webmvc")
 	implementation("org.springframework.boot:spring-boot-starter-jooq")
+	implementation("org.springframework.boot:spring-boot-starter-security")
 	implementation("org.springframework.boot:spring-boot-starter-validation")
 	implementation("org.jetbrains.kotlin:kotlin-reflect")
 	implementation("tools.jackson.module:jackson-module-kotlin")
@@ -29,6 +30,7 @@ dependencies {
 	runtimeOnly("com.mysql:mysql-connector-j")
 
 	testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
+	testImplementation("org.springframework.boot:spring-boot-starter-security-test")
 	// MockK equivalent of Spring Boot Test's @MockBean/@SpyBean (this project uses
 	// MockK, not Mockito, everywhere else too — backend/CLAUDE.md's Testing section).
 	testImplementation("com.ninja-squad:springmockk:5.0.1")
