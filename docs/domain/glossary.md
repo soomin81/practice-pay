@@ -92,3 +92,60 @@ PG가 가맹점 서버로 비동기 결과를 통지하는 방식이다.
 
 ## Outbox Event — 아웃박스 이벤트
 DB 트랜잭션과 비동기 이벤트 전달 사이의 유실을 막기 위해 저장하는 이벤트다.
+
+## InternalUser — 내부 운영자
+
+PG 내부 관리자 화면에 로그인하는 사용자 계정이다.
+
+MVP 역할:
+
+- `SUPER_ADMIN`
+- `OPERATOR`
+- `VIEWER`
+
+내부 운영자 계정은 `SUPER_ADMIN`만 발급할 수 있다.
+
+## MerchantUser — 가맹점 사용자
+
+특정 가맹점의 관리자 화면에 로그인하는 사용자 계정이다.
+
+MVP 역할:
+
+- `OWNER`
+- `ADMIN`
+- `VIEWER`
+
+가맹점 등록 시 최초 `OWNER`를 함께 생성하고, OWNER 또는 ADMIN이 같은 가맹점의 하위 계정을 발급한다.
+
+## AccountInvitation — 계정 초대
+
+내부 운영자 또는 가맹점 사용자가 본인의 비밀번호를 설정하고 계정을 활성화하기 위한 1회성 초대다.
+
+초대 토큰 원문은 저장하지 않고 Hash만 저장한다.
+
+## MerchantApiKey — 가맹점 API Key
+
+가맹점 서버가 스테이블코인 결제 시스템의 결제 API를 호출할 때 사용하는 서버 간 인증 자격증명이다.
+
+소유자는 Merchant이며, 발급한 MerchantUser는 감사 정보로 기록한다.
+
+원문은 최초 한 번만 표시하고 DB에는 Prefix와 Hash만 저장한다.
+
+## API Key Prefix — API Key 접두부
+
+API Key 후보를 빠르게 조회하고 관리자 화면에서 Key를 식별하기 위한 공개 부분이다.
+
+예:
+
+```text
+sk_test_ab12cd34
+```
+
+## API Key Scope — API Key 권한 범위
+
+API Key가 호출할 수 있는 API 범위를 나타낸다.
+
+MVP:
+
+- `PAYMENT_CREATE`
+- `PAYMENT_READ`

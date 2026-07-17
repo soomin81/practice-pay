@@ -18,6 +18,8 @@
 
 MVP 완료 경계: `Payment = SUCCEEDED`, `ExchangeOrder = COMPLETED`, `SettlementReceivable = READY`. 정산 배치, 실제 원화 지급, 환불, AML/KYT, 다중 네트워크는 이후 단계로 미룹니다. 자세한 범위는 [docs/architecture/mvp-scope.md](docs/architecture/mvp-scope.md)와 [ADR-001](docs/decisions/ADR-001-mvp-scope.md)을 참고하세요.
 
+내부 운영자·가맹점 관리자 계정과 가맹점 결제 API Key도 MVP 범위입니다(SUPER_ADMIN Bootstrap, 가맹점 등록 시 OWNER 생성, TEST API Key 발급/폐기). MFA/SSO, 세분화된 RBAC, API Key IP Allowlist·HMAC 서명은 후속 단계입니다. 자세한 설계는 [docs/architecture/identity-access-api-key.md](docs/architecture/identity-access-api-key.md)와 [ADR-006](docs/decisions/ADR-006-identity-api-key-separation.md)을 참고하세요.
+
 ## 저장소 구조
 
 ```text

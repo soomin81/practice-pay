@@ -31,6 +31,30 @@ Payment 생성
 → SettlementReceivable READY
 ```
 
+## 계정 및 API 연동 MVP
+
+포함:
+
+- 내부 SUPER_ADMIN Bootstrap
+- SUPER_ADMIN의 내부 운영자 계정 발급
+- 내부 운영자 로그인
+- 가맹점 등록 시 최초 OWNER 생성
+- OWNER 또는 ADMIN의 하위 계정 발급
+- 가맹점 관리자 로그인
+- 가맹점별 TEST API Key 복수 발급
+- API Key 폐기
+- `PAYMENT_CREATE`, `PAYMENT_READ` Scope
+- API Key 기반 결제 API 인증
+
+후속:
+
+- MFA/OTP
+- SSO
+- 세분화된 RBAC
+- API Key IP Allowlist
+- HMAC 요청 서명
+- 자동 Key Rotation
+
 ## MVP 완료 경계
 
 ```text

@@ -66,3 +66,62 @@ Network, Chain ID, Contract, Wallet, Amount, Receipt, Confirm, 중복 여부를 
 
 ### SettlementAmountCalculator
 Gross, Fee, Adjustment, Net Amount를 계산한다.
+
+# 계정 및 API 연동 Aggregate
+
+## InternalUser
+
+책임:
+
+- 내부 운영자 로그인 식별
+- 내부 역할과 계정 상태
+- 로그인 실패와 잠금
+- 내부 계정 발급자 감사 정보
+
+핵심 정책:
+
+- 최초 SUPER_ADMIN은 Bootstrap으로 생성한다.
+- SUPER_ADMIN만 내부 사용자 계정을 발급한다.
+- 종료된 계정은 재활성화하지 않는다.
+
+## MerchantUser
+
+책임:
+
+- 가맹점 관리자 로그인 식별
+- 소속 Merchant
+- 가맹점 역할과 계정 상태
+- 하위 계정 초대 및 발급
+- API Key 발급·폐기 권한 판단
+
+핵심 정책:
+
+- 가맹점 등록 시 최초 OWNER를 생성한다.
+- OWNER 또는 ADMIN은 같은 가맹점의 하위 사용자만 생성한다.
+- ADMIN은 OWNER를 생성하거나 OWNER 권한을 변경할 수 없다.
+- 최소 하나의 활성 OWNER를 유지한다.
+
+## AccountInvitation
+
+책임:
+
+- 초대 대상 계정 연결
+- 1회성 Token Hash 관리
+- 만료와 수락 상태 관리
+
+## MerchantApiKey
+
+책임:
+
+- Merchant 소유의 서버 간 인증 Key
+- TEST/LIVE 환경 구분
+- Secret Hash 검증 정보
+- 발급·폐기와 마지막 사용 시각
+- API 호출 Scope
+
+핵심 정책:
+
+- 사용자 계정이 아니라 Merchant에 귀속한다.
+- Key 원문은 최초 한 번만 표시한다.
+- 폐기된 Key는 재활성화하지 않는다.
+- 가맹점당 복수 Key를 허용한다.

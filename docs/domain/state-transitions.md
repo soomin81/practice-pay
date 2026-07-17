@@ -82,3 +82,101 @@ PENDING → DELIVERING → SUCCEEDED
 ```
 
 실패 시 `RETRY_WAITING`을 거쳐 재전송하고 최대 횟수 초과 시 `FAILED` 처리한다.
+
+# InternalUser 및 MerchantUser
+
+## 상태
+
+- `INVITED`
+- `ACTIVE`
+- `LOCKED`
+- `SUSPENDED`
+- `TERMINATED`
+
+## 활성화
+
+```text
+INVITED
+→ ACTIVE
+```
+
+조건:
+
+- 유효한 초대
+- 초대 만료 전
+- 비밀번호 설정 완료
+
+## 잠금과 해제
+
+```text
+ACTIVE
+→ LOCKED
+→ ACTIVE
+```
+
+## 운영 중지
+
+```text
+ACTIVE
+→ SUSPENDED
+→ ACTIVE
+```
+
+## 종료
+
+```text
+ACTIVE 또는 SUSPENDED
+→ TERMINATED
+```
+
+`TERMINATED`는 종료 상태다.
+
+# AccountInvitation
+
+## 상태
+
+- `PENDING`
+- `ACCEPTED`
+- `EXPIRED`
+- `REVOKED`
+
+정상 흐름:
+
+```text
+PENDING
+→ ACCEPTED
+```
+
+예외:
+
+```text
+PENDING
+→ EXPIRED
+
+PENDING
+→ REVOKED
+```
+
+# MerchantApiKey
+
+## 상태
+
+- `ACTIVE`
+- `REVOKED`
+- `EXPIRED`
+
+정상 폐기:
+
+```text
+ACTIVE
+→ REVOKED
+```
+
+만료:
+
+```text
+ACTIVE
+→ EXPIRED
+```
+
+`REVOKED`, `EXPIRED`는 종료 상태다. 재사용하지 않고 새로운 Key를 발급한다.

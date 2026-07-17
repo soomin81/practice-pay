@@ -23,9 +23,10 @@ This is a monorepo root with three top-level directories:
 - `docs/domain/domain-model.md` — aggregates, value objects, domain services, and the design rule that domain code must not depend on frameworks or infra (aggregates reference each other by ID only; state changes go through domain methods, not direct field assignment).
 - `docs/domain/state-transitions.md` — the state machine for every aggregate (see summary below).
 - `docs/architecture/mvp-scope.md` — what's in/out of the MVP and the end-to-end happy-path flow.
-- `docs/architecture/persistence-jooq.md` — module layering and jOOQ conventions (backend-specific; see `backend/CLAUDE.md`).
+- `docs/architecture/persistence-jooq.md` — module layering, jOOQ conventions, and credential-storage rules (backend-specific; see `backend/CLAUDE.md`).
+- `docs/architecture/identity-access-api-key.md` — `InternalUser`/`MerchantUser`/`AccountInvitation`/`MerchantApiKey` design: roles, account lifecycle, API key hashing/storage, and scopes.
 - `docs/database/database-design.md` — full MySQL schema design. The actual, applied schema lives as Flyway migrations in `backend/db-core/src/main/resources/db/migration/` (see `backend/CLAUDE.md`) — keep the two in sync when the schema changes.
-- `docs/decisions/ADR-00{1..5}-*.md` — ADRs for MVP scope, MySQL+jOOQ, Hosted Checkout, Fake Exchange, and settlement boundary.
+- `docs/decisions/ADR-00{1..6}-*.md` — ADRs for MVP scope, MySQL+jOOQ, Hosted Checkout, Fake Exchange, settlement boundary, and identity/API key separation.
 
 ## Domain: what this system is
 
@@ -61,6 +62,12 @@ General rule across all aggregates: state is validated before every transition, 
 - `Order` (merchant's product/service order) and `Payment` (PG's payment unit/aggregate root for that order) are distinct concepts — don't conflate them.
 - `Settlement` (future merchant-level aggregation of `SettlementReceivable`s) and `Payout` (future actual KRW bank transfer) are **not implemented in MVP** — `SettlementReceivable` reaching `READY` is the MVP finish line (ADR-005).
 - Never add a settlement/payout status to the `payment` record — settlement state lives only on `SettlementReceivable` and its future successors.
+
+### Identity & access
+
+Three separate credential domains that deliberately do not share a lifecycle (ADR-006): `InternalUser` (PG internal admin login; roles `SUPER_ADMIN`/`OPERATOR`/`VIEWER`), `MerchantUser` (per-merchant admin login; roles `OWNER`/`ADMIN`/`VIEWER`), and `MerchantApiKey` (server-to-server credential for the payment API — owned by the `Merchant`, not by any individual user account, so it survives staff turnover). `AccountInvitation` is the one-time token flow that activates `InternalUser`/`MerchantUser` accounts. Full design (account states, API key hashing/storage, scopes) is in `docs/architecture/identity-access-api-key.md` and ADR-006.
+
+MVP includes SUPER_ADMIN bootstrap, internal user issuance/login, merchant registration with an initial OWNER, OWNER/ADMIN sub-account issuance, and TEST-environment API key issuance/revocation scoped to `PAYMENT_CREATE`/`PAYMENT_READ`. MFA/OTP, SSO, fine-grained RBAC, API key IP allowlisting, and HMAC request signing are deferred.
 
 ## Working process
 

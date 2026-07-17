@@ -80,6 +80,10 @@ Each of these enforces uniqueness/idempotency on the given key(s) — use them, 
 | SettlementReceivable | `payment_seq` |
 | WebhookDelivery | `event_id + merchant_seq` |
 | OutboxEvent | `event_id` |
+| InternalUser | `login_id` (also separately unique: `email`) |
+| MerchantUser | `merchant_seq + login_id` (also separately unique: `merchant_seq + email`) |
+| AccountInvitation | `token_hash` |
+| MerchantApiKey | `key_prefix` |
 
 ## Database / jOOQ code generation
 
@@ -91,15 +95,17 @@ Workflow (from `backend/`):
 docker compose up -d                                    # starts MySQL (db: stablecoin_payment, root pw: verysecret)
 docker exec -i backend-mysql-1 mysql --default-character-set=utf8mb4 -uroot -pverysecret stablecoin_payment < db-core/src/main/resources/db/migration/V1__init_schema.sql
 docker exec -i backend-mysql-1 mysql --default-character-set=utf8mb4 -uroot -pverysecret stablecoin_payment < db-core/src/main/resources/db/migration/V2__seed_dev_data.sql
+docker exec -i backend-mysql-1 mysql --default-character-set=utf8mb4 -uroot -pverysecret stablecoin_payment < db-core/src/main/resources/db/migration/V3__add_identity_access_and_merchant_api_key.sql
 gradlew.bat :db-core:jooqCodegen                          # generates into db-core/build/generated-src/jooq/main (gitignored, not committed)
 gradlew.bat :db-core:build                                 # jooqCodegen runs first (wired via compileKotlin.dependsOn), then compiles
 ```
 
-- **Migrations are applied manually for now, not via the Flyway Gradle plugin.** The official `org.flywaydb.flyway` plugin (latest published: 11.8.2) still calls the Gradle API `JavaPluginConvention`, which was removed in Gradle 9 — its tasks fail outright on this project's Gradle 9.5.1 (unresolved upstream: https://github.com/flyway/flyway/issues/3798). The migration files under `db-core/src/main/resources/db/migration/` are still plain, correctly-numbered Flyway-format SQL (`V1__init_schema.sql`, `V2__seed_dev_data.sql`) — once the app module gets a real `DataSource`, Spring Boot's own Flyway autoconfiguration (`spring-boot-starter-flyway`, independent of this Gradle plugin) will apply them automatically. Re-check whether a newer `flyway-gradle-plugin` fixes this before assuming it's still broken.
+- **Migrations are applied manually for now, not via the Flyway Gradle plugin.** The official `org.flywaydb.flyway` plugin (latest published: 11.8.2) still calls the Gradle API `JavaPluginConvention`, which was removed in Gradle 9 — its tasks fail outright on this project's Gradle 9.5.1 (unresolved upstream: https://github.com/flyway/flyway/issues/3798). The migration files under `db-core/src/main/resources/db/migration/` are still plain, correctly-numbered Flyway-format SQL (`V1__init_schema.sql`, `V2__seed_dev_data.sql`, `V3__add_identity_access_and_merchant_api_key.sql`) — once the app module gets a real `DataSource`, Spring Boot's own Flyway autoconfiguration (`spring-boot-starter-flyway`, independent of this Gradle plugin) will apply them automatically. Re-check whether a newer `flyway-gradle-plugin` fixes this before assuming it's still broken.
 - **Always pass `--default-character-set=utf8mb4` when applying a migration via the `mysql` CLI.** Without it, the CLI's default `latin1` client charset silently mangles the Korean `COMMENT`/seed text on the way into MySQL (the corruption happens on write, not on jOOQ's read side — this bit us once already; the DB had to be dropped and re-seeded to fix it).
 - The `jooq { configuration { jdbc { url = ... } } }` URL also carries `useUnicode=true&characterEncoding=UTF-8` as cheap extra insurance for the codegen connection itself.
 - `compileKotlin` does not automatically depend on `jooqCodegen`, and the official plugin does not automatically add its output directory to the Kotlin source set — both are wired explicitly in `db-core/build.gradle.kts` (`tasks.named("compileKotlin") { dependsOn("jooqCodegen") }` + `sourceSets { main { kotlin { srcDir(...) } } }`). Don't assume a fresh official-plugin setup wires these for you.
 - Generated code lives under package `paytech.practice.pay.dbcore.jooq` and must only be consumed inside future persistence adapters (`modules/infra-persistence`), per the Persistence conventions below — never from `domain`/`application`.
+- `jooqCodegen` prints (harmless) `Ambiguous key name` warnings for `internal_user` and `merchant_user` — both tables have more than one FK back to themselves/each other (`created_by_internal_user_seq`, `invited_by_internal_user_seq`, `invited_by_merchant_user_seq`), so jOOQ can't auto-name every implicit-join convenience accessor uniquely. The build still succeeds and the generated `Table`/`Record` classes are unaffected; only some optional path-navigation sugar methods are skipped.
 
 ## Persistence conventions (once implemented)
 

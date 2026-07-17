@@ -24,6 +24,11 @@
 7. `settlement_receivable`
 8. `webhook_delivery`
 9. `outbox_event`
+10. `internal_user`
+11. `merchant_user`
+12. `account_invitation`
+13. `merchant_api_key`
+14. `merchant_api_key_scope`
 
 ## 주요 Unique
 
@@ -54,3 +59,65 @@
 - `refund_transaction`
 
 Payment에 정산 또는 지급 상태를 추가하지 않는다.
+
+
+## 계정 및 API Key 주요 제약조건
+
+### InternalUser
+
+```text
+internal_user_id
+login_id
+email
+```
+
+### MerchantUser
+
+```text
+merchant_user_id
+merchant_seq + login_id
+merchant_seq + email
+```
+
+### AccountInvitation
+
+```text
+account_invitation_id
+token_hash
+```
+
+### MerchantApiKey
+
+```text
+merchant_api_key_id
+key_prefix
+```
+
+가맹점당 복수 API Key를 허용한다.
+
+### MerchantApiKeyScope
+
+```text
+merchant_api_key_seq + scope_code
+```
+
+## 계정 생성 트랜잭션
+
+가맹점 등록:
+
+```text
+Merchant INSERT
++ MerchantUser(OWNER, INVITED) INSERT
++ AccountInvitation INSERT
++ OutboxEvent INSERT
+```
+
+API Key 발급:
+
+```text
+MerchantApiKey INSERT
++ MerchantApiKeyScope INSERT
++ 감사 이벤트 INSERT
+```
+
+API Key 원문은 DB 트랜잭션 외부에 저장하지 않으며 발급 응답에서 최초 한 번만 반환한다.

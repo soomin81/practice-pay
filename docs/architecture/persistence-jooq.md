@@ -69,3 +69,14 @@ Migration → MySQL Schema → jOOQ Code Generation → Compile
 ```
 
 생성 코드를 직접 수정하지 않는다.
+
+## 인증 정보 저장 규칙
+
+- 비밀번호 원문을 저장하거나 로그에 기록하지 않는다.
+- 초대 Token 원문을 저장하지 않고 Hash만 저장한다.
+- API Key 원문은 최초 발급 응답에서 한 번만 반환한다.
+- API Key는 `key_prefix`와 `secret_hash`로 저장한다.
+- Authorization Header와 API Key Secret을 애플리케이션 로그에 남기지 않는다.
+- API Key 검증은 Prefix 조회 후 Hash 비교 방식으로 구현한다.
+- API Key 사용 시 Merchant 상태, Key 상태, 환경, Scope를 함께 확인한다.
+- `last_used_at` 갱신은 인증 요청의 핵심 성공 여부를 방해하지 않도록 갱신 전략을 별도로 검토한다.

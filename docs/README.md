@@ -10,11 +10,12 @@
 
 - [MVP 범위](architecture/mvp-scope.md)
 - [MySQL·jOOQ 영속성 원칙](architecture/persistence-jooq.md)
+- [계정·권한·API Key 설계](architecture/identity-access-api-key.md)
 
 ## 데이터베이스
 
 - [DB 상세 설계](database/database-design.md)
-- [MySQL 스키마 (Flyway migration)](../backend/db-core/src/main/resources/db/migration/V1__init_schema.sql)
+- [MySQL 스키마 (Flyway migrations)](../backend/db-core/src/main/resources/db/migration/)
 
 ## ADR
 
@@ -23,3 +24,4 @@
 - [ADR-003 Hosted Checkout](decisions/ADR-003-hosted-checkout.md)
 - [ADR-004 Fake Exchange](decisions/ADR-004-fake-exchange.md)
 - [ADR-005 정산 경계](decisions/ADR-005-settlement-boundary.md)
+- [ADR-006 관리자 계정과 가맹점 API Key 분리](decisions/ADR-006-identity-api-key-separation.md)
