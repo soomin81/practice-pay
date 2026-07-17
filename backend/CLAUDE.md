@@ -4,19 +4,21 @@ Guidance for working in `backend/`. For the shared payment domain (aggregates, s
 
 ## Current implementation state
 
-The backend is still at the Spring Initializr skeleton stage. `src/main/kotlin/paytech/practice/pay/PracticePayApplication.kt` is the only application code. The following are empty placeholders for the planned multi-module architecture described below — none of them are wired into `settings.gradle.kts` yet, and `settings.gradle.kts` currently declares only the root project. Don't assume code exists in these folders; check before referencing them, and re-verify this layout before relying on it since it has already been restructured once:
+The backend is still mostly at the Spring Initializr skeleton stage. `src/main/kotlin/paytech/practice/pay/PracticePayApplication.kt` (the root project) is the only application code so far. `modules:domain` and `modules:application` are now real Gradle subprojects (see `settings.gradle.kts`) but have no source yet — `domain` has zero dependencies beyond the Kotlin stdlib (no Spring/jOOQ, per the Architecture rules below), and `application` depends only on `domain`. The rest are still empty placeholders not wired into `settings.gradle.kts`. Don't assume code exists in these folders; check before referencing them, and re-verify this layout before relying on it since it has already been restructured once:
 
 ```
-apps/               api-admin, api-merchant, api-payment, batch
+apps/               api-admin, api-merchant, api-payment, batch   (placeholder)
 modules/
-  application/
-  common/
-  domain/
-  infra-blockchain/
-  infra-persistence/
-db-core/
-architecture-tests/
+  application/       real Gradle subproject, depends on domain, no source yet
+  common/            (placeholder)
+  domain/            real Gradle subproject, no dependencies, no source yet
+  infra-blockchain/  (placeholder)
+  infra-persistence/ (placeholder)
+db-core/             (placeholder)
+architecture-tests/  (placeholder)
 ```
+
+The root project does not yet depend on `modules:application` or `modules:domain` — nothing wires them into the running app.
 
 ## Commands
 
