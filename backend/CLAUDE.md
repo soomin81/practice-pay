@@ -4,7 +4,7 @@
 
 ## 현재 구현 상태
 
-`modules:domain`, `modules:application`, `modules:infra-persistence`, `db-core`, `architecture-tests`, 그리고 `apps:*` 4개 전부 실제 Gradle 서브프로젝트다(`settings.gradle.kts` 참고). 나머지는 아직 비어 있는 Placeholder로, 아무것도 연결돼 있지 않다. Placeholder 폴더에 코드가 있다고 가정하지 말고, 참조하기 전에 먼저 확인한다. 이 구조가 이미 여러 번 재편됐으니 의존하기 전에 다시 확인한다:
+`modules:domain`, `modules:application`, `modules:infra-persistence`, `modules:common`, `modules:infra-blockchain`, `db-core`, `architecture-tests`, 그리고 `apps:*` 4개 전부 실제 Gradle 서브프로젝트다(`settings.gradle.kts` 참고). `modules:common`/`modules:infra-blockchain`은 서브프로젝트로는 연결돼 있지만 아직 `src`가 비어 있다(빌드는 NO-SOURCE로 통과한다) — 실제로 필요해질 때까지 다른 모듈에 대한 의존성도 추가하지 않았다(아래 각 항목 참고). 빈 서브프로젝트에 코드가 있다고 가정하지 말고, 참조하기 전에 먼저 확인한다. 이 구조가 이미 여러 번 재편됐으니 의존하기 전에 다시 확인한다:
 
 ```
 apps/
@@ -25,9 +25,16 @@ apps/
 modules/
   application/       실제 Gradle 서브프로젝트, domain에 의존; CreatePaymentUseCase(결제 생성 슬라이스), Identity/API Key
                      Use Case(Authenticate*/IssueInternalUser) + 그 outbound port들(Architecture 참고)
-  common/            (Placeholder)
+  common/            실제 Gradle 서브프로젝트, 의존성 없음, src 비어 있음 — 어떤 레이어에서도 쓸 수 있는 공용
+                     유틸리티가 실제로 필요해질 때 채운다(순환 의존을 피하려고 지금은 어떤 modules:*도
+                     참조하지 않는다)
   domain/            실제 Gradle 서브프로젝트, 의존성 없음; 8개 결제 애그리게이트 전부 + OutboxEvent + Identity/API Key 애그리게이트(Domain code conventions 참고)
-  infra-blockchain/  (Placeholder)
+  infra-blockchain/  실제 Gradle 서브프로젝트, 의존성 없음, src 비어 있음 — modules:infra-persistence가 결제
+                     흐름의 영속성 쪽 outbound Port를 구현하는 것과 같은 자리에서, Base Sepolia 온체인
+                     조회(BlockchainTransaction 감지·Confirm)를 구현할 자리다. modules:application에 아직
+                     그 Port가 없어서 domain/application 의존성도, 온체인 클라이언트 라이브러리도 아직
+                     추가하지 않았다 — 그 Use Case가 생기면 infra-persistence의 build.gradle.kts와 같은
+                     모양으로 채운다.
   infra-persistence/ 실제 Gradle 서브프로젝트 — modules:application의 outbound port를 구현하는 jOOQ Repository Adapter(Architecture 참고)
 db-core/             실제 Gradle 서브프로젝트 — Flyway 마이그레이션 + jOOQ 코드 생성(아래 참고)
 architecture-tests/  실제 Gradle 서브프로젝트, 테스트 전용(src/main 없음) — 다른 모듈의 컴파일된 클래스에 대한 ArchUnit 규칙
