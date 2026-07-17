@@ -16,10 +16,10 @@ apps/
                      modules:application + modules:infra-persistence에 의존한다. AuthenticateInternalUserUseCase와
                      그걸 노출하는 컨트롤러(POST /admin/login)가 있다(Apps 절 참고). 내부 운영자 발급 등
                      나머지 흐름은 아직 Use Case가 없다.
-  api-merchant/      실제 Gradle 서브프로젝트, 독립 배포 가능한 Spring Boot 앱 — webmvc + security,
-                     modules:domain에만 의존한다(MerchantUser/MerchantApiKey Use Case가 아직 없어서
-                     jOOQ/DataSource도 없다) — MerchantUser/MerchantApiKey 흐름의 Use Case가 생기면
-                     api-admin과 같은 모양으로 넓힌다.
+  api-merchant/      실제 Gradle 서브프로젝트, 독립 배포 가능한 Spring Boot 앱 — webmvc + jooq + security,
+                     modules:application + modules:infra-persistence에 의존한다. AuthenticateMerchantUserUseCase와
+                     그걸 노출하는 컨트롤러(POST /merchant/login)가 있다(Apps 절 참고). 가맹점 등록, 하위
+                     계정 발급, API Key 등 나머지 흐름은 아직 Use Case가 없다.
   batch/             실제 Gradle 서브프로젝트, 독립 배포 가능한 Spring Boot 앱 — spring-boot-starter-batch,
                      웹 스타터 없음, 아직 정의된 Job 없음(예: 향후 OutboxEvent 발행 Worker의 자리)
 modules/
@@ -100,11 +100,11 @@ inbound adapter → application → domain ← outbound port ← outbound adapte
 
 각각 **독립적으로 배포 가능한 Spring Boot 애플리케이션**이다 — 자체 `build.gradle.kts`(`org.springframework.boot` 플러그인 적용), 자체 `@SpringBootApplication` 메인 클래스, 자체 `application.yaml`, 자체 포트를 가진다 — 하나의 공유 앱 안의 패키지가 아니다. 이건 의도적인 선택이었다(모듈러 모놀리스 대안을 두고 사용자와 확인함) — 정확히는 네 앱이 서로 다른 대상(가맹점 서버를 향한 결제 API, 내부 직원용 관리 콘솔, 가맹점 콘솔, 오프라인 배치 Job)을 상대해서 나중에 독립적으로 스케일·배포·장애가 나야 할 수 있어서다 — 이 선택을 끝까지 따른 결과로, `api-payment`와 역할이 겹치던 원래 Spring-Initializr 루트 앱도 다섯 번째 중복 배포 단위로 남겨두지 않고 삭제했다.
 
-- **의존성은 각 앱이 지금 실제로 하는 일에만 맞춘다 — 나중에 할 일까지 미리 넣지 않는다.** `api-payment`/`api-admin`은 실제 Use Case(각각 `CreatePaymentUseCase`/`AuthenticateInternalUserUseCase`)가 있어서 `modules:application`/`modules:infra-persistence`/`spring-boot-starter-jooq`/`DataSource`가 연결돼 있다. `api-merchant`는 아직 `modules:domain`에만 의존한다(Identity/API Key 애그리게이트는 있지만 그 Use Case가 없다) — 나중에 로그인 엔드포인트를 위한 `webmvc`+`security`만 미리 갖고 있고, MerchantUser Use Case가 생기면 `api-admin`과 같은 모양(jOOQ/DataSource/infra-persistence 추가)으로 넓힌다. `batch`는 `spring-boot-starter-batch`만 있고 웹 스타터는 없다. 실제 Use Case가 필요로 할 때만 그 앱의 의존성을 넓히고, 미리 넓히지 않는다.
+- **의존성은 각 앱이 지금 실제로 하는 일에만 맞춘다 — 나중에 할 일까지 미리 넣지 않는다.** `api-payment`/`api-admin`/`api-merchant`는 각각 실제 Use Case(`CreatePaymentUseCase`/`AuthenticateInternalUserUseCase`/`AuthenticateMerchantUserUseCase`)가 있어서 `modules:application`/`modules:infra-persistence`/`spring-boot-starter-jooq`/`DataSource`가 연결돼 있다. `batch`만 아직 `spring-boot-starter-batch`뿐이고 웹 스타터도, jOOQ/DataSource도 없다 — 실제 Job이 필요로 할 때만 넓힌다. 세 API 앱은 전부 `webmvc`+`security`도 갖고 있다(로그인/향후 인증 엔드포인트용). 실제 Use Case가 필요로 할 때만 그 앱의 의존성을 넓히고, 미리 넓히지 않는다.
 - **포트**: `api-payment` 8081, `api-admin` 8082, `api-merchant` 8083; `batch`는 `server.port`가 없다(웹 앱이 아니다 — 웹 스타터 없는 `spring-boot-starter-batch`는 웹 서버 자동 구성을 스스로 끄고, `DataSource` Bean이 없으면 `BatchAutoConfiguration` 자체도 물러나서, 지금은 그냥 웹도 Job도 없는 앱으로 부팅된다).
-- **컴포넌트 스캔**: `@SpringBootApplication`의 기본 스캔 범위는 메인 클래스 자신의 패키지와 그 하위 패키지다. `api-payment`의 메인 클래스는 `paytech.practice.pay.api.payment`에 있는데, 이건 `modules:infra-persistence`의 Adapter(`paytech.practice.pay.infra.persistence.jooq`)와 *형제* 관계이지 상위가 아니다 — 그래서 `PaymentApiApplication`은 `@SpringBootApplication(scanBasePackages = ["paytech.practice.pay.api.payment", "paytech.practice.pay.infra.persistence.jooq"])`로 두 패키지를 모두 명시한다. 새 앱이 다른 모듈의 Bean을 쓰기 시작하면, Gradle 의존성을 추가하는 것만으로 Bean이 연결된다고 가정하지 말고 같은 방식으로 스캔 범위를 넓힌다.
-- `DataSource`가 있는 앱(`api-payment`, `api-admin`)의 `application.yaml`은 `spring-boot-docker-compose` 자동 감지에 기대지 않고 `spring.datasource.*`를 `db-core`/`compose.yaml`이 이미 쓰는 것과 같은 로컬 개발 MySQL로 직접 가리킨다(`localhost:3306/stablecoin_payment`, `root`/`verysecret`) — 그 자동 감지 메커니즘은 실행 중인 앱 자신의 작업 디렉토리(예: `apps/api-payment/`)에서 `compose.yaml`을 찾지, `backend/`에서 찾지 않아서, 추가 경로 설정 없이는 공유 파일을 찾지 못한다.
-- 테스트는 전부 같은 모양을 따른다(`@SpringBootTest` + Kotest `SpringExtension`, 앱마다 `contextLoads` 테스트 하나 — 위 "테스트" 참고). `DataSource`가 있는 앱은 만족시켜야 할 `DataSource`가 있어서 `TestcontainersConfiguration`도 추가로 import하고, 나머지는 아직 필요 없다.
+- **컴포넌트 스캔**: `@SpringBootApplication`의 기본 스캔 범위는 메인 클래스 자신의 패키지와 그 하위 패키지다. 세 API 앱의 메인 클래스(`paytech.practice.pay.api.payment`/`api.admin`/`api.merchant`)는 전부 `modules:infra-persistence`의 Adapter(`paytech.practice.pay.infra.persistence.jooq`)와 *형제* 관계이지 상위가 아니다 — 그래서 셋 다 `@SpringBootApplication(scanBasePackages = [자기 패키지, "paytech.practice.pay.infra.persistence.jooq"])`로 두 패키지를 모두 명시한다. 새 앱이 다른 모듈의 Bean을 쓰기 시작하면, Gradle 의존성을 추가하는 것만으로 Bean이 연결된다고 가정하지 말고 같은 방식으로 스캔 범위를 넓힌다.
+- `DataSource`가 있는 세 API 앱의 `application.yaml`은 `spring-boot-docker-compose` 자동 감지에 기대지 않고 `spring.datasource.*`를 `db-core`/`compose.yaml`이 이미 쓰는 것과 같은 로컬 개발 MySQL로 직접 가리킨다(`localhost:3306/stablecoin_payment`, `root`/`verysecret`) — 그 자동 감지 메커니즘은 실행 중인 앱 자신의 작업 디렉토리(예: `apps/api-payment/`)에서 `compose.yaml`을 찾지, `backend/`에서 찾지 않아서, 추가 경로 설정 없이는 공유 파일을 찾지 못한다.
+- 테스트는 전부 같은 모양을 따른다(`@SpringBootTest` + Kotest `SpringExtension`, 앱마다 `contextLoads` 테스트 하나 — 위 "테스트" 참고). `DataSource`가 있는 세 API 앱은 만족시켜야 할 `DataSource`가 있어서 `TestcontainersConfiguration`도 추가로 import하고, `batch`는 아직 필요 없다.
 
 ### `api-payment`의 결제 생성 컨트롤러
 
@@ -129,6 +129,14 @@ inbound adapter → application → domain ← outbound port ← outbound adapte
 - **`SecurityConfig`**: `/admin/login`만 인증 없이 열고 나머지는 인증을 요구한다. **알려진 gap: CSRF 보호를 꺼뒀다.** 세션 쿠키 인증에서 원래는 반드시 켜야 하지만, 이 학습용 MVP 단계에서는 아직 CSRF 토큰 발급/검증 흐름을 만들지 않았다 — 실제 프론트엔드가 이 API를 붙이기 전에 반드시 켜야 한다.
 - **`InternalUserRepositoryAdapter`**(`modules:infra-persistence`)는 `PaymentRepositoryAdapter`와 같은 모양·같은 낙관적 잠금 한계를 가진다(위 "영속성 Adapter 컨벤션" 참고) — `internal_user`도 `version` 컬럼이 있는데 도메인 `InternalUser`는 그걸 모른다.
 - **테스트**: `AuthenticateInternalUserUseCaseTest`(단위, 성공/미존재/오답/5회 오답 잠금/잠금 중 시도/잠금 만료 후 재시도/`INVITED` 계정을 전부 커버), `InternalUserRepositoryAdapterTest`(Testcontainers MySQL 통합), `AdminLoginControllerTest`(`@WebMvcTest(AdminLoginController::class)` + `@Import(SecurityConfig::class)` — 컨트롤러가 `SecurityContextRepository` Bean도 필요해서 `PaymentControllerTest`와 달리 `SecurityConfig`를 명시적으로 Import한다). 여기에 더해 실제 `bootRun` + `curl`로 BCrypt 해시를 미리 심어둔 테스트 계정을 상대로 로그인 성공(세션 쿠키 발급 확인) → 오답 5회 반복 → 잠김(`AccountLockedException`, DB의 `user_status=LOCKED` 확인)까지 수동으로 검증했다.
+
+### `api-merchant`의 가맹점 관리자 로그인 컨트롤러
+
+`POST /merchant/login`(`docs/architecture/identity-access-api-key.md`의 "4.5 로그인 경로" 권장 경로)이 `AuthenticateMerchantUserUseCase`를 HTTP로 노출한다. `api-admin`의 로그인 컨트롤러와 거의 모든 게 같다(같은 패키지 구조, 같은 `SecurityConfig`/세션 쿠키 방식, 같은 CSRF-꺼짐 gap, 같은 잠금 정책 상수) — 차이만 적는다:
+
+- **가맹점부터 특정해야 한다.** `login_id`는 가맹점 안에서만 유일하다(`merchant_seq + login_id`, "Idempotency keys" 참고) — `InternalUser`처럼 `loginId`만으로 계정을 찾을 수 없다. 그래서 `MerchantLoginRequest`/`AuthenticateMerchantUserCommand`는 `merchantCode`(사람이 읽는 가맹점 코드)를 함께 받고, Use Case가 `MerchantRepository.findByCode`로 가맹점을 먼저 확정한 다음 `MerchantUserRepository.findByMerchantIdAndLoginId`로 계정을 찾는다. 가맹점 코드가 틀려도 같은 `InvalidCredentialsException`을 던진다(가맹점 존재 여부도 노출하지 않는다) — 이걸 위해 `MerchantRepository` Port에 `findByCode`를 추가했다(기존엔 `findById`만 있었다).
+- **가맹점 자체의 상태는 로그인 가능 여부에 영향을 주지 않는다.** `Merchant`가 `SUSPENDED`여도 그 가맹점의 관리자는 이유를 확인하러 로그인할 수 있어야 한다는 판단이다 — 문서에 명시된 규칙은 아니고, `AuthenticateMerchantUserUseCase`의 KDoc에 그렇게 남겨뒀다.
+- **`MerchantUserRepositoryAdapter`**(`modules:infra-persistence`)는 `InternalUserRepositoryAdapter`와 같은 모양이지만 FK가 하나 더 있다 — `merchant_seq`(소속 가맹점)에 더해 `invited_by_internal_user_seq`/`invited_by_merchant_user_seq`(둘 다 nullable, 초대자 감사 정보)까지 resolve한다.
 
 ## 도메인 코드 컨벤션
 

@@ -33,6 +33,13 @@ class MerchantRepositoryAdapter(
 			.fetchOne()
 			?.toDomain()
 
+	override fun findByCode(merchantCode: MerchantCode): Merchant? =
+		dsl
+			.selectFrom(MERCHANT)
+			.where(MERCHANT.MERCHANT_CODE.eq(merchantCode.value))
+			.fetchOne()
+			?.toDomain()
+
 	private fun MerchantRecord.toDomain(): Merchant =
 		Merchant.reconstitute(
 			id = MerchantId(merchantId!!),

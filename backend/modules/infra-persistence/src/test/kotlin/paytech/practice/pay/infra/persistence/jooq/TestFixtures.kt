@@ -12,12 +12,15 @@ fun uniqueSuffix(): String = UUID.randomUUID().toString().take(8)
  * FK 제약을 만족시키기 위한 최소한의 Merchant 행을 raw jOOQ로 직접 심는다 —
  * `MerchantRepository` Port에는 `save`가 없어서 Adapter를 통해서는 만들 수 없다.
  */
-fun insertTestMerchant(merchantId: String = "mrc_${uniqueSuffix()}"): String {
+fun insertTestMerchant(
+	merchantId: String = "mrc_${uniqueSuffix()}",
+	merchantCode: String = "code-${uniqueSuffix()}",
+): String {
 	PersistenceTestSupport.dsl
 		.newRecord(MERCHANT)
 		.apply {
 			this.merchantId = merchantId
-			merchantCode = "code-${uniqueSuffix()}"
+			this.merchantCode = merchantCode
 			merchantName = "테스트 가맹점"
 			merchantStatus = "ACTIVE"
 			webhookUrl = null

@@ -1,0 +1,96 @@
+package paytech.practice.pay.api.merchant.web
+
+import com.ninjasquad.springmockk.MockkBean
+import io.kotest.core.spec.style.FunSpec
+import io.kotest.extensions.spring.SpringExtension
+import io.mockk.every
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest
+import org.springframework.context.annotation.Import
+import org.springframework.http.MediaType
+import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import paytech.practice.pay.api.merchant.config.SecurityConfig
+import paytech.practice.pay.application.identity.AccountLockedException
+import paytech.practice.pay.application.identity.AuthenticateMerchantUserResult
+import paytech.practice.pay.application.identity.AuthenticateMerchantUserUseCase
+import paytech.practice.pay.application.identity.InvalidCredentialsException
+import paytech.practice.pay.domain.identity.LoginId
+import paytech.practice.pay.domain.identity.MerchantUserId
+import paytech.practice.pay.domain.identity.MerchantUserRole
+import paytech.practice.pay.domain.merchant.MerchantId
+import tools.jackson.databind.ObjectMapper
+import java.time.Instant
+
+private fun validRequest(): MerchantLoginRequest =
+	MerchantLoginRequest(merchantCode = "test-merchant", loginId = "owner01", password = "correct-horse-battery-staple")
+
+@WebMvcTest(MerchantLoginController::class)
+@Import(SecurityConfig::class)
+class MerchantLoginControllerTest : FunSpec() {
+	@Autowired
+	lateinit var mockMvc: MockMvc
+
+	@Autowired
+	lateinit var objectMapper: ObjectMapper
+
+	@MockkBean
+	lateinit var authenticateMerchantUserUseCase: AuthenticateMerchantUserUseCase
+
+	init {
+		extensions(SpringExtension)
+
+		test("valid credentials return 200 with the authenticated identity") {
+			every { authenticateMerchantUserUseCase.execute(any()) } returns
+				AuthenticateMerchantUserResult(
+					merchantUserId = MerchantUserId("mu_001"),
+					merchantId = MerchantId("mrc_001"),
+					loginId = LoginId("owner01"),
+					userName = "테스트 오너",
+					role = MerchantUserRole.OWNER,
+				)
+
+			mockMvc
+				.perform(
+					post("/merchant/login")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsString(validRequest())),
+				).andExpect(status().isOk)
+				.andExpect(jsonPath("$.loginId").value("owner01"))
+				.andExpect(jsonPath("$.role").value("OWNER"))
+		}
+
+		test("blank merchantCode returns 400") {
+			mockMvc
+				.perform(
+					post("/merchant/login")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsString(validRequest().copy(merchantCode = ""))),
+				).andExpect(status().isBadRequest)
+		}
+
+		test("InvalidCredentialsException from the use case returns 401") {
+			every { authenticateMerchantUserUseCase.execute(any()) } throws InvalidCredentialsException()
+
+			mockMvc
+				.perform(
+					post("/merchant/login")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsString(validRequest())),
+				).andExpect(status().isUnauthorized)
+		}
+
+		test("AccountLockedException from the use case returns 401") {
+			every { authenticateMerchantUserUseCase.execute(any()) } throws AccountLockedException(Instant.parse("2026-07-17T00:15:00Z"))
+
+			mockMvc
+				.perform(
+					post("/merchant/login")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsString(validRequest())),
+				).andExpect(status().isUnauthorized)
+		}
+	}
+}
