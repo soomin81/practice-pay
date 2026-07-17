@@ -1,12 +1,12 @@
 package paytech.practice.pay.domain.payment
 
-import java.time.Instant
 import paytech.practice.pay.domain.merchant.MerchantId
 import paytech.practice.pay.domain.shared.Asset
 import paytech.practice.pay.domain.shared.BlockchainNetwork
 import paytech.practice.pay.domain.shared.Money
 import paytech.practice.pay.domain.shared.TokenAmount
 import paytech.practice.pay.domain.shared.WalletAddress
+import java.time.Instant
 
 /**
  * 결제(Payment) Aggregate Root다.
@@ -41,7 +41,6 @@ class Payment private constructor(
 	paidAt: Instant?,
 	updatedAt: Instant,
 ) {
-
 	/** 고객이 체크아웃에서 연결한 지갑. [submit]으로 결제를 제출하기 전까지는 `null`이다. */
 	var customerWallet: WalletAddress? = customerWallet
 		private set
@@ -81,7 +80,10 @@ class Payment private constructor(
 	}
 
 	/** `READY` → `PROCESSING`. 고객 지갑 연결과 결제 제출을 함께 기록한다. */
-	fun submit(wallet: WalletAddress, submittedAt: Instant) {
+	fun submit(
+		wallet: WalletAddress,
+		submittedAt: Instant,
+	) {
 		checkTransition(status == PaymentStatus.READY, PaymentStatus.PROCESSING)
 		customerWallet = wallet
 		status = PaymentStatus.PROCESSING
@@ -121,7 +123,10 @@ class Payment private constructor(
 	}
 
 	/** (`PROCESSING` 또는 `CONFIRMING`) → `FAILED`. */
-	fun fail(reason: PaymentFailureReason, failedAt: Instant) {
+	fun fail(
+		reason: PaymentFailureReason,
+		failedAt: Instant,
+	) {
 		checkTransition(
 			status == PaymentStatus.PROCESSING || status == PaymentStatus.CONFIRMING,
 			PaymentStatus.FAILED,
@@ -131,12 +136,14 @@ class Payment private constructor(
 		updatedAt = failedAt
 	}
 
-	private fun checkTransition(allowed: Boolean, target: PaymentStatus) {
+	private fun checkTransition(
+		allowed: Boolean,
+		target: PaymentStatus,
+	) {
 		check(allowed) { "Payment 상태를 $status 에서 $target (으)로 전이할 수 없습니다." }
 	}
 
 	companion object {
-
 		/** 새 결제를 `CREATED` 상태로 생성한다. */
 		fun create(
 			id: PaymentId,
@@ -151,26 +158,27 @@ class Payment private constructor(
 			receivingWallet: WalletAddress,
 			expiresAt: Instant,
 			createdAt: Instant,
-		): Payment = Payment(
-			id = id,
-			merchantId = merchantId,
-			merchantOrderId = merchantOrderId,
-			orderName = orderName,
-			orderAmount = orderAmount,
-			paymentAsset = paymentAsset,
-			paymentAmount = paymentAmount,
-			tokenDecimals = tokenDecimals,
-			network = network,
-			receivingWallet = receivingWallet,
-			expiresAt = expiresAt,
-			createdAt = createdAt,
-			customerWallet = null,
-			status = PaymentStatus.CREATED,
-			failureReason = null,
-			failureMessage = null,
-			paidAt = null,
-			updatedAt = createdAt,
-		)
+		): Payment =
+			Payment(
+				id = id,
+				merchantId = merchantId,
+				merchantOrderId = merchantOrderId,
+				orderName = orderName,
+				orderAmount = orderAmount,
+				paymentAsset = paymentAsset,
+				paymentAmount = paymentAmount,
+				tokenDecimals = tokenDecimals,
+				network = network,
+				receivingWallet = receivingWallet,
+				expiresAt = expiresAt,
+				createdAt = createdAt,
+				customerWallet = null,
+				status = PaymentStatus.CREATED,
+				failureReason = null,
+				failureMessage = null,
+				paidAt = null,
+				updatedAt = createdAt,
+			)
 
 		/** 영속 계층에 저장되어 있던 값으로 Aggregate를 복원한다. */
 		fun reconstitute(
@@ -192,25 +200,26 @@ class Payment private constructor(
 			failureMessage: String?,
 			paidAt: Instant?,
 			updatedAt: Instant,
-		): Payment = Payment(
-			id = id,
-			merchantId = merchantId,
-			merchantOrderId = merchantOrderId,
-			orderName = orderName,
-			orderAmount = orderAmount,
-			paymentAsset = paymentAsset,
-			paymentAmount = paymentAmount,
-			tokenDecimals = tokenDecimals,
-			network = network,
-			receivingWallet = receivingWallet,
-			expiresAt = expiresAt,
-			createdAt = createdAt,
-			customerWallet = customerWallet,
-			status = status,
-			failureReason = failureReason,
-			failureMessage = failureMessage,
-			paidAt = paidAt,
-			updatedAt = updatedAt,
-		)
+		): Payment =
+			Payment(
+				id = id,
+				merchantId = merchantId,
+				merchantOrderId = merchantOrderId,
+				orderName = orderName,
+				orderAmount = orderAmount,
+				paymentAsset = paymentAsset,
+				paymentAmount = paymentAmount,
+				tokenDecimals = tokenDecimals,
+				network = network,
+				receivingWallet = receivingWallet,
+				expiresAt = expiresAt,
+				createdAt = createdAt,
+				customerWallet = customerWallet,
+				status = status,
+				failureReason = failureReason,
+				failureMessage = failureMessage,
+				paidAt = paidAt,
+				updatedAt = updatedAt,
+			)
 	}
 }

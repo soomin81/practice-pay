@@ -13,8 +13,9 @@ package paytech.practice.pay.domain.shared
  * @property value `http://` 또는 `https://`로 시작하는 URL 문자열.
  */
 @JvmInline
-value class HttpUrl(val value: String) {
-
+value class HttpUrl(
+	val value: String,
+) {
 	init {
 		require(value.length <= MAX_LENGTH) { "HttpUrl은 ${MAX_LENGTH}자를 초과할 수 없습니다: $value" }
 		require(value.startsWith("http://") || value.startsWith("https://")) {

@@ -11,8 +11,9 @@ package paytech.practice.pay.domain.shared
  * @property code 자산 코드 문자열(예: `"USDC"`). 공백일 수 없다.
  */
 @JvmInline
-value class Asset(val code: String) {
-
+value class Asset(
+	val code: String,
+) {
 	init {
 		require(code.isNotBlank()) { "Asset 코드는 공백일 수 없습니다." }
 	}

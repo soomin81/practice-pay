@@ -7,11 +7,11 @@ import org.springframework.context.annotation.Import
 
 @Import(TestcontainersConfiguration::class)
 @SpringBootTest
-class PracticePayApplicationTests : FunSpec({
+class PracticePayApplicationTests :
+	FunSpec({
 
-	extensions(SpringExtension)
+		extensions(SpringExtension)
 
-	test("contextLoads") {
-	}
-
-})
+		test("contextLoads") {
+		}
+	})

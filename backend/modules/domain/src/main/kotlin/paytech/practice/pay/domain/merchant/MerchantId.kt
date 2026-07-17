@@ -9,8 +9,9 @@ package paytech.practice.pay.domain.merchant
  * @property value 가맹점 공개 ID 문자열. 공백일 수 없고 [MAX_LENGTH]자를 넘을 수 없다.
  */
 @JvmInline
-value class MerchantId(val value: String) {
-
+value class MerchantId(
+	val value: String,
+) {
 	init {
 		require(value.isNotBlank()) { "MerchantId는 공백일 수 없습니다." }
 		require(value.length <= MAX_LENGTH) { "MerchantId는 ${MAX_LENGTH}자를 초과할 수 없습니다: $value" }

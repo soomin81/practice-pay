@@ -1,9 +1,9 @@
 package paytech.practice.pay.domain.checkout
 
-import java.time.Instant
 import paytech.practice.pay.domain.payment.PaymentId
 import paytech.practice.pay.domain.shared.HttpUrl
 import paytech.practice.pay.domain.shared.WalletAddress
+import java.time.Instant
 
 /**
  * 체크아웃 세션(CheckoutSession) Aggregate Root다.
@@ -34,7 +34,6 @@ class CheckoutSession private constructor(
 	completedAt: Instant?,
 	updatedAt: Instant,
 ) {
-
 	/** 고객이 체크아웃에서 연결한 지갑. [connectWallet] 전까지는 `null`이다. */
 	var connectedWallet: WalletAddress? = connectedWallet
 		private set
@@ -76,7 +75,10 @@ class CheckoutSession private constructor(
 	}
 
 	/** `OPEN` → `WALLET_CONNECTED`. 고객이 외부 지갑을 연결했다. */
-	fun connectWallet(wallet: WalletAddress, connectedAt: Instant) {
+	fun connectWallet(
+		wallet: WalletAddress,
+		connectedAt: Instant,
+	) {
 		checkTransition(status == CheckoutSessionStatus.OPEN, CheckoutSessionStatus.WALLET_CONNECTED)
 		connectedWallet = wallet
 		status = CheckoutSessionStatus.WALLET_CONNECTED
@@ -130,12 +132,14 @@ class CheckoutSession private constructor(
 			status == CheckoutSessionStatus.OPEN ||
 			status == CheckoutSessionStatus.WALLET_CONNECTED
 
-	private fun checkTransition(allowed: Boolean, target: CheckoutSessionStatus) {
+	private fun checkTransition(
+		allowed: Boolean,
+		target: CheckoutSessionStatus,
+	) {
 		check(allowed) { "CheckoutSession 상태를 $status 에서 $target (으)로 전이할 수 없습니다." }
 	}
 
 	companion object {
-
 		/** 새 체크아웃 세션을 `CREATED` 상태로 생성한다. */
 		fun create(
 			id: CheckoutSessionId,
@@ -144,21 +148,22 @@ class CheckoutSession private constructor(
 			cancelUrl: HttpUrl?,
 			expiresAt: Instant,
 			createdAt: Instant,
-		): CheckoutSession = CheckoutSession(
-			id = id,
-			paymentId = paymentId,
-			successUrl = successUrl,
-			cancelUrl = cancelUrl,
-			expiresAt = expiresAt,
-			createdAt = createdAt,
-			connectedWallet = null,
-			status = CheckoutSessionStatus.CREATED,
-			openedAt = null,
-			walletConnectedAt = null,
-			paymentSubmittedAt = null,
-			completedAt = null,
-			updatedAt = createdAt,
-		)
+		): CheckoutSession =
+			CheckoutSession(
+				id = id,
+				paymentId = paymentId,
+				successUrl = successUrl,
+				cancelUrl = cancelUrl,
+				expiresAt = expiresAt,
+				createdAt = createdAt,
+				connectedWallet = null,
+				status = CheckoutSessionStatus.CREATED,
+				openedAt = null,
+				walletConnectedAt = null,
+				paymentSubmittedAt = null,
+				completedAt = null,
+				updatedAt = createdAt,
+			)
 
 		/** 영속 계층에 저장되어 있던 값으로 Aggregate를 복원한다. */
 		fun reconstitute(
@@ -175,20 +180,21 @@ class CheckoutSession private constructor(
 			paymentSubmittedAt: Instant?,
 			completedAt: Instant?,
 			updatedAt: Instant,
-		): CheckoutSession = CheckoutSession(
-			id = id,
-			paymentId = paymentId,
-			successUrl = successUrl,
-			cancelUrl = cancelUrl,
-			expiresAt = expiresAt,
-			createdAt = createdAt,
-			connectedWallet = connectedWallet,
-			status = status,
-			openedAt = openedAt,
-			walletConnectedAt = walletConnectedAt,
-			paymentSubmittedAt = paymentSubmittedAt,
-			completedAt = completedAt,
-			updatedAt = updatedAt,
-		)
+		): CheckoutSession =
+			CheckoutSession(
+				id = id,
+				paymentId = paymentId,
+				successUrl = successUrl,
+				cancelUrl = cancelUrl,
+				expiresAt = expiresAt,
+				createdAt = createdAt,
+				connectedWallet = connectedWallet,
+				status = status,
+				openedAt = openedAt,
+				walletConnectedAt = walletConnectedAt,
+				paymentSubmittedAt = paymentSubmittedAt,
+				completedAt = completedAt,
+				updatedAt = updatedAt,
+			)
 	}
 }

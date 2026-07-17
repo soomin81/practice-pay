@@ -11,8 +11,9 @@ package paytech.practice.pay.domain.webhook
  * @property value Webhook 전송 공개 ID 문자열. 공백일 수 없고 [MAX_LENGTH]자를 넘을 수 없다.
  */
 @JvmInline
-value class WebhookDeliveryId(val value: String) {
-
+value class WebhookDeliveryId(
+	val value: String,
+) {
 	init {
 		require(value.isNotBlank()) { "WebhookDeliveryId는 공백일 수 없습니다." }
 		require(value.length <= MAX_LENGTH) {

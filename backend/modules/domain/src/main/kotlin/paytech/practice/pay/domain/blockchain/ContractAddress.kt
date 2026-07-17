@@ -15,8 +15,9 @@ package paytech.practice.pay.domain.blockchain
  * @property value `0x` 접두사를 포함한 계약 주소 문자열.
  */
 @JvmInline
-value class ContractAddress(val value: String) {
-
+value class ContractAddress(
+	val value: String,
+) {
 	init {
 		require(ADDRESS_REGEX.matches(value)) { "ContractAddress 형식이 올바르지 않습니다: $value" }
 	}

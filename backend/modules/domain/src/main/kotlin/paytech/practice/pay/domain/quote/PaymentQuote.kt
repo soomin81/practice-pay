@@ -1,12 +1,12 @@
 package paytech.practice.pay.domain.quote
 
-import java.math.BigDecimal
-import java.time.Instant
 import paytech.practice.pay.domain.payment.PaymentId
 import paytech.practice.pay.domain.shared.Asset
 import paytech.practice.pay.domain.shared.ExchangeRate
 import paytech.practice.pay.domain.shared.Money
 import paytech.practice.pay.domain.shared.TokenAmount
+import java.math.BigDecimal
+import java.time.Instant
 
 /**
  * 결제 견적(PaymentQuote)이다.
@@ -51,7 +51,6 @@ data class PaymentQuote(
 	val expiresAt: Instant,
 	val createdAt: Instant,
 ) {
-
 	init {
 		require(marketProviderCode.isNotBlank()) { "marketProviderCode는 공백일 수 없습니다." }
 		require(quotedAt.isBefore(expiresAt)) {

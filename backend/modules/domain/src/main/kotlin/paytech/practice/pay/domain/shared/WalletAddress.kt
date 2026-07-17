@@ -12,8 +12,9 @@ package paytech.practice.pay.domain.shared
  * @property value `0x` 접두사를 포함한 지갑 주소 문자열.
  */
 @JvmInline
-value class WalletAddress(val value: String) {
-
+value class WalletAddress(
+	val value: String,
+) {
 	init {
 		require(ADDRESS_REGEX.matches(value)) { "WalletAddress 형식이 올바르지 않습니다: $value" }
 	}

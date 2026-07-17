@@ -13,8 +13,9 @@ package paytech.practice.pay.domain.apikey
  * @property value API Key Prefix 문자열. 공백일 수 없고 [MAX_LENGTH]자를 넘을 수 없다.
  */
 @JvmInline
-value class ApiKeyPrefix(val value: String) {
-
+value class ApiKeyPrefix(
+	val value: String,
+) {
 	init {
 		require(value.isNotBlank()) { "ApiKeyPrefix는 공백일 수 없습니다." }
 		require(value.length <= MAX_LENGTH) { "ApiKeyPrefix는 ${MAX_LENGTH}자를 초과할 수 없습니다: $value" }

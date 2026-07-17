@@ -11,8 +11,9 @@ package paytech.practice.pay.domain.shared
  * @property amountMinor 최소 단위 정수 수량. 음수를 허용하지 않는다.
  */
 @JvmInline
-value class TokenAmount(val amountMinor: Long) : Comparable<TokenAmount> {
-
+value class TokenAmount(
+	val amountMinor: Long,
+) : Comparable<TokenAmount> {
 	init {
 		require(amountMinor >= 0) { "TokenAmount는 음수일 수 없습니다: $amountMinor" }
 	}

@@ -10,8 +10,9 @@ package paytech.practice.pay.domain.merchant
  * @property value 가맹점 코드 문자열. 공백일 수 없고 [MAX_LENGTH]자를 넘을 수 없다.
  */
 @JvmInline
-value class MerchantCode(val value: String) {
-
+value class MerchantCode(
+	val value: String,
+) {
 	init {
 		require(value.isNotBlank()) { "MerchantCode는 공백일 수 없습니다." }
 		require(value.length <= MAX_LENGTH) { "MerchantCode는 ${MAX_LENGTH}자를 초과할 수 없습니다: $value" }

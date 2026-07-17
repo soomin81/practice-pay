@@ -1,7 +1,7 @@
 package paytech.practice.pay.domain.merchant
 
-import java.time.Instant
 import paytech.practice.pay.domain.shared.HttpUrl
+import java.time.Instant
 
 /**
  * 가맹점(Merchant) Aggregate Root다.
@@ -26,7 +26,6 @@ class Merchant private constructor(
 	webhookUrl: HttpUrl?,
 	updatedAt: Instant,
 ) {
-
 	var status: MerchantStatus = status
 		private set
 
@@ -68,17 +67,22 @@ class Merchant private constructor(
 	}
 
 	/** Webhook 수신 URL을 갱신한다. `null`을 넘기면 설정을 해제한다. 상태 전이는 아니다. */
-	fun updateWebhookUrl(webhookUrl: HttpUrl?, changedAt: Instant) {
+	fun updateWebhookUrl(
+		webhookUrl: HttpUrl?,
+		changedAt: Instant,
+	) {
 		this.webhookUrl = webhookUrl
 		updatedAt = changedAt
 	}
 
-	private fun checkTransition(allowed: Boolean, target: MerchantStatus) {
+	private fun checkTransition(
+		allowed: Boolean,
+		target: MerchantStatus,
+	) {
 		check(allowed) { "Merchant 상태를 $status 에서 $target (으)로 전이할 수 없습니다." }
 	}
 
 	companion object {
-
 		/** 새 가맹점을 `ACTIVE` 상태로 생성한다. */
 		fun create(
 			id: MerchantId,
@@ -86,15 +90,16 @@ class Merchant private constructor(
 			name: String,
 			webhookUrl: HttpUrl?,
 			createdAt: Instant,
-		): Merchant = Merchant(
-			id = id,
-			code = code,
-			name = name,
-			createdAt = createdAt,
-			status = MerchantStatus.ACTIVE,
-			webhookUrl = webhookUrl,
-			updatedAt = createdAt,
-		)
+		): Merchant =
+			Merchant(
+				id = id,
+				code = code,
+				name = name,
+				createdAt = createdAt,
+				status = MerchantStatus.ACTIVE,
+				webhookUrl = webhookUrl,
+				updatedAt = createdAt,
+			)
 
 		/** 영속 계층에 저장되어 있던 값으로 Aggregate를 복원한다. */
 		fun reconstitute(
@@ -105,14 +110,15 @@ class Merchant private constructor(
 			status: MerchantStatus,
 			webhookUrl: HttpUrl?,
 			updatedAt: Instant,
-		): Merchant = Merchant(
-			id = id,
-			code = code,
-			name = name,
-			createdAt = createdAt,
-			status = status,
-			webhookUrl = webhookUrl,
-			updatedAt = updatedAt,
-		)
+		): Merchant =
+			Merchant(
+				id = id,
+				code = code,
+				name = name,
+				createdAt = createdAt,
+				status = status,
+				webhookUrl = webhookUrl,
+				updatedAt = updatedAt,
+			)
 	}
 }

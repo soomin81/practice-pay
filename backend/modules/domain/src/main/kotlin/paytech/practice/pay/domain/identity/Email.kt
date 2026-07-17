@@ -12,8 +12,9 @@ package paytech.practice.pay.domain.identity
  * @property value 이메일 주소 문자열.
  */
 @JvmInline
-value class Email(val value: String) {
-
+value class Email(
+	val value: String,
+) {
 	init {
 		require(value.length <= MAX_LENGTH) { "Email은 ${MAX_LENGTH}자를 초과할 수 없습니다: $value" }
 		require(value.isNotBlank() && value.contains("@")) { "Email 형식이 올바르지 않습니다: $value" }

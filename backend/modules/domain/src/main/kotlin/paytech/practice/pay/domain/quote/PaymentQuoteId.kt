@@ -10,8 +10,9 @@ package paytech.practice.pay.domain.quote
  * @property value 결제 견적 공개 ID 문자열. 공백일 수 없고 [MAX_LENGTH]자를 넘을 수 없다.
  */
 @JvmInline
-value class PaymentQuoteId(val value: String) {
-
+value class PaymentQuoteId(
+	val value: String,
+) {
 	init {
 		require(value.isNotBlank()) { "PaymentQuoteId는 공백일 수 없습니다." }
 		require(value.length <= MAX_LENGTH) { "PaymentQuoteId는 ${MAX_LENGTH}자를 초과할 수 없습니다: $value" }

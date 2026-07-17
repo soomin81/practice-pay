@@ -15,8 +15,9 @@ import java.math.BigDecimal
  * @property value 환율 값. 0보다 커야 한다.
  */
 @JvmInline
-value class ExchangeRate(val value: BigDecimal) {
-
+value class ExchangeRate(
+	val value: BigDecimal,
+) {
 	init {
 		require(value > BigDecimal.ZERO) { "ExchangeRate는 0보다 커야 합니다: $value" }
 	}

@@ -11,8 +11,9 @@ package paytech.practice.pay.domain.exchange
  * @property value 클라이언트 주문 ID 문자열. 공백일 수 없고 [MAX_LENGTH]자를 넘을 수 없다.
  */
 @JvmInline
-value class ClientOrderId(val value: String) {
-
+value class ClientOrderId(
+	val value: String,
+) {
 	init {
 		require(value.isNotBlank()) { "ClientOrderId는 공백일 수 없습니다." }
 		require(value.length <= MAX_LENGTH) { "ClientOrderId는 ${MAX_LENGTH}자를 초과할 수 없습니다: $value" }

@@ -1,11 +1,11 @@
 package paytech.practice.pay.domain.blockchain
 
-import java.time.Instant
 import paytech.practice.pay.domain.payment.PaymentId
 import paytech.practice.pay.domain.shared.Asset
 import paytech.practice.pay.domain.shared.BlockchainNetwork
 import paytech.practice.pay.domain.shared.TokenAmount
 import paytech.practice.pay.domain.shared.WalletAddress
+import java.time.Instant
 
 /**
  * 블록체인 거래(BlockchainTransaction) Aggregate Root다.
@@ -48,7 +48,6 @@ class BlockchainTransaction private constructor(
 	confirmedAt: Instant?,
 	updatedAt: Instant,
 ) {
-
 	var status: BlockchainTransactionStatus = status
 		private set
 
@@ -89,7 +88,10 @@ class BlockchainTransaction private constructor(
 	}
 
 	/** `SUBMITTED` → `DETECTED`. 온체인에서 거래가 블록에 포함된 것을 감지했다. */
-	fun detect(blockNumber: Long, detectedAt: Instant) {
+	fun detect(
+		blockNumber: Long,
+		detectedAt: Instant,
+	) {
 		checkTransition(status == BlockchainTransactionStatus.SUBMITTED, BlockchainTransactionStatus.DETECTED)
 		this.blockNumber = blockNumber
 		status = BlockchainTransactionStatus.DETECTED
@@ -105,7 +107,10 @@ class BlockchainTransaction private constructor(
 	}
 
 	/** `CONFIRMING` 상태에서 누적 블록 확인 수를 갱신한다. 상태 전이는 없다. */
-	fun recordConfirmation(confirmationCount: Int, changedAt: Instant) {
+	fun recordConfirmation(
+		confirmationCount: Int,
+		changedAt: Instant,
+	) {
 		check(status == BlockchainTransactionStatus.CONFIRMING) {
 			"CONFIRMING 상태가 아니면 confirmationCount를 갱신할 수 없습니다: 현재 상태=$status"
 		}
@@ -123,7 +128,11 @@ class BlockchainTransaction private constructor(
 	}
 
 	/** (`SUBMITTED`, `DETECTED` 또는 `CONFIRMING`) → `FAILED`. */
-	fun fail(failureCode: String?, failureMessage: String?, failedAt: Instant) {
+	fun fail(
+		failureCode: String?,
+		failureMessage: String?,
+		failedAt: Instant,
+	) {
 		checkTransition(
 			status == BlockchainTransactionStatus.SUBMITTED ||
 				status == BlockchainTransactionStatus.DETECTED ||
@@ -136,12 +145,14 @@ class BlockchainTransaction private constructor(
 		updatedAt = failedAt
 	}
 
-	private fun checkTransition(allowed: Boolean, target: BlockchainTransactionStatus) {
+	private fun checkTransition(
+		allowed: Boolean,
+		target: BlockchainTransactionStatus,
+	) {
 		check(allowed) { "BlockchainTransaction 상태를 $status 에서 $target (으)로 전이할 수 없습니다." }
 	}
 
 	companion object {
-
 		/** 새 온체인 거래를 `SUBMITTED` 상태로 생성한다. */
 		fun create(
 			id: BlockchainTransactionId,
@@ -157,29 +168,30 @@ class BlockchainTransaction private constructor(
 			amountMinor: TokenAmount?,
 			requiredConfirmationCount: Int,
 			submittedAt: Instant,
-		): BlockchainTransaction = BlockchainTransaction(
-			id = id,
-			paymentId = paymentId,
-			transactionType = transactionType,
-			network = network,
-			chainId = chainId,
-			transactionHash = transactionHash,
-			fromAddress = fromAddress,
-			toAddress = toAddress,
-			tokenContractAddress = tokenContractAddress,
-			tokenAsset = tokenAsset,
-			amountMinor = amountMinor,
-			requiredConfirmationCount = requiredConfirmationCount,
-			submittedAt = submittedAt,
-			status = BlockchainTransactionStatus.SUBMITTED,
-			blockNumber = null,
-			confirmationCount = 0,
-			failureCode = null,
-			failureMessage = null,
-			detectedAt = null,
-			confirmedAt = null,
-			updatedAt = submittedAt,
-		)
+		): BlockchainTransaction =
+			BlockchainTransaction(
+				id = id,
+				paymentId = paymentId,
+				transactionType = transactionType,
+				network = network,
+				chainId = chainId,
+				transactionHash = transactionHash,
+				fromAddress = fromAddress,
+				toAddress = toAddress,
+				tokenContractAddress = tokenContractAddress,
+				tokenAsset = tokenAsset,
+				amountMinor = amountMinor,
+				requiredConfirmationCount = requiredConfirmationCount,
+				submittedAt = submittedAt,
+				status = BlockchainTransactionStatus.SUBMITTED,
+				blockNumber = null,
+				confirmationCount = 0,
+				failureCode = null,
+				failureMessage = null,
+				detectedAt = null,
+				confirmedAt = null,
+				updatedAt = submittedAt,
+			)
 
 		/** 영속 계층에 저장되어 있던 값으로 Aggregate를 복원한다. */
 		fun reconstitute(
@@ -204,28 +216,29 @@ class BlockchainTransaction private constructor(
 			detectedAt: Instant?,
 			confirmedAt: Instant?,
 			updatedAt: Instant,
-		): BlockchainTransaction = BlockchainTransaction(
-			id = id,
-			paymentId = paymentId,
-			transactionType = transactionType,
-			network = network,
-			chainId = chainId,
-			transactionHash = transactionHash,
-			fromAddress = fromAddress,
-			toAddress = toAddress,
-			tokenContractAddress = tokenContractAddress,
-			tokenAsset = tokenAsset,
-			amountMinor = amountMinor,
-			requiredConfirmationCount = requiredConfirmationCount,
-			submittedAt = submittedAt,
-			status = status,
-			blockNumber = blockNumber,
-			confirmationCount = confirmationCount,
-			failureCode = failureCode,
-			failureMessage = failureMessage,
-			detectedAt = detectedAt,
-			confirmedAt = confirmedAt,
-			updatedAt = updatedAt,
-		)
+		): BlockchainTransaction =
+			BlockchainTransaction(
+				id = id,
+				paymentId = paymentId,
+				transactionType = transactionType,
+				network = network,
+				chainId = chainId,
+				transactionHash = transactionHash,
+				fromAddress = fromAddress,
+				toAddress = toAddress,
+				tokenContractAddress = tokenContractAddress,
+				tokenAsset = tokenAsset,
+				amountMinor = amountMinor,
+				requiredConfirmationCount = requiredConfirmationCount,
+				submittedAt = submittedAt,
+				status = status,
+				blockNumber = blockNumber,
+				confirmationCount = confirmationCount,
+				failureCode = failureCode,
+				failureMessage = failureMessage,
+				detectedAt = detectedAt,
+				confirmedAt = confirmedAt,
+				updatedAt = updatedAt,
+			)
 	}
 }

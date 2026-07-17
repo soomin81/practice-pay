@@ -30,11 +30,13 @@ gradlew.bat bootRun                            # run the app locally (needs MySQ
 gradlew.bat test                               # run all tests
 gradlew.bat test --tests "paytech.practice.pay.PracticePayApplicationTests"   # single test class
 gradlew.bat test --tests "*PracticePayApplicationTests.contextLoads"          # single test method
+gradlew.bat ktlintCheck                        # lint every module (also runs as part of `check`/`build`)
+gradlew.bat ktlintFormat                       # auto-fix every module in place
 ```
 
 - Local MySQL: `compose.yaml` defines a `mysql:latest` service for `docker compose up`, seeded with database `stablecoin_payment` (matches the schema — see "Database / jOOQ code generation" below). Tests instead use Testcontainers automatically (`TestcontainersConfiguration.kt` boots a MySQL container via `@ServiceConnection`); `TestPracticePayApplication.kt` is a dev-time main that wires the same Testcontainers config for local `bootRun`-style use without a manual DB.
 - Toolchain: Java 25, Kotlin 2.3.21, Spring Boot 4.1.0.
-- No linter/formatter (ktlint/detekt) is configured yet.
+- Lint/format: **ktlint** via the `org.jlleitschuh.gradle.ktlint` plugin (14.2.0), applied to every module (including the phantom `:modules` parent Gradle creates for the hierarchical `modules:domain`/`modules:application` includes) via `allprojects {}` in the root `build.gradle.kts` — the one deliberate exception to this project's "duplicate small config per module" style, since ktlint config never varies per module. `backend/.editorconfig` pins `indent_style = tab` (this project's existing convention) so ktlint doesn't force a reformat to spaces. `ktlintCheck` already runs as part of `check`/`build`, so a green build implies lint-clean code. `db-core/build.gradle.kts` excludes `generated-src` (jOOQ-generated code, never hand-edited) from linting and adds an explicit `dependsOn("jooqCodegen")` on the ktlint tasks that read it, since Gradle's task-input validation requires a declared dependency on whatever produces a directory a task reads.
 
 ## Testing
 

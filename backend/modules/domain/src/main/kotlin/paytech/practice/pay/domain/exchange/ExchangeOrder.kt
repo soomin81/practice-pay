@@ -1,11 +1,11 @@
 package paytech.practice.pay.domain.exchange
 
-import java.time.Instant
 import paytech.practice.pay.domain.payment.PaymentId
 import paytech.practice.pay.domain.shared.Asset
 import paytech.practice.pay.domain.shared.ExchangeRate
 import paytech.practice.pay.domain.shared.Money
 import paytech.practice.pay.domain.shared.TokenAmount
+import java.time.Instant
 
 /**
  * 거래소 주문(ExchangeOrder) Aggregate Root다.
@@ -45,7 +45,6 @@ class ExchangeOrder private constructor(
 	completedAt: Instant?,
 	updatedAt: Instant,
 ) {
-
 	/** 거래소가 부여한 주문번호. [submit] 전까지는 `null`일 수 있다. */
 	var providerOrderId: String? = providerOrderId
 		private set
@@ -98,7 +97,10 @@ class ExchangeOrder private constructor(
 	}
 
 	/** `REQUESTED` → `SUBMITTED`. 거래소에 주문을 제출하고 주문번호를 기록한다. */
-	fun submit(providerOrderId: String?, submittedAt: Instant) {
+	fun submit(
+		providerOrderId: String?,
+		submittedAt: Instant,
+	) {
 		checkTransition(status == ExchangeOrderStatus.REQUESTED, ExchangeOrderStatus.SUBMITTED)
 		this.providerOrderId = providerOrderId
 		status = ExchangeOrderStatus.SUBMITTED
@@ -137,7 +139,11 @@ class ExchangeOrder private constructor(
 	}
 
 	/** (`REQUESTED`, `SUBMITTED` 또는 `PROCESSING`) → `FAILED`. */
-	fun fail(failureCode: String?, failureMessage: String?, failedAt: Instant) {
+	fun fail(
+		failureCode: String?,
+		failureMessage: String?,
+		failedAt: Instant,
+	) {
 		checkTransition(isInFlight(), ExchangeOrderStatus.FAILED)
 		status = ExchangeOrderStatus.FAILED
 		this.failureCode = failureCode
@@ -163,12 +169,14 @@ class ExchangeOrder private constructor(
 			status == ExchangeOrderStatus.SUBMITTED ||
 			status == ExchangeOrderStatus.PROCESSING
 
-	private fun checkTransition(allowed: Boolean, target: ExchangeOrderStatus) {
+	private fun checkTransition(
+		allowed: Boolean,
+		target: ExchangeOrderStatus,
+	) {
 		check(allowed) { "ExchangeOrder 상태를 $status 에서 $target (으)로 전이할 수 없습니다." }
 	}
 
 	companion object {
-
 		/** 새 거래소 주문을 `REQUESTED` 상태로 생성한다. */
 		fun create(
 			id: ExchangeOrderId,
@@ -179,27 +187,28 @@ class ExchangeOrder private constructor(
 			baseAsset: Asset,
 			requestedAmount: TokenAmount,
 			requestedAt: Instant,
-		): ExchangeOrder = ExchangeOrder(
-			id = id,
-			paymentId = paymentId,
-			exchangeProviderCode = exchangeProviderCode,
-			clientOrderId = clientOrderId,
-			orderSide = orderSide,
-			baseAsset = baseAsset,
-			requestedAmount = requestedAmount,
-			requestedAt = requestedAt,
-			providerOrderId = null,
-			status = ExchangeOrderStatus.REQUESTED,
-			executedAmount = null,
-			averageExecutionRate = null,
-			receivedAmount = null,
-			exchangeFeeAmount = null,
-			failureCode = null,
-			failureMessage = null,
-			submittedAt = null,
-			completedAt = null,
-			updatedAt = requestedAt,
-		)
+		): ExchangeOrder =
+			ExchangeOrder(
+				id = id,
+				paymentId = paymentId,
+				exchangeProviderCode = exchangeProviderCode,
+				clientOrderId = clientOrderId,
+				orderSide = orderSide,
+				baseAsset = baseAsset,
+				requestedAmount = requestedAmount,
+				requestedAt = requestedAt,
+				providerOrderId = null,
+				status = ExchangeOrderStatus.REQUESTED,
+				executedAmount = null,
+				averageExecutionRate = null,
+				receivedAmount = null,
+				exchangeFeeAmount = null,
+				failureCode = null,
+				failureMessage = null,
+				submittedAt = null,
+				completedAt = null,
+				updatedAt = requestedAt,
+			)
 
 		/** 영속 계층에 저장되어 있던 값으로 Aggregate를 복원한다. */
 		fun reconstitute(
@@ -222,26 +231,27 @@ class ExchangeOrder private constructor(
 			submittedAt: Instant?,
 			completedAt: Instant?,
 			updatedAt: Instant,
-		): ExchangeOrder = ExchangeOrder(
-			id = id,
-			paymentId = paymentId,
-			exchangeProviderCode = exchangeProviderCode,
-			clientOrderId = clientOrderId,
-			orderSide = orderSide,
-			baseAsset = baseAsset,
-			requestedAmount = requestedAmount,
-			requestedAt = requestedAt,
-			providerOrderId = providerOrderId,
-			status = status,
-			executedAmount = executedAmount,
-			averageExecutionRate = averageExecutionRate,
-			receivedAmount = receivedAmount,
-			exchangeFeeAmount = exchangeFeeAmount,
-			failureCode = failureCode,
-			failureMessage = failureMessage,
-			submittedAt = submittedAt,
-			completedAt = completedAt,
-			updatedAt = updatedAt,
-		)
+		): ExchangeOrder =
+			ExchangeOrder(
+				id = id,
+				paymentId = paymentId,
+				exchangeProviderCode = exchangeProviderCode,
+				clientOrderId = clientOrderId,
+				orderSide = orderSide,
+				baseAsset = baseAsset,
+				requestedAmount = requestedAmount,
+				requestedAt = requestedAt,
+				providerOrderId = providerOrderId,
+				status = status,
+				executedAmount = executedAmount,
+				averageExecutionRate = averageExecutionRate,
+				receivedAmount = receivedAmount,
+				exchangeFeeAmount = exchangeFeeAmount,
+				failureCode = failureCode,
+				failureMessage = failureMessage,
+				submittedAt = submittedAt,
+				completedAt = completedAt,
+				updatedAt = updatedAt,
+			)
 	}
 }

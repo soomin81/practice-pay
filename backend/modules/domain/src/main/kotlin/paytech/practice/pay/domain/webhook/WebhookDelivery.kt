@@ -1,8 +1,8 @@
 package paytech.practice.pay.domain.webhook
 
-import java.time.Instant
 import paytech.practice.pay.domain.merchant.MerchantId
 import paytech.practice.pay.domain.shared.HttpUrl
+import java.time.Instant
 
 /**
  * Webhook 전송(WebhookDelivery) Aggregate Root다.
@@ -42,7 +42,6 @@ class WebhookDelivery private constructor(
 	deliveredAt: Instant?,
 	updatedAt: Instant,
 ) {
-
 	var status: WebhookDeliveryStatus = status
 		private set
 
@@ -93,7 +92,10 @@ class WebhookDelivery private constructor(
 	}
 
 	/** `DELIVERING` → `SUCCEEDED`. */
-	fun succeed(httpStatus: Int, deliveredAt: Instant) {
+	fun succeed(
+		httpStatus: Int,
+		deliveredAt: Instant,
+	) {
 		checkTransition(status == WebhookDeliveryStatus.DELIVERING, WebhookDeliveryStatus.SUCCEEDED)
 		status = WebhookDeliveryStatus.SUCCEEDED
 		lastHttpStatus = httpStatus
@@ -102,7 +104,12 @@ class WebhookDelivery private constructor(
 	}
 
 	/** `DELIVERING` → `RETRY_WAITING`. 다음 재시도 시각을 기록한다. */
-	fun scheduleRetry(httpStatus: Int?, errorMessage: String?, nextRetryAt: Instant, changedAt: Instant) {
+	fun scheduleRetry(
+		httpStatus: Int?,
+		errorMessage: String?,
+		nextRetryAt: Instant,
+		changedAt: Instant,
+	) {
 		checkTransition(status == WebhookDeliveryStatus.DELIVERING, WebhookDeliveryStatus.RETRY_WAITING)
 		status = WebhookDeliveryStatus.RETRY_WAITING
 		lastHttpStatus = httpStatus
@@ -112,7 +119,11 @@ class WebhookDelivery private constructor(
 	}
 
 	/** `DELIVERING` → `FAILED`. 최대 재시도 횟수를 초과했을 때 호출부가 선택해서 호출한다. */
-	fun fail(httpStatus: Int?, errorMessage: String?, failedAt: Instant) {
+	fun fail(
+		httpStatus: Int?,
+		errorMessage: String?,
+		failedAt: Instant,
+	) {
 		checkTransition(status == WebhookDeliveryStatus.DELIVERING, WebhookDeliveryStatus.FAILED)
 		status = WebhookDeliveryStatus.FAILED
 		lastHttpStatus = httpStatus
@@ -120,12 +131,14 @@ class WebhookDelivery private constructor(
 		updatedAt = failedAt
 	}
 
-	private fun checkTransition(allowed: Boolean, target: WebhookDeliveryStatus) {
+	private fun checkTransition(
+		allowed: Boolean,
+		target: WebhookDeliveryStatus,
+	) {
 		check(allowed) { "WebhookDelivery 상태를 $status 에서 $target (으)로 전이할 수 없습니다." }
 	}
 
 	companion object {
-
 		/** 새 Webhook 전송을 `PENDING` 상태로 생성한다. */
 		fun create(
 			id: WebhookDeliveryId,
@@ -137,24 +150,25 @@ class WebhookDelivery private constructor(
 			destinationUrl: HttpUrl,
 			payload: String,
 			createdAt: Instant,
-		): WebhookDelivery = WebhookDelivery(
-			id = id,
-			merchantId = merchantId,
-			eventId = eventId,
-			eventType = eventType,
-			aggregateType = aggregateType,
-			aggregateId = aggregateId,
-			destinationUrl = destinationUrl,
-			payload = payload,
-			createdAt = createdAt,
-			status = WebhookDeliveryStatus.PENDING,
-			attemptCount = 0,
-			lastHttpStatus = null,
-			lastErrorMessage = null,
-			nextRetryAt = null,
-			deliveredAt = null,
-			updatedAt = createdAt,
-		)
+		): WebhookDelivery =
+			WebhookDelivery(
+				id = id,
+				merchantId = merchantId,
+				eventId = eventId,
+				eventType = eventType,
+				aggregateType = aggregateType,
+				aggregateId = aggregateId,
+				destinationUrl = destinationUrl,
+				payload = payload,
+				createdAt = createdAt,
+				status = WebhookDeliveryStatus.PENDING,
+				attemptCount = 0,
+				lastHttpStatus = null,
+				lastErrorMessage = null,
+				nextRetryAt = null,
+				deliveredAt = null,
+				updatedAt = createdAt,
+			)
 
 		/** 영속 계층에 저장되어 있던 값으로 Aggregate를 복원한다. */
 		fun reconstitute(
@@ -174,23 +188,24 @@ class WebhookDelivery private constructor(
 			nextRetryAt: Instant?,
 			deliveredAt: Instant?,
 			updatedAt: Instant,
-		): WebhookDelivery = WebhookDelivery(
-			id = id,
-			merchantId = merchantId,
-			eventId = eventId,
-			eventType = eventType,
-			aggregateType = aggregateType,
-			aggregateId = aggregateId,
-			destinationUrl = destinationUrl,
-			payload = payload,
-			createdAt = createdAt,
-			status = status,
-			attemptCount = attemptCount,
-			lastHttpStatus = lastHttpStatus,
-			lastErrorMessage = lastErrorMessage,
-			nextRetryAt = nextRetryAt,
-			deliveredAt = deliveredAt,
-			updatedAt = updatedAt,
-		)
+		): WebhookDelivery =
+			WebhookDelivery(
+				id = id,
+				merchantId = merchantId,
+				eventId = eventId,
+				eventType = eventType,
+				aggregateType = aggregateType,
+				aggregateId = aggregateId,
+				destinationUrl = destinationUrl,
+				payload = payload,
+				createdAt = createdAt,
+				status = status,
+				attemptCount = attemptCount,
+				lastHttpStatus = lastHttpStatus,
+				lastErrorMessage = lastErrorMessage,
+				nextRetryAt = nextRetryAt,
+				deliveredAt = deliveredAt,
+				updatedAt = updatedAt,
+			)
 	}
 }

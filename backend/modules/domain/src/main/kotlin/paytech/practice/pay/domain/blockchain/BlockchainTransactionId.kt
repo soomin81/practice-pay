@@ -12,8 +12,9 @@ package paytech.practice.pay.domain.blockchain
  * @property value 블록체인 거래 공개 ID 문자열. 공백일 수 없고 [MAX_LENGTH]자를 넘을 수 없다.
  */
 @JvmInline
-value class BlockchainTransactionId(val value: String) {
-
+value class BlockchainTransactionId(
+	val value: String,
+) {
 	init {
 		require(value.isNotBlank()) { "BlockchainTransactionId는 공백일 수 없습니다." }
 		require(value.length <= MAX_LENGTH) {

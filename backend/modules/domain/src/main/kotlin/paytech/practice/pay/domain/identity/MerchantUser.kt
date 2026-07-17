@@ -1,7 +1,7 @@
 package paytech.practice.pay.domain.identity
 
-import java.time.Instant
 import paytech.practice.pay.domain.merchant.MerchantId
+import java.time.Instant
 
 /**
  * 가맹점 사용자(MerchantUser) Aggregate Root다.
@@ -44,7 +44,6 @@ class MerchantUser private constructor(
 	terminatedAt: Instant?,
 	updatedAt: Instant,
 ) {
-
 	var status: AccountStatus = status
 		private set
 
@@ -88,15 +87,16 @@ class MerchantUser private constructor(
 	}
 
 	/** `ACTIVE` 상태의 `OWNER` 또는 `ADMIN`만 같은 가맹점의 하위 계정을 발급할 수 있다. */
-	fun canInviteSubAccounts(): Boolean =
-		status == AccountStatus.ACTIVE && (role == MerchantUserRole.OWNER || role == MerchantUserRole.ADMIN)
+	fun canInviteSubAccounts(): Boolean = status == AccountStatus.ACTIVE && (role == MerchantUserRole.OWNER || role == MerchantUserRole.ADMIN)
 
 	/** `ACTIVE` 상태의 `OWNER` 또는 `ADMIN`만 API Key를 발급·폐기할 수 있다. */
-	fun canManageApiKeys(): Boolean =
-		status == AccountStatus.ACTIVE && (role == MerchantUserRole.OWNER || role == MerchantUserRole.ADMIN)
+	fun canManageApiKeys(): Boolean = status == AccountStatus.ACTIVE && (role == MerchantUserRole.OWNER || role == MerchantUserRole.ADMIN)
 
 	/** `INVITED` → `ACTIVE`. 초대받은 계정이 비밀번호를 설정해 활성화된다. */
-	fun activate(passwordHash: String, activatedAt: Instant) {
+	fun activate(
+		passwordHash: String,
+		activatedAt: Instant,
+	) {
 		checkTransition(status == AccountStatus.INVITED, AccountStatus.ACTIVE)
 		status = AccountStatus.ACTIVE
 		this.passwordHash = passwordHash
@@ -121,7 +121,10 @@ class MerchantUser private constructor(
 	}
 
 	/** `ACTIVE` → `LOCKED`. */
-	fun lock(lockedUntil: Instant, changedAt: Instant) {
+	fun lock(
+		lockedUntil: Instant,
+		changedAt: Instant,
+	) {
 		checkTransition(status == AccountStatus.ACTIVE, AccountStatus.LOCKED)
 		status = AccountStatus.LOCKED
 		this.lockedUntil = lockedUntil
@@ -162,12 +165,14 @@ class MerchantUser private constructor(
 		updatedAt = terminatedAt
 	}
 
-	private fun checkTransition(allowed: Boolean, target: AccountStatus) {
+	private fun checkTransition(
+		allowed: Boolean,
+		target: AccountStatus,
+	) {
 		check(allowed) { "MerchantUser 상태를 $status 에서 $target (으)로 전이할 수 없습니다." }
 	}
 
 	companion object {
-
 		/** 가맹점 등록 트랜잭션에서 내부 운영자가 최초 `OWNER`를 `INVITED` 상태로 생성한다. */
 		fun inviteInitialOwner(
 			id: MerchantUserId,
@@ -177,27 +182,28 @@ class MerchantUser private constructor(
 			userName: String,
 			invitedByInternalUserId: InternalUserId,
 			createdAt: Instant,
-		): MerchantUser = MerchantUser(
-			id = id,
-			merchantId = merchantId,
-			loginId = loginId,
-			email = email,
-			userName = userName,
-			role = MerchantUserRole.OWNER,
-			invitedByInternalUserId = invitedByInternalUserId,
-			invitedByMerchantUserId = null,
-			createdAt = createdAt,
-			status = AccountStatus.INVITED,
-			passwordHash = null,
-			failedLoginCount = 0,
-			lockedUntil = null,
-			passwordChangedAt = null,
-			lastLoginAt = null,
-			invitedAt = createdAt,
-			activatedAt = null,
-			terminatedAt = null,
-			updatedAt = createdAt,
-		)
+		): MerchantUser =
+			MerchantUser(
+				id = id,
+				merchantId = merchantId,
+				loginId = loginId,
+				email = email,
+				userName = userName,
+				role = MerchantUserRole.OWNER,
+				invitedByInternalUserId = invitedByInternalUserId,
+				invitedByMerchantUserId = null,
+				createdAt = createdAt,
+				status = AccountStatus.INVITED,
+				passwordHash = null,
+				failedLoginCount = 0,
+				lockedUntil = null,
+				passwordChangedAt = null,
+				lastLoginAt = null,
+				invitedAt = createdAt,
+				activatedAt = null,
+				terminatedAt = null,
+				updatedAt = createdAt,
+			)
 
 		/**
 		 * `OWNER` 또는 `ADMIN`이 같은 가맹점의 `ADMIN`/`VIEWER` 하위 계정을
@@ -262,26 +268,27 @@ class MerchantUser private constructor(
 			activatedAt: Instant?,
 			terminatedAt: Instant?,
 			updatedAt: Instant,
-		): MerchantUser = MerchantUser(
-			id = id,
-			merchantId = merchantId,
-			loginId = loginId,
-			email = email,
-			userName = userName,
-			role = role,
-			invitedByInternalUserId = invitedByInternalUserId,
-			invitedByMerchantUserId = invitedByMerchantUserId,
-			createdAt = createdAt,
-			status = status,
-			passwordHash = passwordHash,
-			failedLoginCount = failedLoginCount,
-			lockedUntil = lockedUntil,
-			passwordChangedAt = passwordChangedAt,
-			lastLoginAt = lastLoginAt,
-			invitedAt = invitedAt,
-			activatedAt = activatedAt,
-			terminatedAt = terminatedAt,
-			updatedAt = updatedAt,
-		)
+		): MerchantUser =
+			MerchantUser(
+				id = id,
+				merchantId = merchantId,
+				loginId = loginId,
+				email = email,
+				userName = userName,
+				role = role,
+				invitedByInternalUserId = invitedByInternalUserId,
+				invitedByMerchantUserId = invitedByMerchantUserId,
+				createdAt = createdAt,
+				status = status,
+				passwordHash = passwordHash,
+				failedLoginCount = failedLoginCount,
+				lockedUntil = lockedUntil,
+				passwordChangedAt = passwordChangedAt,
+				lastLoginAt = lastLoginAt,
+				invitedAt = invitedAt,
+				activatedAt = activatedAt,
+				terminatedAt = terminatedAt,
+				updatedAt = updatedAt,
+			)
 	}
 }

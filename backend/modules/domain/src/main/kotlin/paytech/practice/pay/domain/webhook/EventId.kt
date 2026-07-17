@@ -10,8 +10,9 @@ package paytech.practice.pay.domain.webhook
  * @property value 이벤트 ID 문자열. 공백일 수 없고 [MAX_LENGTH]자를 넘을 수 없다.
  */
 @JvmInline
-value class EventId(val value: String) {
-
+value class EventId(
+	val value: String,
+) {
 	init {
 		require(value.isNotBlank()) { "EventId는 공백일 수 없습니다." }
 		require(value.length <= MAX_LENGTH) { "EventId는 ${MAX_LENGTH}자를 초과할 수 없습니다: $value" }

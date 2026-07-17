@@ -11,8 +11,9 @@ package paytech.practice.pay.domain.identity
  * @property value 로그인 아이디 문자열. 공백일 수 없고 [MAX_LENGTH]자를 넘을 수 없다.
  */
 @JvmInline
-value class LoginId(val value: String) {
-
+value class LoginId(
+	val value: String,
+) {
 	init {
 		require(value.isNotBlank()) { "LoginId는 공백일 수 없습니다." }
 		require(value.length <= MAX_LENGTH) { "LoginId는 ${MAX_LENGTH}자를 초과할 수 없습니다: $value" }

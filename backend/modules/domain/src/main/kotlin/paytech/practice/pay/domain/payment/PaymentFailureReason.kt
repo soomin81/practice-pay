@@ -7,7 +7,6 @@ package paytech.practice.pay.domain.payment
  * 실패하는 경우들을 값으로 나열한다.
  */
 enum class PaymentFailureReason {
-
 	/** 온체인 거래의 Network 또는 Chain ID가 기대값과 다르다. */
 	NETWORK_MISMATCH,
 

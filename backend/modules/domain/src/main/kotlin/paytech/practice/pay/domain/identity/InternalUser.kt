@@ -40,7 +40,6 @@ class InternalUser private constructor(
 	terminatedAt: Instant?,
 	updatedAt: Instant,
 ) {
-
 	var status: AccountStatus = status
 		private set
 
@@ -81,7 +80,10 @@ class InternalUser private constructor(
 	}
 
 	/** `INVITED` → `ACTIVE`. 초대받은 계정이 비밀번호를 설정해 활성화된다. */
-	fun activate(passwordHash: String, activatedAt: Instant) {
+	fun activate(
+		passwordHash: String,
+		activatedAt: Instant,
+	) {
 		checkTransition(status == AccountStatus.INVITED, AccountStatus.ACTIVE)
 		status = AccountStatus.ACTIVE
 		this.passwordHash = passwordHash
@@ -106,7 +108,10 @@ class InternalUser private constructor(
 	}
 
 	/** `ACTIVE` → `LOCKED`. */
-	fun lock(lockedUntil: Instant, changedAt: Instant) {
+	fun lock(
+		lockedUntil: Instant,
+		changedAt: Instant,
+	) {
 		checkTransition(status == AccountStatus.ACTIVE, AccountStatus.LOCKED)
 		status = AccountStatus.LOCKED
 		this.lockedUntil = lockedUntil
@@ -147,12 +152,14 @@ class InternalUser private constructor(
 		updatedAt = terminatedAt
 	}
 
-	private fun checkTransition(allowed: Boolean, target: AccountStatus) {
+	private fun checkTransition(
+		allowed: Boolean,
+		target: AccountStatus,
+	) {
 		check(allowed) { "InternalUser 상태를 $status 에서 $target (으)로 전이할 수 없습니다." }
 	}
 
 	companion object {
-
 		/**
 		 * 최초 SUPER_ADMIN을 `ACTIVE` 상태로 직접 생성한다.
 		 *
@@ -167,25 +174,26 @@ class InternalUser private constructor(
 			userName: String,
 			passwordHash: String,
 			createdAt: Instant,
-		): InternalUser = InternalUser(
-			id = id,
-			loginId = loginId,
-			email = email,
-			userName = userName,
-			role = InternalUserRole.SUPER_ADMIN,
-			createdByInternalUserId = null,
-			createdAt = createdAt,
-			status = AccountStatus.ACTIVE,
-			passwordHash = passwordHash,
-			failedLoginCount = 0,
-			lockedUntil = null,
-			passwordChangedAt = createdAt,
-			lastLoginAt = null,
-			invitedAt = null,
-			activatedAt = createdAt,
-			terminatedAt = null,
-			updatedAt = createdAt,
-		)
+		): InternalUser =
+			InternalUser(
+				id = id,
+				loginId = loginId,
+				email = email,
+				userName = userName,
+				role = InternalUserRole.SUPER_ADMIN,
+				createdByInternalUserId = null,
+				createdAt = createdAt,
+				status = AccountStatus.ACTIVE,
+				passwordHash = passwordHash,
+				failedLoginCount = 0,
+				lockedUntil = null,
+				passwordChangedAt = createdAt,
+				lastLoginAt = null,
+				invitedAt = null,
+				activatedAt = createdAt,
+				terminatedAt = null,
+				updatedAt = createdAt,
+			)
 
 		/** SUPER_ADMIN이 새 내부 운영자를 `INVITED` 상태로 초대한다. */
 		fun invite(
@@ -196,25 +204,26 @@ class InternalUser private constructor(
 			role: InternalUserRole,
 			createdByInternalUserId: InternalUserId,
 			createdAt: Instant,
-		): InternalUser = InternalUser(
-			id = id,
-			loginId = loginId,
-			email = email,
-			userName = userName,
-			role = role,
-			createdByInternalUserId = createdByInternalUserId,
-			createdAt = createdAt,
-			status = AccountStatus.INVITED,
-			passwordHash = null,
-			failedLoginCount = 0,
-			lockedUntil = null,
-			passwordChangedAt = null,
-			lastLoginAt = null,
-			invitedAt = createdAt,
-			activatedAt = null,
-			terminatedAt = null,
-			updatedAt = createdAt,
-		)
+		): InternalUser =
+			InternalUser(
+				id = id,
+				loginId = loginId,
+				email = email,
+				userName = userName,
+				role = role,
+				createdByInternalUserId = createdByInternalUserId,
+				createdAt = createdAt,
+				status = AccountStatus.INVITED,
+				passwordHash = null,
+				failedLoginCount = 0,
+				lockedUntil = null,
+				passwordChangedAt = null,
+				lastLoginAt = null,
+				invitedAt = createdAt,
+				activatedAt = null,
+				terminatedAt = null,
+				updatedAt = createdAt,
+			)
 
 		/** 영속 계층에 저장되어 있던 값으로 Aggregate를 복원한다. */
 		fun reconstitute(
@@ -235,24 +244,25 @@ class InternalUser private constructor(
 			activatedAt: Instant?,
 			terminatedAt: Instant?,
 			updatedAt: Instant,
-		): InternalUser = InternalUser(
-			id = id,
-			loginId = loginId,
-			email = email,
-			userName = userName,
-			role = role,
-			createdByInternalUserId = createdByInternalUserId,
-			createdAt = createdAt,
-			status = status,
-			passwordHash = passwordHash,
-			failedLoginCount = failedLoginCount,
-			lockedUntil = lockedUntil,
-			passwordChangedAt = passwordChangedAt,
-			lastLoginAt = lastLoginAt,
-			invitedAt = invitedAt,
-			activatedAt = activatedAt,
-			terminatedAt = terminatedAt,
-			updatedAt = updatedAt,
-		)
+		): InternalUser =
+			InternalUser(
+				id = id,
+				loginId = loginId,
+				email = email,
+				userName = userName,
+				role = role,
+				createdByInternalUserId = createdByInternalUserId,
+				createdAt = createdAt,
+				status = status,
+				passwordHash = passwordHash,
+				failedLoginCount = failedLoginCount,
+				lockedUntil = lockedUntil,
+				passwordChangedAt = passwordChangedAt,
+				lastLoginAt = lastLoginAt,
+				invitedAt = invitedAt,
+				activatedAt = activatedAt,
+				terminatedAt = terminatedAt,
+				updatedAt = updatedAt,
+			)
 	}
 }

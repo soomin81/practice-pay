@@ -11,8 +11,9 @@ package paytech.practice.pay.domain.shared
  * @property code 네트워크 코드 문자열. 공백일 수 없다.
  */
 @JvmInline
-value class BlockchainNetwork(val code: String) {
-
+value class BlockchainNetwork(
+	val code: String,
+) {
 	init {
 		require(code.isNotBlank()) { "BlockchainNetwork 코드는 공백일 수 없습니다." }
 	}

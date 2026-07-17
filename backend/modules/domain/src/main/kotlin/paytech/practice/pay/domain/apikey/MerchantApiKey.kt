@@ -1,8 +1,8 @@
 package paytech.practice.pay.domain.apikey
 
-import java.time.Instant
 import paytech.practice.pay.domain.identity.MerchantUserId
 import paytech.practice.pay.domain.merchant.MerchantId
+import java.time.Instant
 
 /**
  * 가맹점 API Key(MerchantApiKey) Aggregate Root다.
@@ -44,7 +44,6 @@ class MerchantApiKey private constructor(
 	revokedAt: Instant?,
 	updatedAt: Instant,
 ) {
-
 	var status: ApiKeyStatus = status
 		private set
 
@@ -87,7 +86,10 @@ class MerchantApiKey private constructor(
 	}
 
 	/** `ACTIVE` → `REVOKED`. 관리자에 의한 즉시 폐기. */
-	fun revoke(revokedByMerchantUserId: MerchantUserId, revokedAt: Instant) {
+	fun revoke(
+		revokedByMerchantUserId: MerchantUserId,
+		revokedAt: Instant,
+	) {
 		checkTransition(status == ApiKeyStatus.ACTIVE, ApiKeyStatus.REVOKED)
 		status = ApiKeyStatus.REVOKED
 		this.revokedByMerchantUserId = revokedByMerchantUserId
@@ -102,12 +104,14 @@ class MerchantApiKey private constructor(
 		updatedAt = changedAt
 	}
 
-	private fun checkTransition(allowed: Boolean, target: ApiKeyStatus) {
+	private fun checkTransition(
+		allowed: Boolean,
+		target: ApiKeyStatus,
+	) {
 		check(allowed) { "MerchantApiKey 상태를 $status 에서 $target (으)로 전이할 수 없습니다." }
 	}
 
 	companion object {
-
 		/** 새 API Key를 `ACTIVE` 상태로 발급한다. */
 		fun create(
 			id: MerchantApiKeyId,
@@ -121,24 +125,25 @@ class MerchantApiKey private constructor(
 			createdByMerchantUserId: MerchantUserId,
 			expiresAt: Instant?,
 			createdAt: Instant,
-		): MerchantApiKey = MerchantApiKey(
-			id = id,
-			merchantId = merchantId,
-			keyName = keyName,
-			environment = environment,
-			keyPrefix = keyPrefix,
-			secretHash = secretHash,
-			hashAlgorithm = hashAlgorithm,
-			scopes = scopes,
-			createdByMerchantUserId = createdByMerchantUserId,
-			createdAt = createdAt,
-			status = ApiKeyStatus.ACTIVE,
-			expiresAt = expiresAt,
-			lastUsedAt = null,
-			revokedByMerchantUserId = null,
-			revokedAt = null,
-			updatedAt = createdAt,
-		)
+		): MerchantApiKey =
+			MerchantApiKey(
+				id = id,
+				merchantId = merchantId,
+				keyName = keyName,
+				environment = environment,
+				keyPrefix = keyPrefix,
+				secretHash = secretHash,
+				hashAlgorithm = hashAlgorithm,
+				scopes = scopes,
+				createdByMerchantUserId = createdByMerchantUserId,
+				createdAt = createdAt,
+				status = ApiKeyStatus.ACTIVE,
+				expiresAt = expiresAt,
+				lastUsedAt = null,
+				revokedByMerchantUserId = null,
+				revokedAt = null,
+				updatedAt = createdAt,
+			)
 
 		/** 영속 계층에 저장되어 있던 값으로 Aggregate를 복원한다. */
 		fun reconstitute(
@@ -158,23 +163,24 @@ class MerchantApiKey private constructor(
 			revokedByMerchantUserId: MerchantUserId?,
 			revokedAt: Instant?,
 			updatedAt: Instant,
-		): MerchantApiKey = MerchantApiKey(
-			id = id,
-			merchantId = merchantId,
-			keyName = keyName,
-			environment = environment,
-			keyPrefix = keyPrefix,
-			secretHash = secretHash,
-			hashAlgorithm = hashAlgorithm,
-			scopes = scopes,
-			createdByMerchantUserId = createdByMerchantUserId,
-			createdAt = createdAt,
-			status = status,
-			expiresAt = expiresAt,
-			lastUsedAt = lastUsedAt,
-			revokedByMerchantUserId = revokedByMerchantUserId,
-			revokedAt = revokedAt,
-			updatedAt = updatedAt,
-		)
+		): MerchantApiKey =
+			MerchantApiKey(
+				id = id,
+				merchantId = merchantId,
+				keyName = keyName,
+				environment = environment,
+				keyPrefix = keyPrefix,
+				secretHash = secretHash,
+				hashAlgorithm = hashAlgorithm,
+				scopes = scopes,
+				createdByMerchantUserId = createdByMerchantUserId,
+				createdAt = createdAt,
+				status = status,
+				expiresAt = expiresAt,
+				lastUsedAt = lastUsedAt,
+				revokedByMerchantUserId = revokedByMerchantUserId,
+				revokedAt = revokedAt,
+				updatedAt = updatedAt,
+			)
 	}
 }

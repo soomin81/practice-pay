@@ -91,3 +91,20 @@ sourceSets {
 tasks.named("compileKotlin") {
 	dependsOn("jooqCodegen")
 }
+
+// jOOQ-generated code (SCREAMING_SNAKE_CASE table/field constants, long generated
+// lines, etc.) is never hand-edited ("생성 코드를 직접 수정하지 않는다") and
+// shouldn't be linted or reformatted like the rest of the codebase.
+ktlint {
+	filter {
+		exclude { entry -> entry.file.path.contains("generated-src") }
+	}
+}
+
+// The generated-src directory is included in the main source set above, so
+// Gradle's task-input validation requires every ktlint task that reads it to
+// have an explicit dependency on the task that produces it (jooqCodegen) —
+// otherwise ktlint could run before/without the generated code existing.
+tasks.matching { it.name.startsWith("runKtlint") || it.name.startsWith("ktlint") }.configureEach {
+	dependsOn("jooqCodegen")
+}

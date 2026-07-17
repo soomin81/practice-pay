@@ -10,8 +10,9 @@ package paytech.practice.pay.domain.blockchain
  * @property value Chain ID 정수값. 0보다 커야 한다.
  */
 @JvmInline
-value class ChainId(val value: Long) {
-
+value class ChainId(
+	val value: Long,
+) {
 	init {
 		require(value > 0) { "ChainId는 0보다 커야 합니다: $value" }
 	}

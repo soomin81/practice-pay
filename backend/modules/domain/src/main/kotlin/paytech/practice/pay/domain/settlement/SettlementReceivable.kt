@@ -1,13 +1,13 @@
 package paytech.practice.pay.domain.settlement
 
-import java.math.BigDecimal
-import java.time.Instant
-import java.time.LocalDate
 import paytech.practice.pay.domain.exchange.ExchangeOrderId
 import paytech.practice.pay.domain.merchant.MerchantId
 import paytech.practice.pay.domain.payment.PaymentId
 import paytech.practice.pay.domain.shared.Money
 import paytech.practice.pay.domain.shared.SignedMoney
+import java.math.BigDecimal
+import java.time.Instant
+import java.time.LocalDate
 
 /**
  * 정산 대상(SettlementReceivable) Aggregate Root다.
@@ -45,7 +45,6 @@ class SettlementReceivable private constructor(
 	holdReasonCode: String?,
 	updatedAt: Instant,
 ) {
-
 	/** 이 정산 대상을 확정한 `ExchangeOrder`. [markReady] 전까지는 `null`이다. */
 	var exchangeOrderId: ExchangeOrderId? = exchangeOrderId
 		private set
@@ -101,7 +100,10 @@ class SettlementReceivable private constructor(
 	 * `docs/domain/state-transitions.md`는 이 전이를 명시하지 않지만
 	 * `hold_reason_code` 컬럼이 MVP 스키마에 이미 있어 지원한다.
 	 */
-	fun hold(reasonCode: String, changedAt: Instant) {
+	fun hold(
+		reasonCode: String,
+		changedAt: Instant,
+	) {
 		checkTransition(
 			status == SettlementReceivableStatus.PENDING || status == SettlementReceivableStatus.READY,
 			SettlementReceivableStatus.HELD,
@@ -129,12 +131,14 @@ class SettlementReceivable private constructor(
 		updatedAt = cancelledAt
 	}
 
-	private fun checkTransition(allowed: Boolean, target: SettlementReceivableStatus) {
+	private fun checkTransition(
+		allowed: Boolean,
+		target: SettlementReceivableStatus,
+	) {
 		check(allowed) { "SettlementReceivable 상태를 $status 에서 $target (으)로 전이할 수 없습니다." }
 	}
 
 	companion object {
-
 		/**
 		 * 새 정산 대상을 `PENDING` 상태로 생성한다.
 		 *
@@ -193,23 +197,24 @@ class SettlementReceivable private constructor(
 			status: SettlementReceivableStatus,
 			holdReasonCode: String?,
 			updatedAt: Instant,
-		): SettlementReceivable = SettlementReceivable(
-			id = id,
-			paymentId = paymentId,
-			merchantId = merchantId,
-			grossAmount = grossAmount,
-			feeRate = feeRate,
-			feeAmount = feeAmount,
-			adjustmentAmount = adjustmentAmount,
-			netAmount = netAmount,
-			eligibleDate = eligibleDate,
-			createdAt = createdAt,
-			exchangeOrderId = exchangeOrderId,
-			exchangeReceivedAmount = exchangeReceivedAmount,
-			exchangeProfitLossAmount = exchangeProfitLossAmount,
-			status = status,
-			holdReasonCode = holdReasonCode,
-			updatedAt = updatedAt,
-		)
+		): SettlementReceivable =
+			SettlementReceivable(
+				id = id,
+				paymentId = paymentId,
+				merchantId = merchantId,
+				grossAmount = grossAmount,
+				feeRate = feeRate,
+				feeAmount = feeAmount,
+				adjustmentAmount = adjustmentAmount,
+				netAmount = netAmount,
+				eligibleDate = eligibleDate,
+				createdAt = createdAt,
+				exchangeOrderId = exchangeOrderId,
+				exchangeReceivedAmount = exchangeReceivedAmount,
+				exchangeProfitLossAmount = exchangeProfitLossAmount,
+				status = status,
+				holdReasonCode = holdReasonCode,
+				updatedAt = updatedAt,
+			)
 	}
 }

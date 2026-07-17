@@ -33,7 +33,6 @@ class AccountInvitation private constructor(
 	status: AccountInvitationStatus,
 	acceptedAt: Instant?,
 ) {
-
 	var status: AccountInvitationStatus = status
 		private set
 
@@ -44,12 +43,14 @@ class AccountInvitation private constructor(
 	init {
 		require(tokenHash.isNotBlank()) { "tokenHash는 공백일 수 없습니다." }
 		when (accountType) {
-			InvitationAccountType.INTERNAL_USER -> require(internalUserId != null && merchantUserId == null) {
-				"INTERNAL_USER 초대는 internalUserId만 있어야 합니다."
-			}
-			InvitationAccountType.MERCHANT_USER -> require(merchantUserId != null && internalUserId == null) {
-				"MERCHANT_USER 초대는 merchantUserId만 있어야 합니다."
-			}
+			InvitationAccountType.INTERNAL_USER ->
+				require(internalUserId != null && merchantUserId == null) {
+					"INTERNAL_USER 초대는 internalUserId만 있어야 합니다."
+				}
+			InvitationAccountType.MERCHANT_USER ->
+				require(merchantUserId != null && internalUserId == null) {
+					"MERCHANT_USER 초대는 merchantUserId만 있어야 합니다."
+				}
 		}
 		require(status != AccountInvitationStatus.ACCEPTED || acceptedAt != null) {
 			"ACCEPTED 상태는 acceptedAt이 반드시 있어야 합니다."
@@ -75,12 +76,14 @@ class AccountInvitation private constructor(
 		status = AccountInvitationStatus.REVOKED
 	}
 
-	private fun checkTransition(allowed: Boolean, target: AccountInvitationStatus) {
+	private fun checkTransition(
+		allowed: Boolean,
+		target: AccountInvitationStatus,
+	) {
 		check(allowed) { "AccountInvitation 상태를 $status 에서 $target (으)로 전이할 수 없습니다." }
 	}
 
 	companion object {
-
 		/** 내부 운영자 계정을 활성화하기 위한 초대를 `PENDING` 상태로 생성한다. */
 		fun forInternalUser(
 			id: AccountInvitationId,
@@ -88,17 +91,18 @@ class AccountInvitation private constructor(
 			tokenHash: String,
 			expiresAt: Instant,
 			createdAt: Instant,
-		): AccountInvitation = AccountInvitation(
-			id = id,
-			accountType = InvitationAccountType.INTERNAL_USER,
-			internalUserId = internalUserId,
-			merchantUserId = null,
-			tokenHash = tokenHash,
-			expiresAt = expiresAt,
-			createdAt = createdAt,
-			status = AccountInvitationStatus.PENDING,
-			acceptedAt = null,
-		)
+		): AccountInvitation =
+			AccountInvitation(
+				id = id,
+				accountType = InvitationAccountType.INTERNAL_USER,
+				internalUserId = internalUserId,
+				merchantUserId = null,
+				tokenHash = tokenHash,
+				expiresAt = expiresAt,
+				createdAt = createdAt,
+				status = AccountInvitationStatus.PENDING,
+				acceptedAt = null,
+			)
 
 		/** 가맹점 사용자 계정을 활성화하기 위한 초대를 `PENDING` 상태로 생성한다. */
 		fun forMerchantUser(
@@ -107,17 +111,18 @@ class AccountInvitation private constructor(
 			tokenHash: String,
 			expiresAt: Instant,
 			createdAt: Instant,
-		): AccountInvitation = AccountInvitation(
-			id = id,
-			accountType = InvitationAccountType.MERCHANT_USER,
-			internalUserId = null,
-			merchantUserId = merchantUserId,
-			tokenHash = tokenHash,
-			expiresAt = expiresAt,
-			createdAt = createdAt,
-			status = AccountInvitationStatus.PENDING,
-			acceptedAt = null,
-		)
+		): AccountInvitation =
+			AccountInvitation(
+				id = id,
+				accountType = InvitationAccountType.MERCHANT_USER,
+				internalUserId = null,
+				merchantUserId = merchantUserId,
+				tokenHash = tokenHash,
+				expiresAt = expiresAt,
+				createdAt = createdAt,
+				status = AccountInvitationStatus.PENDING,
+				acceptedAt = null,
+			)
 
 		/** 영속 계층에 저장되어 있던 값으로 Aggregate를 복원한다. */
 		fun reconstitute(
@@ -130,16 +135,17 @@ class AccountInvitation private constructor(
 			createdAt: Instant,
 			status: AccountInvitationStatus,
 			acceptedAt: Instant?,
-		): AccountInvitation = AccountInvitation(
-			id = id,
-			accountType = accountType,
-			internalUserId = internalUserId,
-			merchantUserId = merchantUserId,
-			tokenHash = tokenHash,
-			expiresAt = expiresAt,
-			createdAt = createdAt,
-			status = status,
-			acceptedAt = acceptedAt,
-		)
+		): AccountInvitation =
+			AccountInvitation(
+				id = id,
+				accountType = accountType,
+				internalUserId = internalUserId,
+				merchantUserId = merchantUserId,
+				tokenHash = tokenHash,
+				expiresAt = expiresAt,
+				createdAt = createdAt,
+				status = status,
+				acceptedAt = acceptedAt,
+			)
 	}
 }

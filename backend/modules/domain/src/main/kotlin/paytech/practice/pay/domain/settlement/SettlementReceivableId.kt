@@ -12,8 +12,9 @@ package paytech.practice.pay.domain.settlement
  * @property value 정산 대상 공개 ID 문자열. 공백일 수 없고 [MAX_LENGTH]자를 넘을 수 없다.
  */
 @JvmInline
-value class SettlementReceivableId(val value: String) {
-
+value class SettlementReceivableId(
+	val value: String,
+) {
 	init {
 		require(value.isNotBlank()) { "SettlementReceivableId는 공백일 수 없습니다." }
 		require(value.length <= MAX_LENGTH) {

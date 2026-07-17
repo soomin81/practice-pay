@@ -9,8 +9,9 @@ package paytech.practice.pay.domain.shared
  * @property amount KRW 금액(원 단위 정수). 음수를 허용하지 않는다.
  */
 @JvmInline
-value class Money(val amount: Long) : Comparable<Money> {
-
+value class Money(
+	val amount: Long,
+) : Comparable<Money> {
 	init {
 		require(amount >= 0) { "Money 금액은 음수일 수 없습니다: $amount" }
 	}

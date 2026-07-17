@@ -11,8 +11,9 @@ package paytech.practice.pay.domain.blockchain
  * @property value `0x` 접두사를 포함한 거래 해시 문자열.
  */
 @JvmInline
-value class TransactionHash(val value: String) {
-
+value class TransactionHash(
+	val value: String,
+) {
 	init {
 		require(HASH_REGEX.matches(value)) { "TransactionHash 형식이 올바르지 않습니다: $value" }
 	}

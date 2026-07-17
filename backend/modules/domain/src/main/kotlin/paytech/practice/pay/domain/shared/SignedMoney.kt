@@ -11,8 +11,9 @@ package paytech.practice.pay.domain.shared
  * @property amount KRW 금액(원 단위 정수). 양수·음수·0 모두 허용한다.
  */
 @JvmInline
-value class SignedMoney(val amount: Long) : Comparable<SignedMoney> {
-
+value class SignedMoney(
+	val amount: Long,
+) : Comparable<SignedMoney> {
 	/** 두 금액을 더한 새 [SignedMoney]를 반환한다. */
 	operator fun plus(other: SignedMoney): SignedMoney = SignedMoney(amount + other.amount)
 
