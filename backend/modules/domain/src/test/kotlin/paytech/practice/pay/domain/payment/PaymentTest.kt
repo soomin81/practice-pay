@@ -10,6 +10,7 @@ import paytech.practice.pay.domain.merchant.MerchantId
 import paytech.practice.pay.domain.shared.Asset
 import paytech.practice.pay.domain.shared.Money
 import paytech.practice.pay.domain.shared.TokenAmount
+import paytech.practice.pay.domain.shared.WalletAddress
 
 private val CREATED_AT: Instant = Instant.parse("2026-07-17T00:00:00Z")
 private val EXPIRES_AT: Instant = CREATED_AT.plus(30, ChronoUnit.MINUTES)

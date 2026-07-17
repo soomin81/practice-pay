@@ -5,6 +5,7 @@ import paytech.practice.pay.domain.merchant.MerchantId
 import paytech.practice.pay.domain.shared.Asset
 import paytech.practice.pay.domain.shared.Money
 import paytech.practice.pay.domain.shared.TokenAmount
+import paytech.practice.pay.domain.shared.WalletAddress
 
 /**
  * 결제(Payment) Aggregate Root다.
