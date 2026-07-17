@@ -4,7 +4,7 @@ Guidance for working in `backend/`. For the shared payment domain (aggregates, s
 
 ## Current implementation state
 
-The backend is still mostly at the Spring Initializr skeleton stage. `src/main/kotlin/paytech/practice/pay/PracticePayApplication.kt` (the root project) is the only hand-written application code so far. `modules:domain`, `modules:application`, `db-core`, and `architecture-tests` are real Gradle subprojects (see `settings.gradle.kts`); the rest are still empty placeholders not wired in. Don't assume code exists in the placeholder folders; check before referencing them, and re-verify this layout before relying on it since it has already been restructured once:
+The backend is still mostly at the Spring Initializr skeleton stage. `src/main/kotlin/paytech/practice/pay/PracticePayApplication.kt` (the root project) is the only hand-written application code so far. `modules:domain`, `modules:application`, `modules:infra-persistence`, `db-core`, and `architecture-tests` are real Gradle subprojects (see `settings.gradle.kts`); the rest are still empty placeholders not wired in. Don't assume code exists in the placeholder folders; check before referencing them, and re-verify this layout before relying on it since it has already been restructured once:
 
 ```
 apps/               api-admin, api-merchant, api-payment, batch   (placeholder)
@@ -13,12 +13,12 @@ modules/
   common/            (placeholder)
   domain/            real Gradle subproject, no dependencies; all 8 payment aggregates + OutboxEvent + Identity/API key aggregates (see Domain code conventions)
   infra-blockchain/  (placeholder)
-  infra-persistence/ (placeholder) — will implement modules:application's outbound ports with jOOQ
+  infra-persistence/ real Gradle subproject — jOOQ Repository Adapters implementing modules:application's outbound ports (see Architecture)
 db-core/             real Gradle subproject — Flyway migrations + jOOQ codegen (see below)
 architecture-tests/  real Gradle subproject, test-only (no src/main) — ArchUnit rules over other modules' compiled classes
 ```
 
-The root project does not yet depend on `modules:application`, `modules:domain`, or `db-core` — nothing wires them into the running app yet.
+The root project does not yet depend on `modules:application`, `modules:domain`, `modules:infra-persistence`, or `db-core` — nothing wires them into the running app yet (no Spring component scan will find `infra-persistence`'s `@Repository` beans until it does).
 
 ## Commands
 
@@ -70,6 +70,17 @@ Established by the first use case, `CreatePaymentUseCase` (`application.payment`
 - **A use case is a plain class with one `execute(command): result` method** — no separate inbound port interface, since nothing yet needs more than one implementation. `Command`/`Result` are small data classes named `<UseCaseName>Command`/`<UseCaseName>Result` in the same package. Returning an identifier (or other minimal data) from a creation command's `execute` is an accepted CQS exception at the use-case layer — the CQS rule above is about domain aggregate methods, not use-case entry points.
 - **Idempotency checks** (see "Idempotency keys" below) happen at the start of `execute`, before any port write — look up by the documented key and short-circuit with the existing result if found. This is a best-effort fast path, not the final guarantee; the DB's own `UNIQUE` constraint is still the last line of defense against a race between two concurrent requests.
 - Gaps `docs/` doesn't resolve yet (e.g. where a merchant's receiving wallet/network comes from) are taken as `Command` inputs for now rather than invented as new ports/tables — flagged in that `Command`'s KDoc so the simplification is easy to find and replace later.
+
+### Persistence adapter conventions (`modules:infra-persistence`)
+
+Established implementing the payment-creation slice's ports (`infra.persistence.jooq`, one subpackage per aggregate, e.g. `infra.persistence.jooq.payment`) — follow this shape for future adapters:
+
+- Adapters are `@Repository`/`@Component` classes constructor-injected with a single `DSLContext`, so they only need to be added to `modules:infra-persistence`'s dependencies and left for Spring's component scan to pick up once a future app module wires this module in — no manual bean wiring inside the module itself.
+- **jOOQ's generated table classes collide by name with several domain aggregates** (`Payment`, `Merchant`, `CheckoutSession`, `PaymentQuote`, `OutboxEvent` all exist as both a `paytech.practice.pay.dbcore.jooq.tables.*` class and a `paytech.practice.pay.domain.*` class). Every adapter resolves this the same way: import only the table's singleton constant via its companion (`import ...tables.Payment.Companion.PAYMENT`), never the table class itself — the class is never referenced by name, so there's nothing to collide with the domain import.
+- `Instant` ↔ `LocalDateTime` conversion for `DATETIME(6)` UTC columns goes through the shared `toUtcLocalDateTime()`/`toUtcInstant()` extensions in `infra.persistence.jooq.InstantMapping.kt` — don't hand-roll `ZoneOffset.UTC` conversions per adapter.
+- Columns with no domain equivalent (`payment.order_currency`, `payment_quote.quote_currency`) are filled with the hardcoded literal `"KRW"` at the adapter boundary — consistent with `Money` implicitly always meaning KRW everywhere else in this codebase (MVP only supports the KRW→USDC pair).
+- **Known gap: `save()` on `Payment`/`CheckoutSession` (the two aggregates with a `version` optimistic-lock column) does not provide real optimistic-lock protection today.** The domain aggregates don't carry a `version` field (kept out deliberately to avoid leaking a persistence concern into the domain layer), so the adapter re-reads the current DB `version` immediately before updating and uses `current + 1` — this only guards against literal concurrent writes to the exact same adapter call, not "the aggregate was loaded from a stale version." Revisit this (most likely by threading an expected-version through the port, or fully embracing DB-side `SELECT ... FOR UPDATE`) when the first state-transition use case that re-saves an existing aggregate is built — today only `CreatePaymentUseCase` calls `save()`, and it always saves brand-new aggregates, so the gap has no live impact yet.
+- **Testing**: `infra-persistence` has real MySQL integration tests (not mocks) — a Testcontainers MySQL instance shared across the test JVM run (`PersistenceTestSupport`), migrated with the `flyway-core` Java API directly (`Flyway.configure()...migrate()`), not the `org.flywaydb.flyway` Gradle plugin (that plugin is what's broken on Gradle 9.5.1 — see "Database / jOOQ code generation" below — the plain Java library has nothing to do with that breakage). The test `DSLContext` is wired exactly like Spring Boot's own `JooqAutoConfiguration` would (`DataSourceConnectionProvider` + `TransactionAwareDataSourceProxy` + `org.springframework.boot.jooq.autoconfigure.SpringTransactionProvider`, from the `spring-boot-jooq` module — Spring Boot 4.x moved jOOQ autoconfiguration out of `spring-boot-autoconfigure` into this dedicated module), so `TransactionManagerAdapterTest` can prove multi-repository writes actually roll back together.
 
 ## Domain code conventions
 
