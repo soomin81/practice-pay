@@ -4,21 +4,21 @@ Guidance for working in `backend/`. For the shared payment domain (aggregates, s
 
 ## Current implementation state
 
-The backend is still mostly at the Spring Initializr skeleton stage. `src/main/kotlin/paytech/practice/pay/PracticePayApplication.kt` (the root project) is the only application code so far. `modules:domain` and `modules:application` are now real Gradle subprojects (see `settings.gradle.kts`) but have no source yet — `domain` has zero dependencies beyond the Kotlin stdlib (no Spring/jOOQ, per the Architecture rules below), and `application` depends only on `domain`. The rest are still empty placeholders not wired into `settings.gradle.kts`. Don't assume code exists in these folders; check before referencing them, and re-verify this layout before relying on it since it has already been restructured once:
+The backend is still mostly at the Spring Initializr skeleton stage. `src/main/kotlin/paytech/practice/pay/PracticePayApplication.kt` (the root project) is the only hand-written application code so far. `modules:domain`, `modules:application`, and `db-core` are real Gradle subprojects (see `settings.gradle.kts`); the rest are still empty placeholders not wired in. Don't assume code exists in the placeholder folders; check before referencing them, and re-verify this layout before relying on it since it has already been restructured once:
 
 ```
 apps/               api-admin, api-merchant, api-payment, batch   (placeholder)
 modules/
   application/       real Gradle subproject, depends on domain, no source yet
   common/            (placeholder)
-  domain/            real Gradle subproject, no dependencies, no source yet
+  domain/            real Gradle subproject, no dependencies; Money/PaymentId/MerchantId VOs
   infra-blockchain/  (placeholder)
   infra-persistence/ (placeholder)
-db-core/             (placeholder)
+db-core/             real Gradle subproject — Flyway migrations + jOOQ codegen (see below)
 architecture-tests/  (placeholder)
 ```
 
-The root project does not yet depend on `modules:application` or `modules:domain` — nothing wires them into the running app.
+The root project does not yet depend on `modules:application`, `modules:domain`, or `db-core` — nothing wires them into the running app yet.
 
 ## Commands
 
@@ -32,9 +32,8 @@ gradlew.bat test --tests "paytech.practice.pay.PracticePayApplicationTests"   # 
 gradlew.bat test --tests "*PracticePayApplicationTests.contextLoads"          # single test method
 ```
 
-- Local MySQL: `compose.yaml` defines a `mysql:latest` service for `docker compose up`. Tests instead use Testcontainers automatically (`TestcontainersConfiguration.kt` boots a MySQL container via `@ServiceConnection`); `TestPracticePayApplication.kt` is a dev-time main that wires the same Testcontainers config for local `bootRun`-style use without a manual DB.
+- Local MySQL: `compose.yaml` defines a `mysql:latest` service for `docker compose up`, seeded with database `stablecoin_payment` (matches the schema — see "Database / jOOQ code generation" below). Tests instead use Testcontainers automatically (`TestcontainersConfiguration.kt` boots a MySQL container via `@ServiceConnection`); `TestPracticePayApplication.kt` is a dev-time main that wires the same Testcontainers config for local `bootRun`-style use without a manual DB.
 - Toolchain: Java 25, Kotlin 2.3.21, Spring Boot 4.1.0.
-- No jOOQ code-generation Gradle plugin, Flyway, or Liquibase is configured yet, even though `docs/database/schema.sql` documents the target schema and the `jooq` starter is a dependency. Schema/codegen wiring is still to be done.
 - No linter/formatter (ktlint/detekt) is configured yet.
 
 ## Testing
@@ -71,6 +70,26 @@ Each of these enforces uniqueness/idempotency on the given key(s) — use them, 
 | SettlementReceivable | `payment_seq` |
 | WebhookDelivery | `event_id + merchant_seq` |
 | OutboxEvent | `event_id` |
+
+## Database / jOOQ code generation
+
+`db-core` owns the DB schema and generates jOOQ Kotlin code from a real MySQL instance. It is a real Gradle subproject using the **official** `org.jooq.jooq-codegen-gradle` plugin (jOOQ core is 3.21.5 via the Spring Boot 4.1.0 BOM; the codegen plugin's latest published release is 3.20.3 — a known one-minor-version lag between the plugin and jOOQ core, not a mismatch you introduced).
+
+Workflow (from `backend/`):
+
+```
+docker compose up -d                                    # starts MySQL (db: stablecoin_payment, root pw: verysecret)
+docker exec -i backend-mysql-1 mysql --default-character-set=utf8mb4 -uroot -pverysecret stablecoin_payment < db-core/src/main/resources/db/migration/V1__init_schema.sql
+docker exec -i backend-mysql-1 mysql --default-character-set=utf8mb4 -uroot -pverysecret stablecoin_payment < db-core/src/main/resources/db/migration/V2__seed_dev_data.sql
+gradlew.bat :db-core:jooqCodegen                          # generates into db-core/build/generated-src/jooq/main (gitignored, not committed)
+gradlew.bat :db-core:build                                 # jooqCodegen runs first (wired via compileKotlin.dependsOn), then compiles
+```
+
+- **Migrations are applied manually for now, not via the Flyway Gradle plugin.** The official `org.flywaydb.flyway` plugin (latest published: 11.8.2) still calls the Gradle API `JavaPluginConvention`, which was removed in Gradle 9 — its tasks fail outright on this project's Gradle 9.5.1 (unresolved upstream: https://github.com/flyway/flyway/issues/3798). The migration files under `db-core/src/main/resources/db/migration/` are still plain, correctly-numbered Flyway-format SQL (`V1__init_schema.sql`, `V2__seed_dev_data.sql`) — once the app module gets a real `DataSource`, Spring Boot's own Flyway autoconfiguration (`spring-boot-starter-flyway`, independent of this Gradle plugin) will apply them automatically. Re-check whether a newer `flyway-gradle-plugin` fixes this before assuming it's still broken.
+- **Always pass `--default-character-set=utf8mb4` when applying a migration via the `mysql` CLI.** Without it, the CLI's default `latin1` client charset silently mangles the Korean `COMMENT`/seed text on the way into MySQL (the corruption happens on write, not on jOOQ's read side — this bit us once already; the DB had to be dropped and re-seeded to fix it).
+- The `jooq { configuration { jdbc { url = ... } } }` URL also carries `useUnicode=true&characterEncoding=UTF-8` as cheap extra insurance for the codegen connection itself.
+- `compileKotlin` does not automatically depend on `jooqCodegen`, and the official plugin does not automatically add its output directory to the Kotlin source set — both are wired explicitly in `db-core/build.gradle.kts` (`tasks.named("compileKotlin") { dependsOn("jooqCodegen") }` + `sourceSets { main { kotlin { srcDir(...) } } }`). Don't assume a fresh official-plugin setup wires these for you.
+- Generated code lives under package `paytech.practice.pay.dbcore.jooq` and must only be consumed inside future persistence adapters (`modules/infra-persistence`), per the Persistence conventions below — never from `domain`/`application`.
 
 ## Persistence conventions (once implemented)
 

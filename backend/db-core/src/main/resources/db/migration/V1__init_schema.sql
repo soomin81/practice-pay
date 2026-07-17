@@ -6,12 +6,6 @@
 -- Time Storage Policy: UTC
 -- ============================================================
 
-CREATE DATABASE IF NOT EXISTS stablecoin_payment
-    CHARACTER SET utf8mb4
-    COLLATE utf8mb4_0900_ai_ci;
-
-USE stablecoin_payment;
-
 -- ============================================================
 -- 1. merchant
 -- ============================================================
@@ -735,29 +729,3 @@ CREATE INDEX idx_outbox_publish
         next_retry_at,
         created_at
     );
-
-
--- ============================================================
--- Optional seed data for local development
--- ============================================================
-
-INSERT INTO merchant (
-    merchant_id,
-    merchant_code,
-    merchant_name,
-    merchant_status,
-    webhook_url,
-    created_at,
-    updated_at,
-    version
-)
-VALUES (
-    'mrc_test_001',
-    'TEST_MERCHANT',
-    '테스트 가맹점',
-    'ACTIVE',
-    'http://localhost:8081/webhooks/stablecoin',
-    UTC_TIMESTAMP(6),
-    UTC_TIMESTAMP(6),
-    0
-);

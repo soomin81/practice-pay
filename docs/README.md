@@ -14,7 +14,7 @@
 ## 데이터베이스
 
 - [DB 상세 설계](database/database-design.md)
-- [MySQL 스키마](database/schema.sql)
+- [MySQL 스키마 (Flyway migration)](../backend/db-core/src/main/resources/db/migration/V1__init_schema.sql)
 
 ## ADR
 

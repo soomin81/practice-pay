@@ -6,7 +6,7 @@ Codex는 작업을 시작하기 전에 반드시 다음 순서로 문서를 확�
 
 1. `CLAUDE.md`
 2. 현재 작업과 관련된 `docs/` 하위 문서
-3. DB 변경 작업이면 `docs/database/schema.sql`
+3. DB 변경 작업이면 `backend/db-core/src/main/resources/db/migration/`의 Flyway migration 파일
 
 ## 필수 규칙
 

@@ -24,7 +24,7 @@ This is a monorepo root with three top-level directories:
 - `docs/domain/state-transitions.md` — the state machine for every aggregate (see summary below).
 - `docs/architecture/mvp-scope.md` — what's in/out of the MVP and the end-to-end happy-path flow.
 - `docs/architecture/persistence-jooq.md` — module layering and jOOQ conventions (backend-specific; see `backend/CLAUDE.md`).
-- `docs/database/database-design.md` and `docs/database/schema.sql` — full MySQL schema design (not yet applied via migration tooling).
+- `docs/database/database-design.md` — full MySQL schema design. The actual, applied schema lives as Flyway migrations in `backend/db-core/src/main/resources/db/migration/` (see `backend/CLAUDE.md`) — keep the two in sync when the schema changes.
 - `docs/decisions/ADR-00{1..5}-*.md` — ADRs for MVP scope, MySQL+jOOQ, Hosted Checkout, Fake Exchange, and settlement boundary.
 
 ## Domain: what this system is
