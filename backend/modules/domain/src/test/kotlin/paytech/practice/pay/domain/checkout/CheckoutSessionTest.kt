@@ -7,6 +7,7 @@ import io.kotest.matchers.shouldBe
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import paytech.practice.pay.domain.payment.PaymentId
+import paytech.practice.pay.domain.shared.HttpUrl
 import paytech.practice.pay.domain.shared.WalletAddress
 
 private val CREATED_AT: Instant = Instant.parse("2026-07-17T00:00:00Z")
@@ -16,8 +17,8 @@ private val CUSTOMER_WALLET = WalletAddress("0x" + "a".repeat(40))
 private fun newSession(): CheckoutSession = CheckoutSession.create(
 	id = CheckoutSessionId("cs_test_001"),
 	paymentId = PaymentId("pay_test_001"),
-	successUrl = RedirectUrl("https://merchant.example.com/success"),
-	cancelUrl = RedirectUrl("https://merchant.example.com/cancel"),
+	successUrl = HttpUrl("https://merchant.example.com/success"),
+	cancelUrl = HttpUrl("https://merchant.example.com/cancel"),
 	expiresAt = EXPIRES_AT,
 	createdAt = CREATED_AT,
 )
@@ -38,7 +39,7 @@ class CheckoutSessionTest : FunSpec({
 			CheckoutSession.create(
 				id = CheckoutSessionId("cs_test_002"),
 				paymentId = PaymentId("pay_test_001"),
-				successUrl = RedirectUrl("https://merchant.example.com/success"),
+				successUrl = HttpUrl("https://merchant.example.com/success"),
 				cancelUrl = null,
 				expiresAt = CREATED_AT,
 				createdAt = CREATED_AT,
@@ -165,7 +166,7 @@ class CheckoutSessionTest : FunSpec({
 			CheckoutSession.reconstitute(
 				id = CheckoutSessionId("cs_test_003"),
 				paymentId = PaymentId("pay_test_001"),
-				successUrl = RedirectUrl("https://merchant.example.com/success"),
+				successUrl = HttpUrl("https://merchant.example.com/success"),
 				cancelUrl = null,
 				expiresAt = EXPIRES_AT,
 				createdAt = CREATED_AT,
@@ -186,7 +187,7 @@ class CheckoutSessionTest : FunSpec({
 		val session = CheckoutSession.reconstitute(
 			id = CheckoutSessionId("cs_test_004"),
 			paymentId = PaymentId("pay_test_001"),
-			successUrl = RedirectUrl("https://merchant.example.com/success"),
+			successUrl = HttpUrl("https://merchant.example.com/success"),
 			cancelUrl = null,
 			expiresAt = EXPIRES_AT,
 			createdAt = CREATED_AT,

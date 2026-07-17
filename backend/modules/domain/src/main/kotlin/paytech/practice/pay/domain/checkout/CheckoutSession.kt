@@ -2,6 +2,7 @@ package paytech.practice.pay.domain.checkout
 
 import java.time.Instant
 import paytech.practice.pay.domain.payment.PaymentId
+import paytech.practice.pay.domain.shared.HttpUrl
 import paytech.practice.pay.domain.shared.WalletAddress
 
 /**
@@ -21,8 +22,8 @@ import paytech.practice.pay.domain.shared.WalletAddress
 class CheckoutSession private constructor(
 	val id: CheckoutSessionId,
 	val paymentId: PaymentId,
-	val successUrl: RedirectUrl,
-	val cancelUrl: RedirectUrl?,
+	val successUrl: HttpUrl,
+	val cancelUrl: HttpUrl?,
 	val expiresAt: Instant,
 	val createdAt: Instant,
 	connectedWallet: WalletAddress?,
@@ -139,8 +140,8 @@ class CheckoutSession private constructor(
 		fun create(
 			id: CheckoutSessionId,
 			paymentId: PaymentId,
-			successUrl: RedirectUrl,
-			cancelUrl: RedirectUrl?,
+			successUrl: HttpUrl,
+			cancelUrl: HttpUrl?,
 			expiresAt: Instant,
 			createdAt: Instant,
 		): CheckoutSession = CheckoutSession(
@@ -163,8 +164,8 @@ class CheckoutSession private constructor(
 		fun reconstitute(
 			id: CheckoutSessionId,
 			paymentId: PaymentId,
-			successUrl: RedirectUrl,
-			cancelUrl: RedirectUrl?,
+			successUrl: HttpUrl,
+			cancelUrl: HttpUrl?,
 			expiresAt: Instant,
 			createdAt: Instant,
 			connectedWallet: WalletAddress?,
