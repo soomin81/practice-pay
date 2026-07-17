@@ -1,6 +1,10 @@
 spring:
   application:
     name: api-admin
+  datasource:
+    url: jdbc:mysql://localhost:3306/stablecoin_payment?useUnicode=true&characterEncoding=UTF-8
+    username: root
+    password: verysecret
 
 server:
   port: 8082

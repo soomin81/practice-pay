@@ -12,10 +12,14 @@ apps/
                      webmvc + jooq이고 modules:application + modules:infra-persistence에 의존한다. 지금까지
                      실제 Use Case(CreatePaymentUseCase)와 그걸 노출하는 컨트롤러(POST /api/v1/payments)가
                      있는 유일한 앱이다(Apps 절 참고). MerchantApiKey 인증은 아직 없다.
-  api-admin/         실제 Gradle 서브프로젝트, 독립 배포 가능한 Spring Boot 앱 — webmvc + security,
-                     modules:domain에만 의존한다(InternalUser Use Case가 아직 없어서 jOOQ/DataSource도 없다)
-  api-merchant/      실제 Gradle 서브프로젝트, 독립 배포 가능한 Spring Boot 앱 — api-admin과 동일한 모양,
-                     MerchantUser/MerchantApiKey 흐름의 Use Case가 생기면 그때를 위한 것
+  api-admin/         실제 Gradle 서브프로젝트, 독립 배포 가능한 Spring Boot 앱 — webmvc + jooq + security,
+                     modules:application + modules:infra-persistence에 의존한다. AuthenticateInternalUserUseCase와
+                     그걸 노출하는 컨트롤러(POST /admin/login)가 있다(Apps 절 참고). 내부 운영자 발급 등
+                     나머지 흐름은 아직 Use Case가 없다.
+  api-merchant/      실제 Gradle 서브프로젝트, 독립 배포 가능한 Spring Boot 앱 — webmvc + security,
+                     modules:domain에만 의존한다(MerchantUser/MerchantApiKey Use Case가 아직 없어서
+                     jOOQ/DataSource도 없다) — MerchantUser/MerchantApiKey 흐름의 Use Case가 생기면
+                     api-admin과 같은 모양으로 넓힌다.
   batch/             실제 Gradle 서브프로젝트, 독립 배포 가능한 Spring Boot 앱 — spring-boot-starter-batch,
                      웹 스타터 없음, 아직 정의된 Job 없음(예: 향후 OutboxEvent 발행 Worker의 자리)
 modules/
@@ -96,11 +100,11 @@ inbound adapter → application → domain ← outbound port ← outbound adapte
 
 각각 **독립적으로 배포 가능한 Spring Boot 애플리케이션**이다 — 자체 `build.gradle.kts`(`org.springframework.boot` 플러그인 적용), 자체 `@SpringBootApplication` 메인 클래스, 자체 `application.yaml`, 자체 포트를 가진다 — 하나의 공유 앱 안의 패키지가 아니다. 이건 의도적인 선택이었다(모듈러 모놀리스 대안을 두고 사용자와 확인함) — 정확히는 네 앱이 서로 다른 대상(가맹점 서버를 향한 결제 API, 내부 직원용 관리 콘솔, 가맹점 콘솔, 오프라인 배치 Job)을 상대해서 나중에 독립적으로 스케일·배포·장애가 나야 할 수 있어서다 — 이 선택을 끝까지 따른 결과로, `api-payment`와 역할이 겹치던 원래 Spring-Initializr 루트 앱도 다섯 번째 중복 배포 단위로 남겨두지 않고 삭제했다.
 
-- **의존성은 각 앱이 지금 실제로 하는 일에만 맞춘다 — 나중에 할 일까지 미리 넣지 않는다.** `api-payment`만 실제 Use Case(`CreatePaymentUseCase`)가 있어서 `modules:application`/`modules:infra-persistence`/`spring-boot-starter-jooq`/`DataSource`가 연결된 유일한 앱이다. `api-admin`/`api-merchant`는 `modules:domain`에만 의존한다(Identity/API Key 애그리게이트는 있지만 아직 Use Case가 없다) — 나중에 로그인 엔드포인트를 위한 `webmvc`+`security`도 갖고 있다. `batch`는 `spring-boot-starter-batch`만 있고 웹 스타터는 없다. 실제 Use Case가 필요로 할 때만 그 앱의 의존성을 넓히고, 미리 넓히지 않는다.
+- **의존성은 각 앱이 지금 실제로 하는 일에만 맞춘다 — 나중에 할 일까지 미리 넣지 않는다.** `api-payment`/`api-admin`은 실제 Use Case(각각 `CreatePaymentUseCase`/`AuthenticateInternalUserUseCase`)가 있어서 `modules:application`/`modules:infra-persistence`/`spring-boot-starter-jooq`/`DataSource`가 연결돼 있다. `api-merchant`는 아직 `modules:domain`에만 의존한다(Identity/API Key 애그리게이트는 있지만 그 Use Case가 없다) — 나중에 로그인 엔드포인트를 위한 `webmvc`+`security`만 미리 갖고 있고, MerchantUser Use Case가 생기면 `api-admin`과 같은 모양(jOOQ/DataSource/infra-persistence 추가)으로 넓힌다. `batch`는 `spring-boot-starter-batch`만 있고 웹 스타터는 없다. 실제 Use Case가 필요로 할 때만 그 앱의 의존성을 넓히고, 미리 넓히지 않는다.
 - **포트**: `api-payment` 8081, `api-admin` 8082, `api-merchant` 8083; `batch`는 `server.port`가 없다(웹 앱이 아니다 — 웹 스타터 없는 `spring-boot-starter-batch`는 웹 서버 자동 구성을 스스로 끄고, `DataSource` Bean이 없으면 `BatchAutoConfiguration` 자체도 물러나서, 지금은 그냥 웹도 Job도 없는 앱으로 부팅된다).
 - **컴포넌트 스캔**: `@SpringBootApplication`의 기본 스캔 범위는 메인 클래스 자신의 패키지와 그 하위 패키지다. `api-payment`의 메인 클래스는 `paytech.practice.pay.api.payment`에 있는데, 이건 `modules:infra-persistence`의 Adapter(`paytech.practice.pay.infra.persistence.jooq`)와 *형제* 관계이지 상위가 아니다 — 그래서 `PaymentApiApplication`은 `@SpringBootApplication(scanBasePackages = ["paytech.practice.pay.api.payment", "paytech.practice.pay.infra.persistence.jooq"])`로 두 패키지를 모두 명시한다. 새 앱이 다른 모듈의 Bean을 쓰기 시작하면, Gradle 의존성을 추가하는 것만으로 Bean이 연결된다고 가정하지 말고 같은 방식으로 스캔 범위를 넓힌다.
-- `api-payment`의 `application.yaml`은 `spring-boot-docker-compose` 자동 감지에 기대지 않고 `spring.datasource.*`를 `db-core`/`compose.yaml`이 이미 쓰는 것과 같은 로컬 개발 MySQL로 직접 가리킨다(`localhost:3306/stablecoin_payment`, `root`/`verysecret`) — 그 자동 감지 메커니즘은 실행 중인 앱 자신의 작업 디렉토리(`apps/api-payment/`)에서 `compose.yaml`을 찾지, `backend/`에서 찾지 않아서, 추가 경로 설정 없이는 공유 파일을 찾지 못한다.
-- 테스트는 전부 같은 모양을 따른다(`@SpringBootTest` + Kotest `SpringExtension`, 앱마다 `contextLoads` 테스트 하나 — 위 "테스트" 참고). `api-payment`는 만족시켜야 할 `DataSource`가 있어서 `TestcontainersConfiguration`도 추가로 import하고, 나머지 셋은 아직 필요 없다.
+- `DataSource`가 있는 앱(`api-payment`, `api-admin`)의 `application.yaml`은 `spring-boot-docker-compose` 자동 감지에 기대지 않고 `spring.datasource.*`를 `db-core`/`compose.yaml`이 이미 쓰는 것과 같은 로컬 개발 MySQL로 직접 가리킨다(`localhost:3306/stablecoin_payment`, `root`/`verysecret`) — 그 자동 감지 메커니즘은 실행 중인 앱 자신의 작업 디렉토리(예: `apps/api-payment/`)에서 `compose.yaml`을 찾지, `backend/`에서 찾지 않아서, 추가 경로 설정 없이는 공유 파일을 찾지 못한다.
+- 테스트는 전부 같은 모양을 따른다(`@SpringBootTest` + Kotest `SpringExtension`, 앱마다 `contextLoads` 테스트 하나 — 위 "테스트" 참고). `DataSource`가 있는 앱은 만족시켜야 할 `DataSource`가 있어서 `TestcontainersConfiguration`도 추가로 import하고, 나머지는 아직 필요 없다.
 
 ### `api-payment`의 결제 생성 컨트롤러
 
@@ -115,6 +119,16 @@ inbound adapter → application → domain ← outbound port ← outbound adapte
 **Spring Boot 4.1 / Jackson 3.x로 넘어오며 자주 걸리는 패키지 함정 두 가지**(둘 다 `apps:api-payment`에서 처음 부딪혔다):
 - `ObjectMapper`는 `com.fasterxml.jackson.databind`가 아니라 **`tools.jackson.databind`**에 있다 — Jackson 3.x부터 그룹 ID/패키지가 `tools.jackson`으로 바뀌었다(`jackson-module-kotlin`도 `tools.jackson.module:jackson-module-kotlin`). 이 프로젝트의 루트 `build.gradle.kts` 의존성 목록에 이미 그 흔적이 있다.
 - `@WebMvcTest`는 `org.springframework.boot.test.autoconfigure.web.servlet`이 아니라 **`org.springframework.boot.webmvc.test.autoconfigure`**에 있다 — Spring Boot 4.x가 `spring-boot-autoconfigure`를 기술별 전용 모듈로 쪼갠 것과 같은 개편이다(`SpringTransactionProvider`가 `spring-boot-jooq` 모듈로 옮겨진 것과 동일한 패턴 — 위 "영속성 Adapter 컨벤션" 참고). 새로운 Spring Boot 4.x 애노테이션/클래스를 쓸 때는 예전 패키지 경로를 그대로 가정하지 않는다.
+
+### `api-admin`의 내부 운영자 로그인 컨트롤러
+
+`POST /admin/login`(`docs/architecture/identity-access-api-key.md`의 "3.4 로그인 경로" 권장 경로)이 `AuthenticateInternalUserUseCase`를 HTTP로 노출한다. `api-payment`와 같은 패키지 구조(`api.admin.web`/`api.admin.config`/`api.admin.support`)를 따른다.
+
+- **`AuthenticateInternalUserUseCase`**(`application.identity`)는 로그인 아이디/비밀번호만 검증하고 인증된 신원(`AuthenticateInternalUserResult`)만 돌려준다 — 세션은 전혀 다루지 않는다. `InternalUserRepository.findByLoginId` → 계정 상태 확인(`LOCKED`이고 잠금이 아직 안 풀렸으면 `AccountLockedException`, `ACTIVE`가 아니면 `InvalidCredentialsException`) → `PasswordEncoder.matches`로 비밀번호 확인 → 실패면 `InternalUser.recordFailedLogin` 기록(연속 [`MAX_FAILED_LOGIN_ATTEMPTS`]번째면 `InternalUser.lock`도 호출) 후 저장, 성공이면 `recordSuccessfulLogin` 저장. 로그인 아이디가 없거나 계정이 `INVITED`/`SUSPENDED`/`TERMINATED`인 경우도 전부 같은 `InvalidCredentialsException`으로 묶는다 — 계정 존재 여부나 상태를 호출부에 드러내지 않기 위해서다. `MAX_FAILED_LOGIN_ATTEMPTS`(5)/`LOCK_DURATION`(15분)은 `docs/`에 값이 없어서 `CreatePaymentUseCase`의 `SPREAD_RATE`처럼 이 Use Case가 상수로 고정한 MVP 값이다.
+- **세션은 `AdminLoginController`가 만든다.** 로그인이 성공하면 `UsernamePasswordAuthenticationToken` + `ROLE_<InternalUserRole>` 권한으로 Spring Security `SecurityContext`를 만들고 `SecurityContextRepository`(`HttpSessionSecurityContextRepository`)로 세션에 저장한다 — 이후 요청은 이 세션 쿠키로 인증된다. `docs/`가 이 앱을 "PG 내부 관리자 **화면**"이라고 부르는 것에 맞춰(가맹점 서버 간 API Key/Bearer 인증인 `MerchantApiKey`와 다르게) 세션 쿠키 방식을 선택했다 — JWT 등 다른 방식으로 정해진 문서 근거는 없다.
+- **`SecurityConfig`**: `/admin/login`만 인증 없이 열고 나머지는 인증을 요구한다. **알려진 gap: CSRF 보호를 꺼뒀다.** 세션 쿠키 인증에서 원래는 반드시 켜야 하지만, 이 학습용 MVP 단계에서는 아직 CSRF 토큰 발급/검증 흐름을 만들지 않았다 — 실제 프론트엔드가 이 API를 붙이기 전에 반드시 켜야 한다.
+- **`InternalUserRepositoryAdapter`**(`modules:infra-persistence`)는 `PaymentRepositoryAdapter`와 같은 모양·같은 낙관적 잠금 한계를 가진다(위 "영속성 Adapter 컨벤션" 참고) — `internal_user`도 `version` 컬럼이 있는데 도메인 `InternalUser`는 그걸 모른다.
+- **테스트**: `AuthenticateInternalUserUseCaseTest`(단위, 성공/미존재/오답/5회 오답 잠금/잠금 중 시도/잠금 만료 후 재시도/`INVITED` 계정을 전부 커버), `InternalUserRepositoryAdapterTest`(Testcontainers MySQL 통합), `AdminLoginControllerTest`(`@WebMvcTest(AdminLoginController::class)` + `@Import(SecurityConfig::class)` — 컨트롤러가 `SecurityContextRepository` Bean도 필요해서 `PaymentControllerTest`와 달리 `SecurityConfig`를 명시적으로 Import한다). 여기에 더해 실제 `bootRun` + `curl`로 BCrypt 해시를 미리 심어둔 테스트 계정을 상대로 로그인 성공(세션 쿠키 발급 확인) → 오답 5회 반복 → 잠김(`AccountLockedException`, DB의 `user_status=LOCKED` 확인)까지 수동으로 검증했다.
 
 ## 도메인 코드 컨벤션
 

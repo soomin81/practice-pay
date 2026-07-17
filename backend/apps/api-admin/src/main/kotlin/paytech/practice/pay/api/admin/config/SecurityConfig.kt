@@ -1,0 +1,42 @@
+package paytech.practice.pay.api.admin.config
+
+import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Configuration
+import org.springframework.security.config.annotation.web.builders.HttpSecurity
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity
+import org.springframework.security.config.annotation.web.invoke
+import org.springframework.security.web.SecurityFilterChain
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository
+import org.springframework.security.web.context.SecurityContextRepository
+
+/**
+ * `POST /admin/login`은 인증 없이 열어 두고(로그인 자체이니 당연히 인증 전이다),
+ * 그 외 모든 요청은 인증을 요구한다. 로그인 성공 시 세션에 저장되는 방식은
+ * `AdminLoginController` 참고 — 이 앱은 `docs/architecture/identity-access-api-key.md`가
+ * "PG 내부 관리자 **화면**"이라고 부르는 대상이라(가맹점 서버 간 API Key 인증인
+ * `MerchantApiKey`와 달리 브라우저 로그인), Bearer 토큰이 아니라 Spring Security의
+ * 기본 세션 쿠키 방식을 그대로 쓴다.
+ *
+ * **알려진 gap: CSRF 보호를 꺼뒀다.** 세션 쿠키 기반 인증에서 CSRF는 원래 반드시
+ * 막아야 하는 것이지만, 이 학습용 MVP 단계에서는 아직 CSRF 토큰 발급/검증 흐름을
+ * 만들지 않았다 — 실제 화면(프론트엔드)이 붙기 전에 반드시 켜야 한다.
+ */
+@Configuration
+@EnableWebSecurity
+class SecurityConfig {
+	@Bean
+	fun filterChain(http: HttpSecurity): SecurityFilterChain {
+		http {
+			csrf { disable() }
+			authorizeHttpRequests {
+				authorize("/admin/login", permitAll)
+				authorize(anyRequest, authenticated)
+			}
+		}
+		return http.build()
+	}
+
+	/** `AdminLoginController`가 로그인 성공 후 인증 정보를 세션에 저장할 때 쓴다. */
+	@Bean
+	fun securityContextRepository(): SecurityContextRepository = HttpSessionSecurityContextRepository()
+}
