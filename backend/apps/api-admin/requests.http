@@ -1,0 +1,52 @@
+### 이 파일은 IntelliJ HTTP Client용이다(오른쪽 위 환경 선택기에서 "local"을 고른다).
+### apps:api-admin이 로컬에서 떠 있어야 한다: gradlew.bat :apps:api-admin:bootRun
+### 계정은 db-core/src/main/resources/db/migration/V4__seed_dev_identity_data.sql이
+### 심어둔 개발용 SUPER_ADMIN이다(../http-client.env.json의 devLoginId/devPassword) —
+### 로컬 DB에 그 마이그레이션을 적용해야 아래 요청들이 실제로 동작한다.
+
+### 로그인 — 성공하면 세션 쿠키(JSESSIONID)가 응답에 실린다
+### IntelliJ HTTP Client는 같은 환경 안에서 쿠키를 자동으로 유지하므로,
+### 이후 요청도 이어서 인증된 상태로 나간다.
+POST {{apiAdminBaseUrl}}/admin/login
+Content-Type: application/json
+
+{
+  "loginId": "{{devLoginId}}",
+  "password": "{{devPassword}}"
+}
+
+> {%
+    client.test("로그인 성공 (200)", () => {
+        client.assert(response.status === 200, "예상: 200, 실제: " + response.status);
+    });
+    client.test("응답에 role이 있다", () => {
+        client.assert(response.body.role === "SUPER_ADMIN", "role: " + response.body.role);
+    });
+%}
+
+### 잘못된 비밀번호 — 401이어야 한다
+POST {{apiAdminBaseUrl}}/admin/login
+Content-Type: application/json
+
+{
+  "loginId": "{{devLoginId}}",
+  "password": "wrong-password"
+}
+
+### 존재하지 않는 로그인 아이디 — 401이어야 한다(계정 존재 여부를 노출하지 않는다)
+POST {{apiAdminBaseUrl}}/admin/login
+Content-Type: application/json
+
+{
+  "loginId": "no-such-login-id",
+  "password": "{{devPassword}}"
+}
+
+### 빈 비밀번호 — 400이어야 한다(@NotBlank 검증)
+POST {{apiAdminBaseUrl}}/admin/login
+Content-Type: application/json
+
+{
+  "loginId": "{{devLoginId}}",
+  "password": ""
+}
