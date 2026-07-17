@@ -11,11 +11,16 @@ import org.springframework.boot.runApplication
  * `@SpringBootApplication`의 컴포넌트 스캔 기본 범위(이 클래스가 속한 패키지의
  * 하위 패키지 전체)는 `paytech.practice.pay`로는 확장되지 않는다 — `infra-persistence`의
  * Adapter들이 `paytech.practice.pay.infra.persistence.jooq` 패키지에 있어서 이
- * 클래스의 패키지(`paytech.practice.pay.api.payment`)와 형제 관계이기 때문에, 실제
- * 컨트롤러/Use Case가 추가되면 `@SpringBootApplication(scanBasePackages = [...])`로
- * 스캔 범위를 명시해야 한다. 지금은 부팅 가능한 최소 골격만 갖춘 상태다.
+ * 클래스의 패키지(`paytech.practice.pay.api.payment`)와 형제 관계이기 때문에,
+ * `scanBasePackages`로 두 패키지를 모두 명시했다 — 이게 없으면 `MerchantRepositoryAdapter`
+ * 등의 `@Repository` Bean이 인식되지 않는다.
  */
-@SpringBootApplication
+@SpringBootApplication(
+	scanBasePackages = [
+		"paytech.practice.pay.api.payment",
+		"paytech.practice.pay.infra.persistence.jooq",
+	],
+)
 class PaymentApiApplication
 
 fun main(args: Array<String>) {

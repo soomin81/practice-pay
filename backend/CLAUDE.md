@@ -10,7 +10,8 @@
 apps/
   api-payment/       실제 Gradle 서브프로젝트, 독립 배포 가능한 Spring Boot 앱(자체 메인 클래스, 자체 포트) —
                      webmvc + jooq이고 modules:application + modules:infra-persistence에 의존한다. 지금까지
-                     실제 Use Case(CreatePaymentUseCase)가 있는 유일한 앱이며, 아직 연결된 컨트롤러는 없다.
+                     실제 Use Case(CreatePaymentUseCase)와 그걸 노출하는 컨트롤러(POST /api/v1/payments)가
+                     있는 유일한 앱이다(Apps 절 참고). MerchantApiKey 인증은 아직 없다.
   api-admin/         실제 Gradle 서브프로젝트, 독립 배포 가능한 Spring Boot 앱 — webmvc + security,
                      modules:domain에만 의존한다(InternalUser Use Case가 아직 없어서 jOOQ/DataSource도 없다)
   api-merchant/      실제 Gradle 서브프로젝트, 독립 배포 가능한 Spring Boot 앱 — api-admin과 동일한 모양,
@@ -49,8 +50,8 @@ gradlew.bat ktlintFormat                                  # 모든 모듈 자동
 ## 테스트
 
 - 테스트 프레임워크는 **Kotest**(`FunSpec` 스타일)다 — JUnit5의 `@Test`/`kotlin-test`가 아니다. `gradlew.bat test`는 JUnit Platform 위의 `kotest-runner-junit5`를 통해 Kotest Spec을 자동으로 수집한다(`useJUnitPlatform()`이 이미 설정돼 있음, 추가 설정 불필요).
-- Spring 컨텍스트 테스트는 Spec 본문 안에서 `extensions(SpringExtension)`으로 `io.kotest.extensions.spring.SpringExtension`을 등록하고, 평소처럼 `@SpringBootTest`/`@Import` 애노테이션도 함께 쓴다(`apps/api-payment/src/test/kotlin/paytech/practice/pay/api/payment/PaymentApiApplicationTests.kt` 참고).
-- Mocking은 Mockito가 아니라 **MockK**(`io.mockk`)를 쓴다.
+- Spring 컨텍스트 테스트는 Spec 본문 안에서 `extensions(SpringExtension)`으로 `io.kotest.extensions.spring.SpringExtension`을 등록하고, 평소처럼 `@SpringBootTest`/`@Import` 애노테이션도 함께 쓴다(`apps/api-payment/src/test/kotlin/paytech/practice/pay/api/payment/PaymentApiApplicationTests.kt` 참고). `@Autowired`로 필드 주입을 받아야 하는 테스트(예: `@WebMvcTest` 슬라이스)는 `FunSpec({ ... })` 트레일링 람다 대신 `FunSpec() { @Autowired lateinit var ...; init { ... } }` 형태를 쓴다 — 람다 생성자로는 `@Autowired` 필드를 선언할 자리가 없어서다(`PaymentControllerTest` 참고).
+- Mocking은 Mockito가 아니라 **MockK**(`io.mockk`)를 쓴다. Spring Boot Test 슬라이스에서 Bean을 Mock으로 바꿔야 할 때(`@MockBean`/`@SpyBean` 자리)는 Mockito 전용인 그 애노테이션 대신 MockK판인 `com.ninja-squad:springmockk`의 `@MockkBean`을 쓴다(`PaymentControllerTest` 참고) — 이 프로젝트 전체가 Mockito 없이 MockK 하나로 통일돼 있다.
 - Assertion은 `kotest-assertions-core`(`shouldBe` 등)를 쓴다.
 - 아키텍처 규칙(예: domain이 Spring/jOOQ에 의존하지 않는다, 아래의 헥사고날 계층 구조)은 **ArchUnit**(`com.tngtech.archunit:archunit`)으로 강제한다 — 별도의 `archunit-junit5` 엔진/`@AnalyzeClasses` 스타일이 아니라, 평범한 Kotest `test { }` 블록 안에서 `ClassFileImporter().importPackages(...)` + `.check(classes)`를 호출하는 방식이다. 프로젝트 전체가 하나의 테스트 작성 컨벤션(Kotest)을 유지하기 위해서다. 모듈 간 규칙(한 모듈의 컴파일된 클래스를 외부에서 검사)은 `architecture-tests`(테스트 전용 Gradle 서브프로젝트; 검사 대상 모듈을 `testImplementation` 의존성으로 추가한다 — `DomainPurityTest` 참고)에 둔다.
 
@@ -83,7 +84,8 @@ inbound adapter → application → domain ← outbound port ← outbound adapte
 
 결제 생성 슬라이스의 Port를 구현하면서 확립됐다(`infra.persistence.jooq`, 애그리게이트당 서브패키지 하나, 예: `infra.persistence.jooq.payment`) — 앞으로의 Adapter도 이 모양을 따른다:
 
-- Adapter는 `DSLContext` 하나를 생성자로 주입받는 `@Repository`/`@Component` 클래스다 — 모듈 자체 안에서는 수동 Bean 배선이 필요 없다. `modules:infra-persistence`에 의존하는 앱은 자신의 `@SpringBootApplication` 컴포넌트 스캔이 실제로 `infra.persistence.jooq`까지 닿게만 하면 된다(아래 `apps/*` 절 참고 — `api-payment`가 이 모듈에 의존하지만 아직 스캔 범위를 넓히지 않아서, 지금은 이 Bean들이 그쪽에서 인식되지 않는다).
+- Adapter는 `DSLContext` 하나를 생성자로 주입받는 `@Repository`/`@Component` 클래스다 — 모듈 자체 안에서는 수동 Bean 배선이 필요 없다. `modules:infra-persistence`에 의존하는 앱은 자신의 `@SpringBootApplication` 컴포넌트 스캔이 실제로 `infra.persistence.jooq`까지 닿게만 하면 된다(아래 `apps/*` 절 참고 — `api-payment`는 `scanBasePackages`로 이걸 명시했다).
+- **`modules:infra-persistence/build.gradle.kts`는 `kotlin("plugin.spring")`을 적용한다** — Spring Boot는 인터페이스를 구현한 Bean이라도 기본적으로 JDK 동적 프록시가 아니라 CGLIB(서브클래싱) 프록시를 쓴다(`spring.aop.proxy-target-class=true`가 기본값). Kotlin 클래스는 기본이 `final`이라 CGLIB이 서브클래싱하지 못하고 `Cannot subclass final class ...`로 죽는다 — `kotlin("plugin.spring")`이 `@Component`(`@Repository` 포함, 메타 애노테이션까지 인식)가 붙은 클래스를 자동으로 `open`으로 만들어준다. 이 모듈 자체의 테스트는 Adapter를 직접 `new`해서 Spring DI/AOP를 전혀 거치지 않아 이 문제를 드러내지 않았다 — `apps:api-payment`가 실제 Spring 컨테이너로 이 Adapter들을 부팅하고 나서야 처음 발견됐다.
 - **jOOQ가 생성한 테이블 클래스가 여러 도메인 애그리게이트와 이름이 겹친다**(`Payment`, `Merchant`, `CheckoutSession`, `PaymentQuote`, `OutboxEvent` 모두 `paytech.practice.pay.dbcore.jooq.tables.*` 클래스와 `paytech.practice.pay.domain.*` 클래스 양쪽에 존재한다). 모든 Adapter가 같은 방식으로 푼다: 테이블 클래스 자체가 아니라 그 Companion을 거쳐 싱글턴 상수만 import한다(`import ...tables.Payment.Companion.PAYMENT`) — 클래스 자체를 이름으로 참조하지 않으니 도메인 import와 겹칠 게 없다.
 - `DATETIME(6)` UTC 컬럼에 대한 `Instant` ↔ `LocalDateTime` 변환은 `infra.persistence.jooq.InstantMapping.kt`의 공유 `toUtcLocalDateTime()`/`toUtcInstant()` 확장 함수를 거친다 — Adapter마다 `ZoneOffset.UTC` 변환을 직접 만들지 않는다.
 - 도메인에 대응 값이 없는 컬럼(`payment.order_currency`, `payment_quote.quote_currency`)은 Adapter 경계에서 `"KRW"` 리터럴로 하드코딩해서 채운다 — 이 코드베이스 전체에서 `Money`가 암묵적으로 항상 KRW를 뜻하는 것과 같은 맥락이다(MVP는 KRW→USDC 한 쌍만 지원).
@@ -96,9 +98,23 @@ inbound adapter → application → domain ← outbound port ← outbound adapte
 
 - **의존성은 각 앱이 지금 실제로 하는 일에만 맞춘다 — 나중에 할 일까지 미리 넣지 않는다.** `api-payment`만 실제 Use Case(`CreatePaymentUseCase`)가 있어서 `modules:application`/`modules:infra-persistence`/`spring-boot-starter-jooq`/`DataSource`가 연결된 유일한 앱이다. `api-admin`/`api-merchant`는 `modules:domain`에만 의존한다(Identity/API Key 애그리게이트는 있지만 아직 Use Case가 없다) — 나중에 로그인 엔드포인트를 위한 `webmvc`+`security`도 갖고 있다. `batch`는 `spring-boot-starter-batch`만 있고 웹 스타터는 없다. 실제 Use Case가 필요로 할 때만 그 앱의 의존성을 넓히고, 미리 넓히지 않는다.
 - **포트**: `api-payment` 8081, `api-admin` 8082, `api-merchant` 8083; `batch`는 `server.port`가 없다(웹 앱이 아니다 — 웹 스타터 없는 `spring-boot-starter-batch`는 웹 서버 자동 구성을 스스로 끄고, `DataSource` Bean이 없으면 `BatchAutoConfiguration` 자체도 물러나서, 지금은 그냥 웹도 Job도 없는 앱으로 부팅된다).
-- **컴포넌트 스캔**: `@SpringBootApplication`의 기본 스캔 범위는 메인 클래스 자신의 패키지와 그 하위 패키지다. `api-payment`의 메인 클래스는 `paytech.practice.pay.api.payment`에 있는데, 이건 `modules:infra-persistence`의 Adapter(`paytech.practice.pay.infra.persistence.jooq`)와 *형제* 관계이지 상위가 아니다 — 그래서 그 `@Repository` Bean들이 아직 인식되지 않는다. 실제 컨트롤러가 그것들을 필요로 하게 되면, 공유 루트 패키지 접두어로 옮기거나 `@SpringBootApplication(scanBasePackages = [...])`을 명시적으로 설정한다 — Gradle 의존성을 추가하는 것만으로 Bean이 연결된다고 가정하지 않는다.
+- **컴포넌트 스캔**: `@SpringBootApplication`의 기본 스캔 범위는 메인 클래스 자신의 패키지와 그 하위 패키지다. `api-payment`의 메인 클래스는 `paytech.practice.pay.api.payment`에 있는데, 이건 `modules:infra-persistence`의 Adapter(`paytech.practice.pay.infra.persistence.jooq`)와 *형제* 관계이지 상위가 아니다 — 그래서 `PaymentApiApplication`은 `@SpringBootApplication(scanBasePackages = ["paytech.practice.pay.api.payment", "paytech.practice.pay.infra.persistence.jooq"])`로 두 패키지를 모두 명시한다. 새 앱이 다른 모듈의 Bean을 쓰기 시작하면, Gradle 의존성을 추가하는 것만으로 Bean이 연결된다고 가정하지 말고 같은 방식으로 스캔 범위를 넓힌다.
 - `api-payment`의 `application.yaml`은 `spring-boot-docker-compose` 자동 감지에 기대지 않고 `spring.datasource.*`를 `db-core`/`compose.yaml`이 이미 쓰는 것과 같은 로컬 개발 MySQL로 직접 가리킨다(`localhost:3306/stablecoin_payment`, `root`/`verysecret`) — 그 자동 감지 메커니즘은 실행 중인 앱 자신의 작업 디렉토리(`apps/api-payment/`)에서 `compose.yaml`을 찾지, `backend/`에서 찾지 않아서, 추가 경로 설정 없이는 공유 파일을 찾지 못한다.
 - 테스트는 전부 같은 모양을 따른다(`@SpringBootTest` + Kotest `SpringExtension`, 앱마다 `contextLoads` 테스트 하나 — 위 "테스트" 참고). `api-payment`는 만족시켜야 할 `DataSource`가 있어서 `TestcontainersConfiguration`도 추가로 import하고, 나머지 셋은 아직 필요 없다.
+
+### `api-payment`의 결제 생성 컨트롤러
+
+`POST /api/v1/payments`(`docs/architecture/identity-access-api-key.md`의 "대표 사용 API")가 `CreatePaymentUseCase`를 HTTP로 노출하는 첫 inbound Adapter다. 패키지는 `api.payment.web`(컨트롤러/요청·응답 DTO/예외 핸들러), `api.payment.config`(Use Case를 Bean으로 조립하는 Composition Root), `api.payment.support`(아직 다른 모듈이 구현하지 않은 두 outbound port의 임시 구현)로 나눴다.
+
+- **`UseCaseConfiguration`**: `CreatePaymentUseCase`는 `modules:application`에 있고 그 모듈은 Spring에 의존하지 않아서 `@Component`를 직접 달 수 없다 — 그래서 이 `@Configuration` 클래스가 outbound port Bean들을 주입받아 `@Bean` 메서드로 대신 조립한다. 앞으로 Use Case가 늘어나면 이 클래스에 `@Bean` 메서드를 추가한다(Use Case 하나마다 별도 Configuration 클래스를 만들 필요는 없다).
+- **`IdGenerator`/`ExchangeRateProvider`의 구현이 없었다** — 둘 다 영속성 관심사가 아니라서 `modules:infra-persistence`가 구현하지 않았다. `support.UuidIdGenerator`(UUID 기반)와 `support.FakeExchangeRateProvider`(고정 환율, `docs/decisions/ADR-004-fake-exchange.md`의 Fake Exchange를 대표)를 이 앱 안에 직접 만들어 채웠다 — 둘 다 다른 앱이 필요로 하게 되면 그때 공유 위치로 옮길 수 있는, 지금은 이 정도로 충분한 임시 구현이라고 KDoc에 명시했다.
+- **`PaymentApiExceptionHandler`**(`@RestControllerAdvice`)가 `application`/`domain` 예외를 HTTP 상태로 옮긴다: `MerchantNotFoundException` → 404, `MerchantCannotAcceptPaymentsException` → 409, Value Object의 `init { require(...) }` 검증 실패(`IllegalArgumentException`) → 400, `@Valid` 실패(`MethodArgumentNotValidException`) → 400. 이 매핑은 inbound Adapter의 책임이다 — Use Case나 Value Object는 HTTP를 전혀 모른다.
+- **알려진 gap: `MerchantApiKey` 인증이 아직 없다.** `CreatePaymentRequest`는 인증된 API Key 컨텍스트에서 가맹점을 알아내는 대신 `merchantId`를 요청 본문에 직접 받는다 — API Key 인증(`docs/architecture/identity-access-api-key.md`의 "6.3 인증 방식") Use Case가 생기면 이 필드는 제거해야 한다.
+- **테스트**: `PaymentControllerTest`는 `@WebMvcTest(PaymentController::class)`로 웹 계층만 띄운다(DB 없음) — `CreatePaymentUseCase`는 `com.ninja-squad:springmockk`의 `@MockkBean`으로 Mock했다(위 "테스트" 참고). `@Autowired` 필드 주입이 필요해서 이 파일만 `FunSpec() { init { ... } }` 형태를 쓴다. 여기에 더해 실제 `bootRun` + `curl`로 시딩된 `mrc_test_001` 가맹점을 상대로 결제 생성 → 멱등 재요청(같은 `paymentId` 반환, 중복 행 없음) → DB 직접 조회까지 한 번 수동으로 검증했다(자동화된 테스트로 남기지는 않음).
+
+**Spring Boot 4.1 / Jackson 3.x로 넘어오며 자주 걸리는 패키지 함정 두 가지**(둘 다 `apps:api-payment`에서 처음 부딪혔다):
+- `ObjectMapper`는 `com.fasterxml.jackson.databind`가 아니라 **`tools.jackson.databind`**에 있다 — Jackson 3.x부터 그룹 ID/패키지가 `tools.jackson`으로 바뀌었다(`jackson-module-kotlin`도 `tools.jackson.module:jackson-module-kotlin`). 이 프로젝트의 루트 `build.gradle.kts` 의존성 목록에 이미 그 흔적이 있다.
+- `@WebMvcTest`는 `org.springframework.boot.test.autoconfigure.web.servlet`이 아니라 **`org.springframework.boot.webmvc.test.autoconfigure`**에 있다 — Spring Boot 4.x가 `spring-boot-autoconfigure`를 기술별 전용 모듈로 쪼갠 것과 같은 개편이다(`SpringTransactionProvider`가 `spring-boot-jooq` 모듈로 옮겨진 것과 동일한 패턴 — 위 "영속성 Adapter 컨벤션" 참고). 새로운 Spring Boot 4.x 애노테이션/클래스를 쓸 때는 예전 패키지 경로를 그대로 가정하지 않는다.
 
 ## 도메인 코드 컨벤션
 

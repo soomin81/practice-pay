@@ -29,6 +29,9 @@ dependencies {
 	runtimeOnly("com.mysql:mysql-connector-j")
 
 	testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
+	// MockK equivalent of Spring Boot Test's @MockBean/@SpyBean (this project uses
+	// MockK, not Mockito, everywhere else too — backend/CLAUDE.md's Testing section).
+	testImplementation("com.ninja-squad:springmockk:5.0.1")
 	testImplementation("org.springframework.boot:spring-boot-testcontainers")
 	testImplementation("org.testcontainers:testcontainers-junit-jupiter")
 	testImplementation("org.testcontainers:testcontainers-mysql")
