@@ -58,7 +58,7 @@ architecture-tests/  실제 Gradle 서브프로젝트, 테스트 전용(src/main
 
 11개 서브프로젝트가 `kotlin("jvm")` 버전, Java 25 toolchain, `compilerOptions`, kotest/mockk 좌표, Spring Boot BOM, Spring 앱 공통 의존성을 그대로 반복하던 걸 `backend/build-logic/`(Composite Build로 포함된 빌드)의 Precompiled Script Plugin으로 뽑아냈다 — `buildSrc` 대신 포함된 빌드를 쓴 이유는 `buildSrc`가 바뀌면 루트 빌드 전체가 매번 무효화되지만, 포함된 빌드는 독립된 빌드라 그 캐시 이점이 그대로 유지되기 때문이다. `backend/settings.gradle.kts` 맨 앞의 `pluginManagement { includeBuild("build-logic") }`이 이 빌드를 끌어온다.
 
-`build-logic/src/main/kotlin/*.gradle.kts` 6개:
+`build-logic/src/main/kotlin/*.gradle.kts` 7개:
 
 | 이름 | 내용 | 적용 대상 |
 |---|---|---|
@@ -67,11 +67,12 @@ architecture-tests/  실제 Gradle 서브프로젝트, 테스트 전용(src/main
 | `practicepay.mockk` | `testImplementation` mockk | domain/application/infra-blockchain/common/apps 4개(infra-persistence/db-core/architecture-tests는 각자 다른 테스트 전략이라 제외) |
 | `practicepay.spring-bom` | `io.spring.dependency-management` + Spring Boot BOM import | infra-persistence/infra-blockchain/db-core |
 | `practicepay.spring-library` | `practicepay.spring-bom` + `kotlin("plugin.spring")`(Bean을 open으로) | infra-persistence/infra-blockchain(db-core는 `@Component` Bean이 없어서 제외) |
-| `practicepay.spring-boot-app` | `practicepay.kotlin-common` + `kotlin("plugin.spring")` + `org.springframework.boot` + `io.spring.dependency-management` + 4개 앱 공통 의존성(`spring-boot-starter-jooq`, `kotlin-reflect`, `jackson-module-kotlin`, `kotlin-logging-jvm`, `mysql-connector-j`, springmockk, testcontainers 3종, `kotest-extensions-spring`, `junit-platform-launcher`) | api-payment/api-admin/api-merchant/batch |
+| `practicepay.spring-boot-app` | `practicepay.kotlin-common` + `kotlin("plugin.spring")` + `org.springframework.boot` + `io.spring.dependency-management` + 4개 앱 공통 의존성(`spring-boot-starter-jooq`, `kotlin-reflect`, `jackson-module-kotlin`, `kotlin-logging-jvm`, `mysql-connector-j`, springmockk, testcontainers 3종, `kotest-extensions-spring`, `junit-platform-launcher`) | api-payment/api-admin/api-merchant/batch — 단 api-payment/api-admin/api-merchant는 아래 `spring-web-app`을 거쳐 간접 적용되고, batch만 직접 적용한다 |
+| `practicepay.spring-web-app` | `practicepay.spring-boot-app` + webmvc/security/validation 스타터 3종 + 대응 test 스타터 2종(`spring-boot-starter-webmvc-test`/`spring-boot-starter-security-test`) | api-payment/api-admin/api-merchant(batch는 웹 앱이 아니라서 `spring-boot-app`을 직접 쓴다) |
 
-**모듈마다 다른 부분은 그대로 각 `build.gradle.kts`에 남겨둔다** — `webmvc`/`security`/`validation` 스타터는 batch에 없어서 `spring-boot-app`에 넣지 않았고, `project(":modules:...")` 의존성 목록은 모듈 그래프를 그 파일만 보고 파악할 수 있어야 해서 convention plugin으로 감추지 않는다. 즉 "모듈마다 작은 설정을 중복한다"는 예전 컨벤션은, **버전·플러그인처럼 절대 갈릴 이유가 없는 설정**은 convention plugin으로 걷어내고 **모듈마다 실제로 다른 의존성 그래프**는 여전히 각자 명시하는 쪽으로 갈렸다.
+**모듈마다 다른 부분은 그대로 각 `build.gradle.kts`에 남겨둔다** — `project(":modules:...")` 의존성 목록은 모듈 그래프를 그 파일만 보고 파악할 수 있어야 해서 convention plugin으로 감추지 않는다. 즉 "모듈마다 작은 설정을 중복한다"는 예전 컨벤션은, **버전·플러그인처럼 절대 갈릴 이유가 없는 설정**은 convention plugin으로 걷어내고(`webmvc`/`security`/`validation` 스타터도 세 웹 API 앱에서 똑같이 반복되던 것이라 `spring-web-app`으로 걷어냈다) **모듈마다 실제로 다른 의존성 그래프**는 여전히 각자 명시하는 쪽으로 갈렸다.
 
-**알려진 한계**: `build-logic/src/main/kotlin/*.gradle.kts`(Precompiled Script Plugin)는 `backend/gradle/libs.versions.toml` 버전 카탈로그의 `libs` 접근자를 쓸 수 없다(`build-logic/build.gradle.kts` 자신은 되지만, `kotlin-dsl`이 컴파일하는 이 스크립트들의 컴파일 classpath에는 카탈로그 접근자 클래스가 없다 — Gradle의 알려진 한계). 그래서 이 6개 파일 안의 버전 문자열은 `libs.versions.toml`과 값을 손으로 맞춰야 한다(각 파일 KDoc에 표시해뒀다). 반면 메인 빌드에 남아있는 개별 `build.gradle.kts`(예: `modules/infra-blockchain`의 `libs.web3j.core`, `architecture-tests`의 `libs.archunit`, `db-core`의 `alias(libs.plugins.jooq.codegen)`)는 카탈로그를 정상적으로 쓴다.
+**알려진 한계**: `build-logic/src/main/kotlin/*.gradle.kts`(Precompiled Script Plugin)는 `backend/gradle/libs.versions.toml` 버전 카탈로그의 `libs` 접근자를 쓸 수 없다(`build-logic/build.gradle.kts` 자신은 되지만, `kotlin-dsl`이 컴파일하는 이 스크립트들의 컴파일 classpath에는 카탈로그 접근자 클래스가 없다 — Gradle의 알려진 한계). 그래서 이 7개 파일 안의 버전 문자열은 `libs.versions.toml`과 값을 손으로 맞춰야 한다(각 파일 KDoc에 표시해뒀다). 반면 메인 빌드에 남아있는 개별 `build.gradle.kts`(예: `modules/infra-blockchain`의 `libs.web3j.core`, `architecture-tests`의 `libs.archunit`, `db-core`의 `alias(libs.plugins.jooq.codegen)`)는 카탈로그를 정상적으로 쓴다.
 
 ## 명령어
 
