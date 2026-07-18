@@ -9,8 +9,13 @@ import java.util.UUID
 fun uniqueSuffix(): String = UUID.randomUUID().toString().take(8)
 
 /**
- * FK 제약을 만족시키기 위한 최소한의 Merchant 행을 raw jOOQ로 직접 심는다 —
- * `MerchantRepository` Port에는 `save`가 없어서 Adapter를 통해서는 만들 수 없다.
+ * FK 제약을 만족시키기 위한 최소한의 Merchant 행을 raw jOOQ로 직접 심는다.
+ *
+ * `MerchantRepositoryAdapter.save`로도 만들 수 있지만(`Merchant.create` 경유),
+ * 이 헬퍼는 다른 Aggregate(Payment 등)의 FK 픽스처로 주로 쓰여서 `Merchant`
+ * 자체의 필드 조합에는 관심이 없는 호출부가 많다 — 그런 곳에서는 여전히 이
+ * 간단한 raw insert가 더 짧다. `Merchant`의 필드·상태 전이 자체를 검증하는
+ * 테스트는 `MerchantRepositoryAdapterTest`처럼 `save`를 직접 쓴다.
  */
 fun insertTestMerchant(
 	merchantId: String = "mrc_${uniqueSuffix()}",

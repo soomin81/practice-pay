@@ -5,10 +5,12 @@ import org.springframework.context.annotation.Configuration
 import paytech.practice.pay.application.identity.AcceptAccountInvitationUseCase
 import paytech.practice.pay.application.identity.AuthenticateInternalUserUseCase
 import paytech.practice.pay.application.identity.IssueInternalUserUseCase
+import paytech.practice.pay.application.identity.RegisterMerchantUseCase
 import paytech.practice.pay.application.port.outbound.AccountInvitationRepository
 import paytech.practice.pay.application.port.outbound.IdGenerator
 import paytech.practice.pay.application.port.outbound.InternalUserRepository
 import paytech.practice.pay.application.port.outbound.InvitationTokenHasher
+import paytech.practice.pay.application.port.outbound.MerchantRepository
 import paytech.practice.pay.application.port.outbound.MerchantUserRepository
 import paytech.practice.pay.application.port.outbound.PasswordEncoder
 import paytech.practice.pay.application.port.outbound.TransactionManager
@@ -70,6 +72,26 @@ class UseCaseConfiguration {
 			merchantUserRepository = merchantUserRepository,
 			invitationTokenHasher = invitationTokenHasher,
 			passwordEncoder = passwordEncoder,
+			transactionManager = transactionManager,
+			clock = clock,
+		)
+
+	@Bean
+	fun registerMerchantUseCase(
+		merchantRepository: MerchantRepository,
+		merchantUserRepository: MerchantUserRepository,
+		accountInvitationRepository: AccountInvitationRepository,
+		invitationTokenHasher: InvitationTokenHasher,
+		idGenerator: IdGenerator,
+		transactionManager: TransactionManager,
+		clock: Clock,
+	): RegisterMerchantUseCase =
+		RegisterMerchantUseCase(
+			merchantRepository = merchantRepository,
+			merchantUserRepository = merchantUserRepository,
+			accountInvitationRepository = accountInvitationRepository,
+			invitationTokenHasher = invitationTokenHasher,
+			idGenerator = idGenerator,
 			transactionManager = transactionManager,
 			clock = clock,
 		)

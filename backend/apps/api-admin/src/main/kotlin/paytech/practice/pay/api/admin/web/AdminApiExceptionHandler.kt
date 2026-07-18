@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestControllerAdvice
 import paytech.practice.pay.application.identity.AccountLockedException
 import paytech.practice.pay.application.identity.DuplicateInternalUserException
+import paytech.practice.pay.application.identity.DuplicateMerchantException
 import paytech.practice.pay.application.identity.InvalidCredentialsException
 import paytech.practice.pay.application.identity.InvalidInvitationException
 
@@ -29,6 +30,10 @@ class AdminApiExceptionHandler {
 	@ResponseStatus(HttpStatus.CONFLICT)
 	fun handleDuplicateInternalUser(ex: DuplicateInternalUserException): ErrorResponse =
 		ErrorResponse(ex.message ?: "이미 사용 중인 로그인 아이디 또는 이메일입니다.")
+
+	@ExceptionHandler(DuplicateMerchantException::class)
+	@ResponseStatus(HttpStatus.CONFLICT)
+	fun handleDuplicateMerchant(ex: DuplicateMerchantException): ErrorResponse = ErrorResponse(ex.message ?: "이미 사용 중인 가맹점 코드입니다.")
 
 	@ExceptionHandler(InvalidInvitationException::class)
 	@ResponseStatus(HttpStatus.BAD_REQUEST)

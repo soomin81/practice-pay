@@ -107,6 +107,48 @@ Content-Type: application/json
   "role": "NOT_A_ROLE"
 }
 
+### 가맹점 등록 — SUPER_ADMIN 또는 OPERATOR 세션으로 호출한다(위 로그인이 먼저 실행돼 있어야 한다).
+### 응답의 invitationToken을 apps:api-merchant의 POST /merchant/account-invitations/accept에
+### 그대로 제출하면 OWNER 계정을 활성화할 수 있다(../api-merchant/requests.http 참고).
+POST {{apiAdminBaseUrl}}/admin/merchants
+Content-Type: application/json
+
+{
+  "merchantCode": "e2e-merchant-{{$timestamp}}",
+  "merchantName": "E2E 테스트 가맹점",
+  "ownerLoginId": "e2e-owner-{{$timestamp}}",
+  "ownerEmail": "e2e-owner-{{$timestamp}}@example.com",
+  "ownerUserName": "E2E 대표"
+}
+
+> {%
+    client.test("등록 성공 (201)", () => {
+        client.assert(response.status === 201, "예상: 201, 실제: " + response.status);
+    });
+    client.test("응답에 invitationToken이 있다", () => {
+        client.assert(!!response.body.invitationToken, "invitationToken이 비어 있음");
+    });
+    client.global.set("registeredMerchantCode", response.body.merchantCode);
+%}
+
+### 같은 merchantCode로 재등록 — 409여야 한다(uk_merchant_merchant_code)
+POST {{apiAdminBaseUrl}}/admin/merchants
+Content-Type: application/json
+
+{
+  "merchantCode": "{{registeredMerchantCode}}",
+  "merchantName": "중복 가맹점 코드",
+  "ownerLoginId": "another-owner-{{$timestamp}}",
+  "ownerEmail": "another-owner-{{$timestamp}}@example.com",
+  "ownerUserName": "다른 대표"
+}
+
+> {%
+    client.test("가맹점 코드 중복 (409)", () => {
+        client.assert(response.status === 409, "예상: 409, 실제: " + response.status);
+    });
+%}
+
 ### 세션 없이 호출 — SUPER_ADMIN 인증이 없으면 403이어야 한다
 ### (IntelliJ HTTP Client는 쿠키를 환경 단위로 유지하므로, 이 요청만 따로 확인하려면
 ### 새 사설 브라우징 세션이나 별도 환경에서 실행해야 한다 — 위 로그인을 먼저 실행한

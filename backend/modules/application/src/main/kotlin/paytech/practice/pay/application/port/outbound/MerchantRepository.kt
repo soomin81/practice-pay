@@ -5,12 +5,12 @@ import paytech.practice.pay.domain.merchant.MerchantCode
 import paytech.practice.pay.domain.merchant.MerchantId
 
 /**
- * [Merchant] Aggregate를 복원하는 Command Repository Outbound Port다.
- *
- * 아직 조회만 필요해 `findBy...`만 정의한다 — `Merchant` 등록·상태 변경 Use Case가
- * 추가될 때 `save` 등을 함께 확장한다.
+ * [Merchant] Aggregate를 저장·복원하는 Command Repository Outbound Port다.
  */
 interface MerchantRepository {
+	/** Merchant를 저장한다(신규 등록·상태 변경 모두 이 메서드로 반영한다). */
+	fun save(merchant: Merchant)
+
 	/** `merchant_id`로 Merchant를 복원한다. 없으면 `null`이다. */
 	fun findById(merchantId: MerchantId): Merchant?
 

@@ -109,8 +109,9 @@ merchant_api_key_seq + scope_code
 Merchant INSERT
 + MerchantUser(OWNER, INVITED) INSERT
 + AccountInvitation INSERT
-+ OutboxEvent INSERT
 ```
+
+MVP 구현(`RegisterMerchantUseCase`, `backend/CLAUDE.md`의 "가맹점 등록 Use Case" 절)은 `OutboxEvent INSERT`를 포함하지 않는다 — 이 프로젝트에 이메일 등 초대 알림을 전달할 인프라가 없어서, 발급 계열 Use Case(`IssueInternalUserUseCase`도 동일)는 초대 Token 원문을 API 응답으로 직접 돌려주고 호출자가 수동으로 전달하는 방식을 택했다. 알림 발송 인프라가 생기면 이 경계에 `OutboxEvent`를 다시 추가한다.
 
 API Key 발급:
 
