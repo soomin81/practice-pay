@@ -23,7 +23,8 @@ apps/
   batch/             실제 Gradle 서브프로젝트, 독립 배포 가능한 Spring Boot 앱 — spring-boot-starter-batch,
                      웹 스타터 없음, 아직 정의된 Job 없음(예: 향후 OutboxEvent 발행 Worker의 자리)
 modules/
-  application/       실제 Gradle 서브프로젝트, domain에 의존; CreatePaymentUseCase(결제 생성 슬라이스),
+  application/       실제 Gradle 서브프로젝트, domain에 의존; ConnectCheckoutWalletUseCase(application.checkout,
+                     지갑 연결 슬라이스), CreatePaymentUseCase(결제 생성 슬라이스),
                      SubmitPaymentTransactionUseCase(BlockchainTransaction 생성 슬라이스),
                      ConfirmBlockchainTransactionUseCase(감지·Confirm 슬라이스) + PaymentTransactionValidator
                      + PaymentNetworkConfig(공유 MVP 상수), Identity/API Key Use Case(Authenticate*/
@@ -125,6 +126,17 @@ inbound adapter → application → domain ← outbound port ← outbound adapte
 - `eth_chainId`가 `84532`(Base Sepolia의 실제 Chain ID)를 정확히 반환하는 것,
 - `EventEncoder.encode`로 계산한 topic0이 실제 `eth_getLogs` 응답의 `Transfer` 로그 topic0(`0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef`)과 정확히 일치하는 것을 확인했고,
 - **이 검증에서 실제 버그를 하나 잡았다**: `BigInteger.toLong()`은 값이 `Long` 범위를 넘으면 예외 없이 하위 64비트로 조용히 잘라버린다(음수로 뒤집힐 수도 있다) — 18-decimals ERC-20 토큰(대부분의 토큰, USDC의 6-decimals가 오히려 예외)의 전송량은 흔히 `Long.MAX_VALUE`를 넘어서, 실제 Base Sepolia 트랜잭션을 조회하자마자 `TokenAmount는 음수일 수 없습니다: -6446744073709551616` 같은 값으로 터졌다. `toTokenTransferOrNull`에서 `amount`가 `Long` 범위를 넘으면 그 로그 하나만 건너뛰도록 고쳤다(전체 조회를 실패시키지 않는다 — 같은 Receipt에 우리가 찾는 USDC 전송이 함께 있을 수 있어서). 이 사례를 `Web3jBlockchainClientTest`의 회귀 테스트로 남겨뒀다. **유닛 테스트만으로는 못 잡는, 실제 RPC로 검증해야만 드러나는 종류의 버그였다는 점에서 이 단계를 생략하면 안 된다는 근거로 남긴다.**
+
+### "체크아웃 지갑 연결" Use Case(`ConnectCheckoutWalletUseCase`, `application.checkout`)
+
+고객이 체크아웃 페이지에서 외부 EVM 지갑을 연결하는 시점을 구현한다. `SubmitPaymentTransactionUseCase`가 "이미 `WALLET_CONNECTED`인 CheckoutSession"을 전제하고 시작했던 지점을 이 Use Case가 그보다 앞서 채운다 — 지금까지 만든 결제 흐름 Use Case 중 시간순으로 가장 이르다.
+
+- **처음으로 `application.payment`가 아니라 `application.checkout` 패키지를 새로 만들었다.** `CheckoutSession`만 다루고 `Payment`/`BlockchainTransaction`은 건드리지 않아서, `Identity` Use Case들이 `application.identity`에 따로 있는 것과 같은 이유로 아그리게이트별 패키지로 분리했다 — 앞선 세 Use Case가 전부 `application.payment`에 있었던 건 전부 `Payment`가 걸린 다중 Aggregate 트랜잭션이었기 때문이지, "결제 관련은 다 `payment` 패키지"라는 규칙이 아니다.
+- **단일 Aggregate Use Case라 `TransactionManager`가 필요 없다** — `CheckoutSessionRepository.save` 한 번으로 끝난다. `Repository`/`Command`/`Result`/`Use Case` 넷만 있으면 되는, 지금까지 중 가장 단순한 슬라이스다.
+- **`CREATED` 상태였으면 `open()`을 먼저 호출한 뒤 `connectWallet()`으로 넘어간다.** `CheckoutSession.open()`을 부르는 별도의 "체크아웃 페이지 조회" Use Case/API는 만들지 않았다 — 페이지 조회는 상태를 바꾸지 않는 `GET`으로 남겨두는 게 REST 관례에 맞고, 고객이 실제로 처음 행동을 취하는 순간(지갑 연결)을 `open()`이 뜻하는 "체크아웃 페이지를 열었다"로 간주하는 쪽을 택했다 — `docs/`에 이 판단의 근거는 없다(추론한 설계 판단).
+- **`CheckoutSessionNotFoundException`을 `application.payment`에서 `application.checkout`으로 옮겼다.** 원래 `SubmitPaymentTransactionUseCase`를 만들 때 그 패키지에 넣었는데, 이 Use Case도 똑같이 필요해지면서 위치가 어색해졌다 — 두 Use Case 다 이 패키지를 import해서 쓴다.
+- **지갑 재연결(다른 지갑으로 바꾸기)은 도메인에 없다** — `WALLET_CONNECTED` 이후 다시 호출하면 `CheckoutSession.connectWallet()`의 `checkTransition`이 그대로 `IllegalStateException`을 던진다. 새 도메인 메서드가 필요한 범위 밖 기능이라 손대지 않았다.
+- **테스트**: `ConnectCheckoutWalletUseCaseTest`(단위, CREATED에서 한 번에 연결/이미 OPEN인 경우/존재하지 않는 세션/이미 WALLET_CONNECTED인 경우/CANCELLED인 경우).
 
 ### "BlockchainTransaction 생성" Use Case(`SubmitPaymentTransactionUseCase`)
 

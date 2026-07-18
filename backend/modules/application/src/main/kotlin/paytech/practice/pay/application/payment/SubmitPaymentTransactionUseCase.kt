@@ -1,5 +1,6 @@
 package paytech.practice.pay.application.payment
 
+import paytech.practice.pay.application.checkout.CheckoutSessionNotFoundException
 import paytech.practice.pay.application.port.outbound.BlockchainTransactionRepository
 import paytech.practice.pay.application.port.outbound.CheckoutSessionRepository
 import paytech.practice.pay.application.port.outbound.IdGenerator

@@ -6,6 +6,7 @@ import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import paytech.practice.pay.application.checkout.CheckoutSessionNotFoundException
 import paytech.practice.pay.application.port.outbound.BlockchainTransactionRepository
 import paytech.practice.pay.application.port.outbound.CheckoutSessionRepository
 import paytech.practice.pay.application.port.outbound.IdGenerator
