@@ -26,6 +26,7 @@ import org.springframework.scheduling.annotation.EnableScheduling
 		// (PaymentApiApplication의 같은 주석 참고).
 		"paytech.practice.pay.infra.support.id",
 		"paytech.practice.pay.infra.support.exchange",
+		"paytech.practice.pay.infra.support.webhook",
 	],
 )
 class BatchApplication

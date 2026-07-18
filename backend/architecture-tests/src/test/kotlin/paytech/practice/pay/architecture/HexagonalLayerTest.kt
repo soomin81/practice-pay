@@ -82,6 +82,19 @@ class HexagonalLayerTest :
 				.check(productionClasses)
 		}
 
+		// 앱은 Composition Root(UseCaseConfiguration)와 inbound Adapter만 갖는다 —
+		// outbound Port 구현체는 전부 modules:infra-*에 있다. 원래 앱마다 자기 `support`
+		// 패키지에 Port 구현을 두던 관례가 있었는데, 그것들을 modules:infra-support로
+		// 모으면서 이 규칙이 성립하게 됐다(backend/CLAUDE.md의 "modules:infra-support" 절).
+		test("apps must not implement outbound ports themselves") {
+			noClasses()
+				.that()
+				.resideInAnyPackage("${Packages.API_APPS}..", "${Packages.BATCH_APP}..")
+				.should(implementAnOutboundPort)
+				.because("Port 구현체는 outbound Adapter(modules:infra-*)의 것이다 — 앱은 배선만 한다")
+				.check(productionClasses)
+		}
+
 		// ArchUnit 규칙은 대상 클래스가 하나도 없어도 "통과"한다 — 모듈이 빠지거나 패키지가
 		// 바뀌어서 규칙 전체가 조용히 무력화되는 걸 막는 가드다(Packages의 KDoc 참고).
 		test("every layer must actually be imported") {

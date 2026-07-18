@@ -25,6 +25,7 @@ import org.springframework.boot.runApplication
 		// 스캔하면 이 앱의 컨텍스트가 뜨지 않는다.
 		"paytech.practice.pay.infra.support.id",
 		"paytech.practice.pay.infra.support.exchange",
+		"paytech.practice.pay.infra.support.apikey",
 	],
 )
 class PaymentApiApplication

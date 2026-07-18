@@ -4,6 +4,9 @@ import com.tngtech.archunit.core.domain.JavaClass
 import com.tngtech.archunit.core.domain.JavaClasses
 import com.tngtech.archunit.core.importer.ClassFileImporter
 import com.tngtech.archunit.core.importer.ImportOption
+import com.tngtech.archunit.lang.ArchCondition
+import com.tngtech.archunit.lang.ConditionEvents
+import com.tngtech.archunit.lang.SimpleConditionEvent
 
 /**
  * 모든 ArchUnit 규칙이 공유하는 패키지 상수다.
@@ -70,6 +73,30 @@ internal val productionClasses: JavaClasses by lazy {
 			Packages.BATCH_APP,
 		)
 }
+
+/**
+ * `application.port.outbound`의 Port를 실제로 구현하는지 검사하는 조건.
+ *
+ * `PersistenceAdapterTest`는 "Adapter는 Port를 구현해야 한다"로, `HexagonalLayerTest`는
+ * `noClasses().should(...)`로 뒤집어 "앱은 Port를 구현하면 안 된다"로 쓴다.
+ */
+internal val implementAnOutboundPort =
+	object : ArchCondition<JavaClass>("application.port.outbound의 Port를 구현한다") {
+		override fun check(
+			item: JavaClass,
+			events: ConditionEvents,
+		) {
+			val implementsPort =
+				item.allRawInterfaces.any { it.packageName.startsWith(Packages.APPLICATION_PORT) }
+			events.add(
+				SimpleConditionEvent(
+					item,
+					implementsPort,
+					"${item.name}이(가) ${Packages.APPLICATION_PORT}의 Port를 구현한다",
+				),
+			)
+		}
+	}
 
 /**
  * 중첩 클래스(Kotlin `companion object`가 만드는 `...$Companion` 등)를 감안한 최상위 클래스 이름.

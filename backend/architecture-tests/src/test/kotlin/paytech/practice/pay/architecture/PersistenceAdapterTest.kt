@@ -1,9 +1,5 @@
 package paytech.practice.pay.architecture
 
-import com.tngtech.archunit.core.domain.JavaClass
-import com.tngtech.archunit.lang.ArchCondition
-import com.tngtech.archunit.lang.ConditionEvents
-import com.tngtech.archunit.lang.SimpleConditionEvent
 import com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes
 import com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses
 import io.kotest.core.spec.style.FunSpec
@@ -56,22 +52,3 @@ class PersistenceAdapterTest :
 				.check(productionClasses)
 		}
 	})
-
-/** `application.port.outbound`의 인터페이스를 실제로 구현하는지 검사하는 조건. */
-private val implementAnOutboundPort =
-	object : ArchCondition<JavaClass>("application.port.outbound의 Port를 구현해야 한다") {
-		override fun check(
-			item: JavaClass,
-			events: ConditionEvents,
-		) {
-			val implementsPort =
-				item.allRawInterfaces.any { it.packageName.startsWith(Packages.APPLICATION_PORT) }
-			events.add(
-				SimpleConditionEvent(
-					item,
-					implementsPort,
-					"${item.name}이(가) 구현하는 Port가 ${Packages.APPLICATION_PORT}에 없다",
-				),
-			)
-		}
-	}

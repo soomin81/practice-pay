@@ -1,4 +1,4 @@
-package paytech.practice.pay.api.payment.support
+package paytech.practice.pay.infra.support.apikey
 
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
@@ -23,6 +23,11 @@ import javax.crypto.spec.SecretKeySpec
  *
  * 해시 비교는 `String.equals` 대신 [MessageDigest.isEqual]로 한다 — 타이밍
  * 공격을 막기 위한 상수 시간 비교다.
+ *
+ * `infra.support.security`의 `HmacInvitationTokenHasher`와 같은 패턴이지만
+ * 하위 패키지를 나눈 이유는 서로 다른 필수 설정값(`app.api-key.pepper` vs
+ * `app.invitation-token.pepper`)을 요구하기 때문이다 — 그 설정이 없는 앱이
+ * 스캔하면 컨텍스트가 뜨지 않는다. API Key 인증은 `apps:api-payment`에만 있다.
  */
 @Component
 class HmacApiKeySecretHasher(

@@ -1,4 +1,4 @@
-package paytech.practice.pay.batch.support
+package paytech.practice.pay.infra.support.webhook
 
 import org.springframework.stereotype.Component
 import paytech.practice.pay.application.port.outbound.WebhookSendResult
@@ -13,9 +13,14 @@ import java.time.Duration
 
 /**
  * [WebhookSender] Port를 JDK 내장 `java.net.http.HttpClient`로 구현한다 — 이
- * 프로젝트에서 처음으로 아웃바운드 HTTP 호출이 필요해졌지만, `apps:batch`는
- * 웹 앱이 아니라서(`spring-boot-starter-web*` 없음) Spring의 `RestClient`/`WebClient`를
- * 새로 끌어오는 대신 별도 의존성이 필요 없는 JDK 내장 클라이언트를 썼다.
+ * 프로젝트에서 처음으로 아웃바운드 HTTP 호출이 필요해졌지만, 유일한 사용처인
+ * `apps:batch`가 웹 앱이 아니라서(`spring-boot-starter-web*` 없음) Spring의
+ * `RestClient`/`WebClient`를 새로 끌어오는 대신 별도 의존성이 필요 없는 JDK 내장
+ * 클라이언트를 썼다.
+ *
+ * 필수 설정값을 요구하지 않아서(위 두 Hasher와 달리 `@Value`가 없다) 아무 앱이
+ * 스캔해도 안전하지만, 쓰지도 않는 Bean을 만들 이유가 없어 `apps:batch`만
+ * 이 하위 패키지를 스캔한다.
  *
  * [HttpClient]는 스레드 안전하고 재사용을 전제로 설계된 타입이라 인스턴스 하나를
  * 필드로 유지한다.

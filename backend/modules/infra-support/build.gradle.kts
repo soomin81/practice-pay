@@ -5,10 +5,14 @@ plugins {
 }
 
 // modules:infra-persistence(영속성)/modules:infra-blockchain(온체인)과 같은 자리의
-// 세 번째 outbound Adapter 모듈이다 — 특정 외부 시스템에 묶이지 않는 자잘한 Port
-// 구현(ID 생성, 비밀번호/토큰 해시, 환율)을 모은다. 원래 이 구현들은 앱마다 자기
-// `support` 패키지에 복제돼 있었는데(4개 클래스가 9곳), 앱이 늘면서 복제본이 서로
-// 어긋날 위험이 커져 공유 모듈로 옮겼다.
+// 세 번째 outbound Adapter 모듈이다 — 자체 모듈을 둘 만큼 크지 않은 Port 구현
+// (ID 생성, 비밀번호/토큰 해시, 환율, Webhook 전송)을 모은다.
+//
+// 원래 이 구현들은 앱마다 자기 `support` 패키지에 흩어져 있었고(그중 4개는 9곳에
+// 복제까지 돼 있었다), 그것들을 전부 여기로 모은 결과 "앱에는 outbound Port
+// 구현체가 하나도 없다"가 성립하게 됐다 — architecture-tests의 HexagonalLayerTest가
+// 그 상태를 규칙으로 강제한다("apps must not implement outbound ports themselves").
+// 즉 앱은 Composition Root(UseCaseConfiguration)와 inbound Adapter만 갖는다.
 //
 // modules:common이 아니라 여기인 이유: 이것들은 전부 application.port.outbound의
 // Port 구현체(@Component)라서 modules:application과 Spring에 의존한다 —
