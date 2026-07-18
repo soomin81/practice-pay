@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestControllerAdvice
 import paytech.practice.pay.application.identity.AccountLockedException
 import paytech.practice.pay.application.identity.InvalidCredentialsException
+import paytech.practice.pay.application.identity.InvalidInvitationException
 
 /**
  * `application` 계층이 던지는 로그인 예외를 HTTP 상태 코드로 옮긴다
@@ -21,6 +22,10 @@ class MerchantAuthExceptionHandler {
 	@ExceptionHandler(AccountLockedException::class)
 	@ResponseStatus(HttpStatus.UNAUTHORIZED)
 	fun handleAccountLocked(ex: AccountLockedException): ErrorResponse = ErrorResponse(ex.message ?: "계정이 잠겼습니다.")
+
+	@ExceptionHandler(InvalidInvitationException::class)
+	@ResponseStatus(HttpStatus.BAD_REQUEST)
+	fun handleInvalidInvitation(ex: InvalidInvitationException): ErrorResponse = ErrorResponse(ex.message ?: "초대가 유효하지 않거나 만료되었습니다.")
 
 	@ExceptionHandler(MethodArgumentNotValidException::class)
 	@ResponseStatus(HttpStatus.BAD_REQUEST)

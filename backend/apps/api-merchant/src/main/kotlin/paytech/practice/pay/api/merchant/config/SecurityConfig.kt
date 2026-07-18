@@ -23,6 +23,7 @@ class SecurityConfig {
 			csrf { disable() }
 			authorizeHttpRequests {
 				authorize("/merchant/login", permitAll)
+				authorize("/merchant/account-invitations/accept", permitAll)
 				authorize(anyRequest, authenticated)
 			}
 		}

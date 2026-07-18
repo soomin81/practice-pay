@@ -6,9 +6,14 @@ import paytech.practice.pay.application.port.outbound.AccountInvitationRepositor
 import paytech.practice.pay.dbcore.jooq.tables.AccountInvitation.Companion.ACCOUNT_INVITATION
 import paytech.practice.pay.dbcore.jooq.tables.InternalUser.Companion.INTERNAL_USER
 import paytech.practice.pay.dbcore.jooq.tables.MerchantUser.Companion.MERCHANT_USER
+import paytech.practice.pay.dbcore.jooq.tables.records.AccountInvitationRecord
 import paytech.practice.pay.domain.identity.AccountInvitation
+import paytech.practice.pay.domain.identity.AccountInvitationId
+import paytech.practice.pay.domain.identity.AccountInvitationStatus
 import paytech.practice.pay.domain.identity.InternalUserId
+import paytech.practice.pay.domain.identity.InvitationAccountType
 import paytech.practice.pay.domain.identity.MerchantUserId
+import paytech.practice.pay.infra.persistence.jooq.toUtcInstant
 import paytech.practice.pay.infra.persistence.jooq.toUtcLocalDateTime
 
 /**
@@ -60,6 +65,13 @@ class AccountInvitationRepositoryAdapter(
 		}
 	}
 
+	override fun findByTokenHash(tokenHash: String): AccountInvitation? =
+		dsl
+			.selectFrom(ACCOUNT_INVITATION)
+			.where(ACCOUNT_INVITATION.TOKEN_HASH.eq(tokenHash))
+			.fetchOne()
+			?.toDomain()
+
 	private fun resolveInternalUserSeq(internalUserId: InternalUserId): Long =
 		dsl
 			.select(INTERNAL_USER.INTERNAL_USER_SEQ)
@@ -75,4 +87,35 @@ class AccountInvitationRepositoryAdapter(
 			.where(MERCHANT_USER.MERCHANT_USER_ID.eq(merchantUserId.value))
 			.fetchOne(MERCHANT_USER.MERCHANT_USER_SEQ)
 			?: error("MerchantUser(${merchantUserId.value})를 찾을 수 없습니다.")
+
+	private fun resolveInternalUserId(internalUserSeq: Long): InternalUserId =
+		dsl
+			.select(INTERNAL_USER.INTERNAL_USER_ID)
+			.from(INTERNAL_USER)
+			.where(INTERNAL_USER.INTERNAL_USER_SEQ.eq(internalUserSeq))
+			.fetchOne(INTERNAL_USER.INTERNAL_USER_ID)
+			?.let { InternalUserId(it) }
+			?: error("InternalUser(seq=$internalUserSeq)를 찾을 수 없습니다.")
+
+	private fun resolveMerchantUserId(merchantUserSeq: Long): MerchantUserId =
+		dsl
+			.select(MERCHANT_USER.MERCHANT_USER_ID)
+			.from(MERCHANT_USER)
+			.where(MERCHANT_USER.MERCHANT_USER_SEQ.eq(merchantUserSeq))
+			.fetchOne(MERCHANT_USER.MERCHANT_USER_ID)
+			?.let { MerchantUserId(it) }
+			?: error("MerchantUser(seq=$merchantUserSeq)를 찾을 수 없습니다.")
+
+	private fun AccountInvitationRecord.toDomain(): AccountInvitation =
+		AccountInvitation.reconstitute(
+			id = AccountInvitationId(accountInvitationId!!),
+			accountType = InvitationAccountType.valueOf(accountType!!),
+			internalUserId = internalUserSeq?.let { resolveInternalUserId(it) },
+			merchantUserId = merchantUserSeq?.let { resolveMerchantUserId(it) },
+			tokenHash = tokenHash!!,
+			expiresAt = expiresAt!!.toUtcInstant(),
+			createdAt = createdAt!!.toUtcInstant(),
+			status = AccountInvitationStatus.valueOf(invitationStatus!!),
+			acceptedAt = acceptedAt?.toUtcInstant(),
+		)
 }

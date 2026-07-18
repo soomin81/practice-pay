@@ -2,6 +2,7 @@ package paytech.practice.pay.application.port.outbound
 
 import paytech.practice.pay.domain.identity.Email
 import paytech.practice.pay.domain.identity.InternalUser
+import paytech.practice.pay.domain.identity.InternalUserId
 import paytech.practice.pay.domain.identity.LoginId
 
 /**
@@ -16,4 +17,7 @@ interface InternalUserRepository {
 
 	/** `email`로 InternalUser를 찾는다. 없으면 `null`이다. */
 	fun findByEmail(email: Email): InternalUser?
+
+	/** `internal_user_id`로 InternalUser를 찾는다. 없으면 `null`이다. */
+	fun findById(internalUserId: InternalUserId): InternalUser?
 }

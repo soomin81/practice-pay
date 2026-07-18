@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice
 import paytech.practice.pay.application.identity.AccountLockedException
 import paytech.practice.pay.application.identity.DuplicateInternalUserException
 import paytech.practice.pay.application.identity.InvalidCredentialsException
+import paytech.practice.pay.application.identity.InvalidInvitationException
 
 /**
  * `application`/`domain` 계층이 던지는 예외를 HTTP 상태 코드로 옮긴다 — 이 매핑
@@ -28,6 +29,10 @@ class AdminApiExceptionHandler {
 	@ResponseStatus(HttpStatus.CONFLICT)
 	fun handleDuplicateInternalUser(ex: DuplicateInternalUserException): ErrorResponse =
 		ErrorResponse(ex.message ?: "이미 사용 중인 로그인 아이디 또는 이메일입니다.")
+
+	@ExceptionHandler(InvalidInvitationException::class)
+	@ResponseStatus(HttpStatus.BAD_REQUEST)
+	fun handleInvalidInvitation(ex: InvalidInvitationException): ErrorResponse = ErrorResponse(ex.message ?: "초대가 유효하지 않거나 만료되었습니다.")
 
 	@ExceptionHandler(MethodArgumentNotValidException::class)
 	@ResponseStatus(HttpStatus.BAD_REQUEST)

@@ -2,6 +2,7 @@ package paytech.practice.pay.application.port.outbound
 
 import paytech.practice.pay.domain.identity.LoginId
 import paytech.practice.pay.domain.identity.MerchantUser
+import paytech.practice.pay.domain.identity.MerchantUserId
 import paytech.practice.pay.domain.merchant.MerchantId
 
 /**
@@ -21,4 +22,7 @@ interface MerchantUserRepository {
 		merchantId: MerchantId,
 		loginId: LoginId,
 	): MerchantUser?
+
+	/** `merchant_user_id`로 MerchantUser를 찾는다. 없으면 `null`이다. */
+	fun findById(merchantUserId: MerchantUserId): MerchantUser?
 }

@@ -87,4 +87,27 @@ class InternalUserRepositoryAdapterTest :
 		test("findByEmail returns null when no such email exists") {
 			adapter.findByEmail(Email("no-such-${uniqueSuffix()}@example.com")).shouldBeNull()
 		}
+
+		test("save inserts a new InternalUser and findById round-trips it") {
+			val id = InternalUserId("iu_${uniqueSuffix()}")
+			val user =
+				InternalUser.bootstrap(
+					id = id,
+					loginId = LoginId("admin-${uniqueSuffix()}"),
+					email = Email("${uniqueSuffix()}@example.com"),
+					userName = "테스트 관리자",
+					passwordHash = "hashed-password",
+					createdAt = NOW,
+				)
+
+			adapter.save(user)
+			val found = adapter.findById(id)
+
+			found.shouldNotBeNull()
+			found.id shouldBe id
+		}
+
+		test("findById returns null when no such id exists") {
+			adapter.findById(InternalUserId("iu_no-such-id")).shouldBeNull()
+		}
 	})

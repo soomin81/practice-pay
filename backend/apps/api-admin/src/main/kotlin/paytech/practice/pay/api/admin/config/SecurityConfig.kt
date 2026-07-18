@@ -38,6 +38,7 @@ class SecurityConfig {
 			csrf { disable() }
 			authorizeHttpRequests {
 				authorize("/admin/login", permitAll)
+				authorize("/admin/account-invitations/accept", permitAll)
 				authorize("/admin/internal-users", hasRole("SUPER_ADMIN"))
 				authorize(anyRequest, authenticated)
 			}

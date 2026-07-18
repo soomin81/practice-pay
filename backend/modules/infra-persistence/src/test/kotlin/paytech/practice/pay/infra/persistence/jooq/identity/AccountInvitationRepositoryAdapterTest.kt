@@ -1,6 +1,8 @@
 package paytech.practice.pay.infra.persistence.jooq.identity
 
 import io.kotest.core.spec.style.FunSpec
+import io.kotest.matchers.nulls.shouldBeNull
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import paytech.practice.pay.dbcore.jooq.tables.AccountInvitation.Companion.ACCOUNT_INVITATION
 import paytech.practice.pay.domain.identity.AccountInvitation
@@ -83,5 +85,30 @@ class AccountInvitationRepositoryAdapterTest :
 
 			row?.invitationStatus shouldBe AccountInvitationStatus.ACCEPTED.name
 			row?.acceptedAt shouldBe NOW.plusSeconds(60).toUtcLocalDateTime()
+		}
+
+		test("findByTokenHash round-trips a saved invitation") {
+			val internalUser = savedInternalUser()
+			val tokenHash = "hashed-token-${uniqueSuffix()}"
+			val invitation =
+				AccountInvitation.forInternalUser(
+					id = AccountInvitationId("ai_${uniqueSuffix()}"),
+					internalUserId = internalUser.id,
+					tokenHash = tokenHash,
+					expiresAt = NOW.plusSeconds(604_800),
+					createdAt = NOW,
+				)
+			adapter.save(invitation)
+
+			val found = adapter.findByTokenHash(tokenHash)
+
+			found.shouldNotBeNull()
+			found.id shouldBe invitation.id
+			found.internalUserId shouldBe internalUser.id
+			found.status shouldBe AccountInvitationStatus.PENDING
+		}
+
+		test("findByTokenHash returns null when no such token hash exists") {
+			adapter.findByTokenHash("no-such-token-hash-${uniqueSuffix()}").shouldBeNull()
 		}
 	})

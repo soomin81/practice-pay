@@ -2,12 +2,14 @@ package paytech.practice.pay.api.admin.config
 
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import paytech.practice.pay.application.identity.AcceptAccountInvitationUseCase
 import paytech.practice.pay.application.identity.AuthenticateInternalUserUseCase
 import paytech.practice.pay.application.identity.IssueInternalUserUseCase
 import paytech.practice.pay.application.port.outbound.AccountInvitationRepository
 import paytech.practice.pay.application.port.outbound.IdGenerator
 import paytech.practice.pay.application.port.outbound.InternalUserRepository
 import paytech.practice.pay.application.port.outbound.InvitationTokenHasher
+import paytech.practice.pay.application.port.outbound.MerchantUserRepository
 import paytech.practice.pay.application.port.outbound.PasswordEncoder
 import paytech.practice.pay.application.port.outbound.TransactionManager
 import java.time.Clock
@@ -48,6 +50,26 @@ class UseCaseConfiguration {
 			accountInvitationRepository = accountInvitationRepository,
 			invitationTokenHasher = invitationTokenHasher,
 			idGenerator = idGenerator,
+			transactionManager = transactionManager,
+			clock = clock,
+		)
+
+	@Bean
+	fun acceptAccountInvitationUseCase(
+		accountInvitationRepository: AccountInvitationRepository,
+		internalUserRepository: InternalUserRepository,
+		merchantUserRepository: MerchantUserRepository,
+		invitationTokenHasher: InvitationTokenHasher,
+		passwordEncoder: PasswordEncoder,
+		transactionManager: TransactionManager,
+		clock: Clock,
+	): AcceptAccountInvitationUseCase =
+		AcceptAccountInvitationUseCase(
+			accountInvitationRepository = accountInvitationRepository,
+			internalUserRepository = internalUserRepository,
+			merchantUserRepository = merchantUserRepository,
+			invitationTokenHasher = invitationTokenHasher,
+			passwordEncoder = passwordEncoder,
 			transactionManager = transactionManager,
 			clock = clock,
 		)

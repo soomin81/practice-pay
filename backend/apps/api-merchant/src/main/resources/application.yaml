@@ -8,3 +8,9 @@ spring:
 
 server:
   port: 8083
+
+app:
+  invitation-token:
+    # 로컬 개발용 평문 placeholder다 — 실제 배포 전에는 환경변수/Secret Manager로
+    # 옮겨야 한다(HmacInvitationTokenHasher의 KDoc 참고).
+    pepper: dev-only-invitation-token-pepper-change-in-production

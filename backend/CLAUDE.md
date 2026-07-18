@@ -14,11 +14,13 @@ apps/
                      (Apps 절 참고).
   api-admin/         실제 Gradle 서브프로젝트, 독립 배포 가능한 Spring Boot 앱 — webmvc + jooq + security,
                      modules:application + modules:infra-persistence에 의존한다. AuthenticateInternalUserUseCase
-                     (POST /admin/login)와 IssueInternalUserUseCase(POST /admin/internal-users, SUPER_ADMIN 전용)가
-                     있다(Apps 절 참고). 초대 수락(활성화) 등 나머지 흐름은 아직 Use Case가 없다.
+                     (POST /admin/login), IssueInternalUserUseCase(POST /admin/internal-users, SUPER_ADMIN 전용),
+                     AcceptAccountInvitationUseCase(POST /admin/account-invitations/accept, 비인증)가 있다
+                     (Apps 절 참고).
   api-merchant/      실제 Gradle 서브프로젝트, 독립 배포 가능한 Spring Boot 앱 — webmvc + jooq + security,
-                     modules:application + modules:infra-persistence에 의존한다. AuthenticateMerchantUserUseCase와
-                     그걸 노출하는 컨트롤러(POST /merchant/login)가 있다(Apps 절 참고). 가맹점 등록, 하위
+                     modules:application + modules:infra-persistence에 의존한다. AuthenticateMerchantUserUseCase
+                     (POST /merchant/login)와 AcceptAccountInvitationUseCase(POST /merchant/account-invitations/accept,
+                     비인증, api-admin과 같은 공용 Use Case를 재사용)가 있다(Apps 절 참고). 가맹점 등록, 하위
                      계정 발급, API Key 등 나머지 흐름은 아직 Use Case가 없다.
   batch/             실제 Gradle 서브프로젝트, 독립 배포 가능한 Spring Boot 앱 — spring-boot-starter-batch +
                      jooq + modules:application/infra-persistence/infra-blockchain에 의존한다. Job 셋:
@@ -240,14 +242,14 @@ inbound adapter → application → domain ← outbound port ← outbound adapte
 
 `POST /admin/internal-users`(`docs/architecture/identity-access-api-key.md`의 "3.3 발급 정책": "내부 운영자 계정은 SUPER_ADMIN만 발급할 수 있다")가 새 `IssueInternalUserUseCase`를 HTTP로 노출한다. `docs/`에 이 경로 자체가 정해져 있진 않아 `/admin/login`과 같은 리소스 계층에 `POST /api/v1/payments`와 같은 REST 관례로 새로 정했다.
 
-- **발급 = `InternalUser(INVITED)` + `AccountInvitation(PENDING)`을 한 트랜잭션으로.** `docs/database/database-design.md`의 가맹점 등록 트랜잭션 예시(`Merchant + MerchantUser(OWNER, INVITED) + AccountInvitation`)와 같은 모양이다 — `IssueInternalUserUseCase`가 `InternalUser.invite(...)`와 `AccountInvitation.forInternalUser(...)`를 만들어 `TransactionManager.runInTransaction { }` 안에서 함께 저장한다(`CreatePaymentUseCase`와 같은 다중 Aggregate 생성 패턴). **초대를 수락해 비밀번호를 설정하고 `INVITED → ACTIVE`로 전이하는 흐름(활성화)은 아직 없다** — 로그인 흐름이 발급보다 먼저 별도로 구현됐던 것과 같은 이유로, 활성화는 별개의 후속 작업이다.
+- **발급 = `InternalUser(INVITED)` + `AccountInvitation(PENDING)`을 한 트랜잭션으로.** `docs/database/database-design.md`의 가맹점 등록 트랜잭션 예시(`Merchant + MerchantUser(OWNER, INVITED) + AccountInvitation`)와 같은 모양이다 — `IssueInternalUserUseCase`가 `InternalUser.invite(...)`와 `AccountInvitation.forInternalUser(...)`를 만들어 `TransactionManager.runInTransaction { }` 안에서 함께 저장한다(`CreatePaymentUseCase`와 같은 다중 Aggregate 생성 패턴). 초대를 수락해 비밀번호를 설정하고 `INVITED → ACTIVE`로 전이하는 흐름(활성화)은 별도 Use Case `AcceptAccountInvitationUseCase`로 구현했다(아래 "초대 수락(활성화) Use Case" 절 참고) — 로그인 흐름이 발급보다 먼저 별도로 구현됐던 것과 같은 이유로, 발급과는 다른 시점에 별개로 만들어졌다.
 - **초대 Token은 저장하지 않고 Hash만 저장한다** — `AccountInvitation`의 KDoc과 그대로 일치한다. 원문 Token은 `IdGenerator.newId()`로 만든다(별도의 "랜덤 문자열 생성" Port를 새로 만들지 않고 기존 Port를 재사용했다). Hash는 새 Port `InvitationTokenHasher`(`hash`/`matches`, `ApiKeySecretHasher`와 완전히 같은 모양)로 만들고, `api-admin`의 `HmacInvitationTokenHasher`가 HMAC-SHA-256 + Pepper로 구현한다 — **API Key Pepper(`app.api-key.pepper`)와는 별도의 설정값(`app.invitation-token.pepper`)을 쓴다**, 한쪽 비밀값이 새도 다른 쪽까지 같이 위험해지지 않도록 하려는 의도적 분리다. `INVITATION_VALIDITY`(7일)는 `docs/`에 값이 없어 `CreatePaymentUseCase`의 `PAYMENT_VALIDITY`와 같은 성격의 MVP 상수로 고정했다. 응답의 `invitationToken`은 API Key 원문과 같은 규칙(`docs/`의 "6.4 저장 정책")으로 **이 응답에서만** 원문으로 보인다.
 - **`loginId`/`email` 중복은 사전에 막는다.** 둘 다 `internal_user`의 DB Unique 제약(`uk_internal_user_login_id`/`uk_internal_user_email`)이 걸려 있어, 체크 없이 두면 raw SQL 에러가 새 나간다 — `InternalUserRepository`에 (기존 `findByLoginId`에 더해) `findByEmail`을 추가해서 둘 다 사전 조회하고, 겹치면 `DuplicateInternalUserException`(409)을 던진다. `CreatePaymentUseCase`의 멱등성 체크와 같은 성격의 한계다(DB Unique 제약만큼 원자적이지 않다).
 - **호출자 식별을 위해 `InternalUserPrincipal`을 새로 도입했다.** `AdminLoginController`는 원래 `Authentication.principal`에 로그인 아이디 문자열만 심었는데, 발급 감사 정보(`createdByInternalUserId`)로 쓸 `InternalUserId`가 필요해서 `apps:api-payment`의 `ApiKeyPrincipal` 패턴을 그대로 가져와 `InternalUserPrincipal(internalUserId, loginId, role)`을 로그인 성공 시 principal로 심도록 `AdminLoginController`를 바꿨다. `InternalUserIssuanceController`는 `@AuthenticationPrincipal InternalUserPrincipal`로 발급자를 바로 받는다 — `PaymentController`가 `merchantId`를 요청 본문 대신 `ApiKeyPrincipal`에서 가져오는 것과 같은 이유다.
 - **`SecurityConfig`에 역할 기반 인가가 처음 등장했다.** `authorize("/admin/internal-users", hasRole("SUPER_ADMIN"))`를 `anyRequest`보다 먼저 추가했다(Spring Security는 먼저 매칭되는 규칙을 쓴다). `SUPER_ADMIN`이 아닌 인증된 세션이 호출하면 Spring Security 기본 `AccessDeniedHandler`가 403을 돌려준다 — `apps:api-payment`의 Scope 인가(`PaymentControllerTest`의 403 케이스)와 같은 수준으로, 커스텀 JSON 바디를 만들지 않는다. 세션이 아예 없으면(로그인 안 함) 이 앱은 커스텀 `AuthenticationEntryPoint`가 없어서 Spring Security 기본 동작대로 403이 돈다(실제 `bootRun` + `curl`로 확인) — `api-payment`가 `ApiKeyAuthenticationEntryPoint`로 401 JSON 바디를 통일한 것과 달리, `api-admin`은 아직 이 부분을 커스텀하지 않았다.
 - **예외 핸들러 이름을 바꿨다.** `AdminAuthExceptionHandler` → `AdminApiExceptionHandler`(로그인 전용이 아니게 됐으므로 `PaymentApiExceptionHandler`와 이름 패턴을 맞췄다) — `DuplicateInternalUserException`(409)과 `IllegalArgumentException`(400, Value Object `require()` 실패나 `InternalUserRole.valueOf()` 실패를 공통 처리, `PaymentApiExceptionHandler`와 완전히 같은 패턴)을 새로 추가했다.
 - **`IdGenerator`가 `api-admin`에 처음 필요해져서** `apps:api-payment`의 `UuidIdGenerator`를 그대로 복제해 `api-admin`의 `support` 패키지에도 만들었다(각 앱이 자기 `support` 패키지에 자체 구현을 갖는 기존 관례를 따랐다 — 공유 모듈로 옮기지 않았다).
-- **`AccountInvitationRepositoryAdapter`**(`modules:infra-persistence`)는 `account_invitation`에 `version` 컬럼이 없어서(`AccountInvitation`의 KDoc 참고) `InternalUserRepositoryAdapter`와 달리 낙관적 잠금 없이 단순 UPDATE로 상태 전이를 반영한다. 지금은 발급(INSERT)만 실제로 쓰이지만, Port 계약(`save`가 상태 전이도 반영해야 함)을 절반만 구현해 두지 않으려고 `accept`/`expire`/`revoke` 이후의 UPDATE 경로도 함께 만들어 뒀다(수락/만료/폐기 Use Case는 아직 없다).
+- **`AccountInvitationRepositoryAdapter`**(`modules:infra-persistence`)는 `account_invitation`에 `version` 컬럼이 없어서(`AccountInvitation`의 KDoc 참고) `InternalUserRepositoryAdapter`와 달리 낙관적 잠금 없이 단순 UPDATE로 상태 전이를 반영한다. 발급(INSERT) 시점부터 Port 계약(`save`가 상태 전이도 반영해야 함)을 절반만 구현해 두지 않으려고 `accept`/`expire`/`revoke` 이후의 UPDATE 경로도 함께 만들어 뒀는데, `AcceptAccountInvitationUseCase`가 그 `accept` UPDATE 경로를 처음 실제로 호출하는 지점이 됐다(아래 "초대 수락(활성화) Use Case" 절 참고).
 - **테스트**: `IssueInternalUserUseCaseTest`(단위, 정상 발급/로그인 아이디 중복/이메일 중복), `AccountInvitationRepositoryAdapterTest`+`InternalUserRepositoryAdapterTest`의 `findByEmail` 케이스(Testcontainers MySQL 통합), `InternalUserIssuanceControllerTest`(`@WebMvcTest` + `@Import(SecurityConfig::class)`, `PaymentControllerTest`의 `SecurityMockMvcRequestPostProcessors.authentication(...)` 패턴으로 `InternalUserPrincipal`을 주입해 `SUPER_ADMIN`/`OPERATOR` 인가까지 검증). 여기에 더해 실제 `bootRun` + `curl`로 SUPER_ADMIN 로그인 → 발급(201, `invitationToken` 확인, DB에 `internal_user`+`account_invitation` 행 생성 확인) → 중복 loginId/email(둘 다 409) → 세션 없음(403) → 잘못된 role(400)까지 검증한 뒤 DB 행을 정리했다.
 - **단위 테스트에서 걸린 함정: MockK의 `any()`가 값 클래스(Value Class)를 만들지 못할 수 있다.** `every { internalUserRepository.findByEmail(any()) } returns null`처럼 `Email` 타입 매개변수에 `any()`를 쓰면, MockK가 매처 서명을 만들려고 무작위 문자열로 `Email` 인스턴스를 생성하려 시도하는데 `Email`의 `init { require(value.contains("@")) }` 검증에 걸려 `IllegalArgumentException`이 난다(`LoginId`처럼 검증이 "공백 아님" 정도로 느슨한 값 클래스는 무작위 문자열이 통과해서 문제가 없다). 해결: `any()` 대신 실제 값(`findByEmail(EMAIL)`)으로 정확히 매칭한다 — 이런 종류의 값 클래스 매개변수에는 앞으로도 `any()`를 피한다.
 
@@ -258,6 +260,72 @@ inbound adapter → application → domain ← outbound port ← outbound adapte
 - **가맹점부터 특정해야 한다.** `login_id`는 가맹점 안에서만 유일하다(`merchant_seq + login_id`, "Idempotency keys" 참고) — `InternalUser`처럼 `loginId`만으로 계정을 찾을 수 없다. 그래서 `MerchantLoginRequest`/`AuthenticateMerchantUserCommand`는 `merchantCode`(사람이 읽는 가맹점 코드)를 함께 받고, Use Case가 `MerchantRepository.findByCode`로 가맹점을 먼저 확정한 다음 `MerchantUserRepository.findByMerchantIdAndLoginId`로 계정을 찾는다. 가맹점 코드가 틀려도 같은 `InvalidCredentialsException`을 던진다(가맹점 존재 여부도 노출하지 않는다) — 이걸 위해 `MerchantRepository` Port에 `findByCode`를 추가했다(기존엔 `findById`만 있었다).
 - **가맹점 자체의 상태는 로그인 가능 여부에 영향을 주지 않는다.** `Merchant`가 `SUSPENDED`여도 그 가맹점의 관리자는 이유를 확인하러 로그인할 수 있어야 한다는 판단이다 — 문서에 명시된 규칙은 아니고, `AuthenticateMerchantUserUseCase`의 KDoc에 그렇게 남겨뒀다.
 - **`MerchantUserRepositoryAdapter`**(`modules:infra-persistence`)는 `InternalUserRepositoryAdapter`와 같은 모양이지만 FK가 하나 더 있다 — `merchant_seq`(소속 가맹점)에 더해 `invited_by_internal_user_seq`/`invited_by_merchant_user_seq`(둘 다 nullable, 초대자 감사 정보)까지 resolve한다.
+
+### 초대 수락(활성화) Use Case(`AcceptAccountInvitationUseCase`, `application.identity`)
+
+`IssueInternalUserUseCase`가 만든 `InternalUser(INVITED)` + `AccountInvitation(PENDING)`을
+대상으로, 초대받은 사람이 원문 Token과 새 비밀번호를 제출해 `INVITED → ACTIVE`로
+전이시키는 흐름이다(`docs/domain/state-transitions.md`의 "활성화": "유효한 초대,
+초대 만료 전, 비밀번호 설정 완료"). `api-admin`/`api-merchant` 둘 다에서 쓰인다 —
+`docs/architecture/identity-access-api-key.md`가 `InternalUser`/`MerchantUser`
+둘 다 같은 `INVITED → ACTIVE` 상태 흐름을 공유한다고 정의했고, 실제로
+`AccountInvitation`이 이미 `accountType`으로 둘을 구분하며 두 애그리게이트의
+`activate(passwordHash, activatedAt)` 시그니처가 완전히 같아서, Use Case 하나로
+합쳐 만들었다 — 거의 동일한 로직을 두 Use Case로 중복시키지 않는다.
+
+- **`Command.expectedAccountType`으로 앱 경계를 강제한다.** `api-admin`은 항상
+  `InvitationAccountType.INTERNAL_USER`로, `api-merchant`는 항상
+  `InvitationAccountType.MERCHANT_USER`로 고정해서 호출한다 — 실제
+  `AccountInvitation.accountType`이 다르면 다른 앱 경계의 초대 Token을 잘못
+  제출한 것으로 보고 거부한다(가맹점 사용자 초대 Token을 `api-admin`
+  엔드포인트에 제출해도 통과하지 않는다).
+- **새 예외 `InvalidInvitationException`은 `InvalidCredentialsException`과 완전히
+  같은 철학이다.** Token 없음/`accountType` 불일치/`PENDING`이 아님(이미
+  수락·만료·폐기됨)/만료 시각 지남 — 네 경우를 전부 같은 메시지로 가린다. 어느
+  조건에서 실패했는지 드러내면 다른 사람의 초대 Token 존재 여부를 무차별
+  대입으로 탐색할 여지가 생긴다.
+- **만료된 초대를 발견해도 `AccountInvitation.expire()`를 호출해 `EXPIRED`로
+  갱신하지는 않는다.** `docs/database/database-design.md`의
+  `idx_account_invitation_pending(invitation_status, expires_at)` 인덱스가
+  암시하는 별도의 만료 Sweep Worker의 책임으로 남겨뒀다(아직 없음, 알려진
+  gap) — 이 Use Case는 만료 여부를 읽기 전용으로만 판단하고 상태를 바꾸지
+  않는다.
+- **Token을 URL 경로가 아니라 요청 본문으로 받는다**(`POST
+  /admin/account-invitations/accept`, `POST /merchant/account-invitations/accept`
+  — `docs/`에 이 경로 자체가 정해져 있지 않아 새로 정했다) — 접근 로그에 민감한
+  Token 원문이 남지 않게 하려는 의도적 선택이다(`docs/`의 "6.4 저장 정책"이 API
+  Key 원문 노출을 최소화하는 것과 같은 정신).
+- **두 경로 다 `SecurityConfig`에서 `permitAll`이다** — 호출자는 아직 인증되지
+  않은 상태(Token만 갖고 있다)라서, `/admin/login`/`/merchant/login`과 같은
+  자리에 둔다.
+- **빠져 있던 조회 Port 3개를 추가했다**: `AccountInvitationRepository.
+  findByTokenHash`(`account_invitation.token_hash`가 이미 `UNIQUE` 인덱스라
+  `MerchantApiKey`의 Prefix→Hash 2단계 조회와 달리 곧바로 정확히 일치하는 값으로
+  조회한다 — 스키마가 이미 그렇게 설계돼 있었을 뿐 새로 판단한 게 아니다),
+  `InternalUserRepository.findById`, `MerchantUserRepository.findById`(둘 다
+  `AccountInvitation.internalUserId`/`merchantUserId`로 대상 계정을 로드하는 데
+  쓴다 — `MerchantUserRepositoryAdapter`에 이미 있었지만 지금까지 안 쓰이던
+  private `resolveMerchantId(merchantSeq)` 헬퍼를 이 메서드가 처음 실제로 쓴다).
+- **`api-merchant`에는 `InvitationTokenHasher` 구현체가 아직 없었다** —
+  `api-admin`의 `HmacInvitationTokenHasher`를 그대로 복제해
+  `api-merchant/support/`에 추가하고(`BCryptPasswordEncoderAdapter`가 이미
+  앱마다 복제된 것과 같은 기존 관례), `api-merchant/application.yaml`에도
+  `app.invitation-token.pepper`를 추가했다.
+- **`AccountInvitation + (InternalUser 또는 MerchantUser)`를 함께 저장하는
+  트랜잭션 경계는 `docs/architecture/persistence-jooq.md`가 명시한 세 경계
+  어디에도 없다** — `IssueInternalUserUseCase`가 발급 시점에 이미 같은 방식으로
+  새 경계를 정의한 선례를 그대로 따랐다.
+- **테스트**: `AcceptAccountInvitationUseCaseTest`(단위, InternalUser 정상
+  수락/MerchantUser 정상 수락/존재하지 않는 Token/accountType 불일치/이미
+  ACCEPTED/만료됨), `AccountInvitationRepositoryAdapterTest`의
+  `findByTokenHash` 케이스 + `InternalUserRepositoryAdapterTest`/
+  `MerchantUserRepositoryAdapterTest`의 `findById` 케이스(Testcontainers MySQL
+  통합), `AcceptAccountInvitationControllerTest`(api-admin/api-merchant 각각,
+  `@WebMvcTest` + `@Import(SecurityConfig::class)` — 비인증 요청도 성공해야
+  함을 검증). 여기에 더해 실제 `bootRun` + `curl`로 `api-admin`에서 발급 API →
+  그 응답의 `invitationToken`을 그대로 수락 API에 제출 → `INVITED → ACTIVE`
+  전이(DB `user_status=ACTIVE` 확인) → 그 계정으로 실제 `/admin/login` 로그인
+  성공까지 발급→수락→로그인 흐름 전체를 처음으로 끝까지 검증했다.
 
 ### `apps:batch`의 Confirm 폴링 Worker
 

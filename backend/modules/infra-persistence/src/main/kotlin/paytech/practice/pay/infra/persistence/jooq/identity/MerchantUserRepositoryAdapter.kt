@@ -78,6 +78,13 @@ class MerchantUserRepositoryAdapter(
 			.fetchOne()
 			?.toDomain(merchantId)
 
+	override fun findById(merchantUserId: MerchantUserId): MerchantUser? =
+		dsl
+			.selectFrom(MERCHANT_USER)
+			.where(MERCHANT_USER.MERCHANT_USER_ID.eq(merchantUserId.value))
+			.fetchOne()
+			?.let { it.toDomain(resolveMerchantId(it.merchantSeq!!)) }
+
 	private fun resolveMerchantSeq(merchantId: MerchantId): Long =
 		dsl
 			.select(MERCHANT.MERCHANT_SEQ)
