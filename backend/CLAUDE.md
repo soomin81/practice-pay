@@ -4,7 +4,7 @@
 
 ## 현재 구현 상태
 
-`modules:domain`, `modules:application`, `modules:infra-persistence`, `modules:infra-blockchain`, `modules:common`, `db-core`, `architecture-tests`, 그리고 `apps:*` 4개 전부 실제 Gradle 서브프로젝트다(`settings.gradle.kts` 참고). `modules:common`만 아직 `src`가 비어 있다(빌드는 NO-SOURCE로 통과한다) — 실제로 필요해질 때까지 다른 모듈에 대한 의존성도 추가하지 않았다(아래 항목 참고). `modules:infra-blockchain`은 `Web3jBlockchainClient` Adapter가 있지만 **아직 어떤 앱도 이 모듈에 의존하지 않는다**(아래 "온체인 Adapter" 절 참고) — 빈 서브프로젝트나 아직 앱에 연결되지 않은 서브프로젝트에 코드/배선이 있다고 가정하지 말고, 참조하기 전에 먼저 확인한다. 이 구조가 이미 여러 번 재편됐으니 의존하기 전에 다시 확인한다:
+`modules:domain`, `modules:application`, `modules:infra-persistence`, `modules:infra-blockchain`, `modules:common`, `db-core`, `architecture-tests`, 그리고 `apps:*` 4개 전부 실제 Gradle 서브프로젝트다(`settings.gradle.kts` 참고). `modules:common`만 아직 `src`가 비어 있다(빌드는 NO-SOURCE로 통과한다) — 실제로 필요해질 때까지 다른 모듈에 대한 의존성도 추가하지 않았다(아래 항목 참고). 빈 서브프로젝트에 코드/배선이 있다고 가정하지 말고, 참조하기 전에 먼저 확인한다. 이 구조가 이미 여러 번 재편됐으니 의존하기 전에 다시 확인한다:
 
 ```
 apps/
@@ -20,8 +20,10 @@ apps/
                      modules:application + modules:infra-persistence에 의존한다. AuthenticateMerchantUserUseCase와
                      그걸 노출하는 컨트롤러(POST /merchant/login)가 있다(Apps 절 참고). 가맹점 등록, 하위
                      계정 발급, API Key 등 나머지 흐름은 아직 Use Case가 없다.
-  batch/             실제 Gradle 서브프로젝트, 독립 배포 가능한 Spring Boot 앱 — spring-boot-starter-batch,
-                     웹 스타터 없음, 아직 정의된 Job 없음(예: 향후 OutboxEvent 발행 Worker의 자리)
+  batch/             실제 Gradle 서브프로젝트, 독립 배포 가능한 Spring Boot 앱 — spring-boot-starter-batch +
+                     jooq + modules:application/infra-persistence/infra-blockchain에 의존한다. 첫 Job은
+                     confirmBlockchainTransactionJob(BlockchainTransaction 감지·Confirm 폴링 Worker,
+                     10초 주기, Apps 절의 "apps:batch의 Confirm 폴링 Worker" 참고). 웹 스타터는 여전히 없다.
 modules/
   application/       실제 Gradle 서브프로젝트, domain에 의존; ConnectCheckoutWalletUseCase(application.checkout,
                      지갑 연결 슬라이스), CreatePaymentUseCase(결제 생성 슬라이스),
@@ -36,9 +38,8 @@ modules/
   domain/            실제 Gradle 서브프로젝트, 의존성 없음; 8개 결제 애그리게이트 전부 + OutboxEvent + Identity/API Key 애그리게이트(Domain code conventions 참고)
   infra-blockchain/  실제 Gradle 서브프로젝트, domain+application에 의존 — modules:application의
                      BlockchainClient Port를 web3j로 구현하는 Web3jBlockchainClient가 있다
-                     (Base Sepolia RPC 조회, 아래 "온체인 Adapter" 참고). 아직 어떤 앱도 이
-                     모듈에 의존하지 않는다 — RPC URL 설정을 가진 application.yaml도, 이
-                     Port를 쓰는 Use Case도 없다.
+                     (Base Sepolia RPC 조회, 아래 "온체인 Adapter" 참고). apps:batch가 이 모듈에
+                     의존하는 첫 앱이다(RPC URL은 apps:batch의 application.yaml에 있다).
   infra-persistence/ 실제 Gradle 서브프로젝트 — modules:application의 outbound port를 구현하는 jOOQ Repository Adapter(Architecture 참고)
 db-core/             실제 Gradle 서브프로젝트 — Flyway 마이그레이션 + jOOQ 코드 생성(아래 참고)
 architecture-tests/  실제 Gradle 서브프로젝트, 테스트 전용(src/main 없음) — 다른 모듈의 컴파일된 클래스에 대한 ArchUnit 규칙
@@ -59,7 +60,7 @@ gradlew.bat ktlintCheck                                   # 모든 모듈 Lint(`
 gradlew.bat ktlintFormat                                  # 모든 모듈 자동 포맷
 ```
 
-- 로컬 MySQL: `compose.yaml`이 `docker compose up`용 `mysql:latest` 서비스를 정의하고, `stablecoin_payment` DB로 시딩된다(스키마와 일치 — 아래 "Database / jOOQ code generation" 참고). `apps:api-payment`의 테스트는 대신 Testcontainers를 자동으로 쓴다(자체 `TestcontainersConfiguration.kt`가 `@ServiceConnection`으로 MySQL 컨테이너를 띄운다); `apps:api-admin`/`apps:api-merchant`/`apps:batch`는 아직 DB를 건드리지 않아서 둘 다 필요 없다.
+- 로컬 MySQL: `compose.yaml`이 `docker compose up`용 `mysql:latest` 서비스를 정의하고, `stablecoin_payment` DB로 시딩된다(스키마와 일치 — 아래 "Database / jOOQ code generation" 참고). `apps:*` 네 앱 전부 테스트에서는 대신 Testcontainers를 자동으로 쓴다(각자 `TestcontainersConfiguration.kt`가 `@ServiceConnection`으로 MySQL 컨테이너를 띄운다) — `apps:batch`도 Confirm Worker가 생기면서 `DataSource`가 필요해져 같은 패턴을 따라간다.
 - 툴체인: Java 25, Kotlin 2.3.21, Spring Boot 4.1.0(각 `apps:*`/`db-core`/`modules:infra-persistence` 서브프로젝트 기준 — 루트 프로젝트 자체는 더 이상 Kotlin이나 Spring Boot 플러그인을 적용하지 않는다).
 - Lint/포맷: **ktlint**를 `org.jlleitschuh.gradle.ktlint` 플러그인(14.2.0)으로 모든 모듈에 적용한다(계층형 `modules:domain`/`modules:application` include를 위해 Gradle이 만드는 Phantom 부모 `:modules`도 포함) — 루트 `build.gradle.kts`의 `allprojects {}`를 통해서다. ktlint 설정이 모듈마다 달라질 이유가 없어서, 이 프로젝트의 "모듈마다 작은 설정을 중복한다"는 스타일의 유일한 예외다. `backend/.editorconfig`가 `indent_style = tab`을 고정해서(이 프로젝트의 기존 컨벤션) ktlint가 스페이스로 강제 포맷하지 않게 한다. `ktlintCheck`는 이미 `check`/`build`의 일부로 실행되므로, 빌드가 성공하면 Lint도 깨끗하다는 뜻이다. `db-core/build.gradle.kts`는 `generated-src`(jOOQ가 생성한 코드, 직접 수정하지 않음)를 Lint 대상에서 제외하고, 그걸 읽는 ktlint 태스크에 명시적으로 `dependsOn("jooqCodegen")`을 추가한다 — Gradle의 태스크 입력 검증이, 어떤 디렉토리를 읽는 태스크라면 그 디렉토리를 만드는 태스크에 대한 의존성 선언을 요구하기 때문이다.
 
@@ -110,7 +111,7 @@ inbound adapter → application → domain ← outbound port ← outbound adapte
 
 ### 온체인 Adapter(`modules:infra-blockchain`) — `Web3jBlockchainClient`
 
-`BlockchainClient`(`application.port.outbound`)의 실제 구현이다. web3j(`org.web3j:core:4.14.0`)로 Base Sepolia RPC를 직접 호출한다 — Base가 OP-Stack L2라 표준 EVM JSON-RPC(`eth_getTransactionReceipt`, `eth_blockNumber`, `eth_chainId`)만으로 충분했다. `@Component`(`Web3jBlockchainClient`) + `@Configuration`(`Web3jConfiguration`, `Web3j` Bean을 `app.blockchain.base-sepolia.rpc-url` 설정값으로 만든다) 두 클래스가 `infra.blockchain.web3j` 패키지에 있다 — `modules:infra-persistence`의 jOOQ Adapter와 같은 배선 방식(이 모듈에 의존하는 앱이 컴포넌트 스캔을 `infra.blockchain`까지 넓히기만 하면 된다). **아직 어떤 앱도 이 모듈에 의존하지 않는다** — `app.blockchain.base-sepolia.rpc-url`을 실제로 정의한 `application.yaml`이 없고, `UseCaseConfiguration`에서 `BlockchainClient`를 쓰는 Use Case도 아직 없다. 이 모듈이 실제 앱에 연결되는 건 그 Confirm Use Case가 생길 때다.
+`BlockchainClient`(`application.port.outbound`)의 실제 구현이다. web3j(`org.web3j:core:4.14.0`)로 Base Sepolia RPC를 직접 호출한다 — Base가 OP-Stack L2라 표준 EVM JSON-RPC(`eth_getTransactionReceipt`, `eth_blockNumber`, `eth_chainId`)만으로 충분했다. `@Component`(`Web3jBlockchainClient`) + `@Configuration`(`Web3jConfiguration`, `Web3j` Bean을 `app.blockchain.base-sepolia.rpc-url` 설정값으로 만든다) 두 클래스가 `infra.blockchain.web3j` 패키지에 있다 — `modules:infra-persistence`의 jOOQ Adapter와 같은 배선 방식(이 모듈에 의존하는 앱이 컴포넌트 스캔을 `infra.blockchain`까지 넓히기만 하면 된다). **`apps:batch`가 이 모듈에 의존하는 첫 앱이다** — `app.blockchain.base-sepolia.rpc-url`을 `apps:batch/application.yaml`에 정의했고, `apps:batch`의 `UseCaseConfiguration`이 `BlockchainClient`를 필요로 하는 `ConfirmBlockchainTransactionUseCase`를 조립한다(아래 "apps:batch의 Confirm 폴링 Worker" 참고).
 
 설계 판단(Port 자체의 근거는 `BlockchainClient`의 KDoc 참고, 여기는 Adapter 구현 판단만):
 
@@ -168,11 +169,11 @@ inbound adapter → application → domain ← outbound port ← outbound adapte
 
 각각 **독립적으로 배포 가능한 Spring Boot 애플리케이션**이다 — 자체 `build.gradle.kts`(`org.springframework.boot` 플러그인 적용), 자체 `@SpringBootApplication` 메인 클래스, 자체 `application.yaml`, 자체 포트를 가진다 — 하나의 공유 앱 안의 패키지가 아니다. 이건 의도적인 선택이었다(모듈러 모놀리스 대안을 두고 사용자와 확인함) — 정확히는 네 앱이 서로 다른 대상(가맹점 서버를 향한 결제 API, 내부 직원용 관리 콘솔, 가맹점 콘솔, 오프라인 배치 Job)을 상대해서 나중에 독립적으로 스케일·배포·장애가 나야 할 수 있어서다 — 이 선택을 끝까지 따른 결과로, `api-payment`와 역할이 겹치던 원래 Spring-Initializr 루트 앱도 다섯 번째 중복 배포 단위로 남겨두지 않고 삭제했다.
 
-- **의존성은 각 앱이 지금 실제로 하는 일에만 맞춘다 — 나중에 할 일까지 미리 넣지 않는다.** `api-payment`/`api-admin`/`api-merchant`는 각각 실제 Use Case(`CreatePaymentUseCase`/`AuthenticateInternalUserUseCase`/`AuthenticateMerchantUserUseCase`)가 있어서 `modules:application`/`modules:infra-persistence`/`spring-boot-starter-jooq`/`DataSource`가 연결돼 있다. `batch`만 아직 `spring-boot-starter-batch`뿐이고 웹 스타터도, jOOQ/DataSource도 없다 — 실제 Job이 필요로 할 때만 넓힌다. 세 API 앱은 전부 `webmvc`+`security`도 갖고 있다(로그인/향후 인증 엔드포인트용). 실제 Use Case가 필요로 할 때만 그 앱의 의존성을 넓히고, 미리 넓히지 않는다.
-- **포트**: `api-payment` 8081, `api-admin` 8082, `api-merchant` 8083; `batch`는 `server.port`가 없다(웹 앱이 아니다 — 웹 스타터 없는 `spring-boot-starter-batch`는 웹 서버 자동 구성을 스스로 끄고, `DataSource` Bean이 없으면 `BatchAutoConfiguration` 자체도 물러나서, 지금은 그냥 웹도 Job도 없는 앱으로 부팅된다).
-- **컴포넌트 스캔**: `@SpringBootApplication`의 기본 스캔 범위는 메인 클래스 자신의 패키지와 그 하위 패키지다. 세 API 앱의 메인 클래스(`paytech.practice.pay.api.payment`/`api.admin`/`api.merchant`)는 전부 `modules:infra-persistence`의 Adapter(`paytech.practice.pay.infra.persistence.jooq`)와 *형제* 관계이지 상위가 아니다 — 그래서 셋 다 `@SpringBootApplication(scanBasePackages = [자기 패키지, "paytech.practice.pay.infra.persistence.jooq"])`로 두 패키지를 모두 명시한다. 새 앱이 다른 모듈의 Bean을 쓰기 시작하면, Gradle 의존성을 추가하는 것만으로 Bean이 연결된다고 가정하지 말고 같은 방식으로 스캔 범위를 넓힌다.
-- `DataSource`가 있는 세 API 앱의 `application.yaml`은 `spring-boot-docker-compose` 자동 감지에 기대지 않고 `spring.datasource.*`를 `db-core`/`compose.yaml`이 이미 쓰는 것과 같은 로컬 개발 MySQL로 직접 가리킨다(`localhost:3306/stablecoin_payment`, `root`/`verysecret`) — 그 자동 감지 메커니즘은 실행 중인 앱 자신의 작업 디렉토리(예: `apps/api-payment/`)에서 `compose.yaml`을 찾지, `backend/`에서 찾지 않아서, 추가 경로 설정 없이는 공유 파일을 찾지 못한다.
-- 테스트는 전부 같은 모양을 따른다(`@SpringBootTest` + Kotest `SpringExtension`, 앱마다 `contextLoads` 테스트 하나 — 위 "테스트" 참고). `DataSource`가 있는 세 API 앱은 만족시켜야 할 `DataSource`가 있어서 `TestcontainersConfiguration`도 추가로 import하고, `batch`는 아직 필요 없다.
+- **의존성은 각 앱이 지금 실제로 하는 일에만 맞춘다 — 나중에 할 일까지 미리 넣지 않는다.** 네 앱 전부 실제 Use Case가 생겼다(`CreatePaymentUseCase`/`AuthenticateInternalUserUseCase`/`AuthenticateMerchantUserUseCase`/`ConfirmBlockchainTransactionUseCase`) — 그래서 넷 다 `modules:application`/`modules:infra-persistence`/`spring-boot-starter-jooq`/`DataSource`가 연결돼 있다. `batch`는 여기에 `modules:infra-blockchain`(`BlockchainClient`)도 더 붙는다 — Confirm Worker가 온체인 조회를 직접 하기 때문이다(아래 "apps:batch의 Confirm 폴링 Worker" 참고). 세 API 앱은 `webmvc`+`security`도 갖고 있다(로그인/향후 인증 엔드포인트용); `batch`는 여전히 웹 앱이 아니다. 실제 Use Case가 필요로 할 때만 그 앱의 의존성을 넓히고, 미리 넓히지 않는다.
+- **포트**: `api-payment` 8081, `api-admin` 8082, `api-merchant` 8083; `batch`는 `server.port`가 없다(웹 스타터가 없어서 웹 서버 자동 구성이 스스로 꺼진다 — `DataSource`가 생긴 지금도 웹 앱은 아니다).
+- **컴포넌트 스캔**: `@SpringBootApplication`의 기본 스캔 범위는 메인 클래스 자신의 패키지와 그 하위 패키지다. 네 앱의 메인 클래스(`paytech.practice.pay.api.payment`/`api.admin`/`api.merchant`/`batch`)는 전부 `modules:infra-persistence`의 Adapter(`paytech.practice.pay.infra.persistence.jooq`)와 *형제* 관계이지 상위가 아니다 — 그래서 넷 다 `@SpringBootApplication(scanBasePackages = [자기 패키지, "paytech.practice.pay.infra.persistence.jooq", ...])`로 필요한 패키지를 모두 명시한다. `batch`는 `modules:infra-blockchain`의 Adapter 패키지(`paytech.practice.pay.infra.blockchain`)도 추가로 스캔한다. 새 앱이 다른 모듈의 Bean을 쓰기 시작하면, Gradle 의존성을 추가하는 것만으로 Bean이 연결된다고 가정하지 말고 같은 방식으로 스캔 범위를 넓힌다.
+- 네 앱의 `application.yaml`은 `spring-boot-docker-compose` 자동 감지에 기대지 않고 `spring.datasource.*`를 `db-core`/`compose.yaml`이 이미 쓰는 것과 같은 로컬 개발 MySQL로 직접 가리킨다(`localhost:3306/stablecoin_payment`, `root`/`verysecret`) — 그 자동 감지 메커니즘은 실행 중인 앱 자신의 작업 디렉토리(예: `apps/api-payment/`)에서 `compose.yaml`을 찾지, `backend/`에서 찾지 않아서, 추가 경로 설정 없이는 공유 파일을 찾지 못한다.
+- 테스트는 전부 같은 모양을 따른다(`@SpringBootTest` + Kotest `SpringExtension`, 앱마다 `contextLoads` 테스트 하나 — 위 "테스트" 참고). 네 앱 다 만족시켜야 할 `DataSource`가 있어서 `TestcontainersConfiguration`도 추가로 import한다.
 
 ### `api-payment`의 결제 생성 컨트롤러
 
@@ -233,6 +234,20 @@ inbound adapter → application → domain ← outbound port ← outbound adapte
 - **가맹점부터 특정해야 한다.** `login_id`는 가맹점 안에서만 유일하다(`merchant_seq + login_id`, "Idempotency keys" 참고) — `InternalUser`처럼 `loginId`만으로 계정을 찾을 수 없다. 그래서 `MerchantLoginRequest`/`AuthenticateMerchantUserCommand`는 `merchantCode`(사람이 읽는 가맹점 코드)를 함께 받고, Use Case가 `MerchantRepository.findByCode`로 가맹점을 먼저 확정한 다음 `MerchantUserRepository.findByMerchantIdAndLoginId`로 계정을 찾는다. 가맹점 코드가 틀려도 같은 `InvalidCredentialsException`을 던진다(가맹점 존재 여부도 노출하지 않는다) — 이걸 위해 `MerchantRepository` Port에 `findByCode`를 추가했다(기존엔 `findById`만 있었다).
 - **가맹점 자체의 상태는 로그인 가능 여부에 영향을 주지 않는다.** `Merchant`가 `SUSPENDED`여도 그 가맹점의 관리자는 이유를 확인하러 로그인할 수 있어야 한다는 판단이다 — 문서에 명시된 규칙은 아니고, `AuthenticateMerchantUserUseCase`의 KDoc에 그렇게 남겨뒀다.
 - **`MerchantUserRepositoryAdapter`**(`modules:infra-persistence`)는 `InternalUserRepositoryAdapter`와 같은 모양이지만 FK가 하나 더 있다 — `merchant_seq`(소속 가맹점)에 더해 `invited_by_internal_user_seq`/`invited_by_merchant_user_seq`(둘 다 nullable, 초대자 감사 정보)까지 resolve한다.
+
+### `apps:batch`의 Confirm 폴링 Worker
+
+`ConfirmBlockchainTransactionUseCase`(`modules:application`)의 KDoc이 "향후 Worker(`apps:batch`)가 대상 목록을 뽑아 하나씩 호출하는 것을 전제로 설계했다"고 남겨뒀던 그 Worker다 — `apps:batch`의 첫 실제 Job이며, 이 앱을 "웹 스타터도 jOOQ/DataSource도 없는 부팅 골격"에서 진짜 배치 앱으로 만든 계기다.
+
+- **Spring Batch의 `Job`/`Step`/`Tasklet`을 그대로 쓴다** — `@Scheduled` 크론만으로 충분했을 수도 있지만, `spring-boot-starter-batch`가 이미 프로젝트 초기부터 `apps:batch`의 의존성으로 들어가 있었다(그러려고 넣어둔 의존성이었다는 뜻으로 받아들였다). `ConfirmBlockchainTransactionJobConfiguration`이 Job/Step 하나씩만 정의하는 가장 단순한 모양이고, `ConfirmPendingBlockchainTransactionsTasklet`이 실제 폴링 로직(`BlockchainTransactionRepository.findPendingConfirmation()`으로 대상을 뽑아 하나씩 `ConfirmBlockchainTransactionUseCase.execute()` 호출)이다. Chunk 지향(ItemReader/Processor/Writer)으로 나누지 않았다 — Use Case 호출 자체가 이미 저장까지 끝내서 "읽기 → 처리 → 쓰기"를 분리할 이유가 없다.
+- **`JobOperator`를 쓴다, `JobLauncher`가 아니다** — 이 프로젝트가 쓰는 `spring-batch-core:6.0.4`(Spring Boot 4.1.0 BOM)부터 `JobLauncher`가 `@Deprecated(forRemoval)`이고 `JobOperator`(`JobLauncher`를 상속)가 그 대체다. `BlockchainTransactionConfirmScheduler`가 `@Scheduled(fixedDelay = 10_000)`로 10초마다 `jobOperator.start(job, jobParameters)`를 부른다 — 매번 `JobParameters`에 현재 시각을 담아서, 이미 `COMPLETED`된 `JobInstance`를 Spring Batch가 재실행 거부하는 걸 피한다(같은 파라미터면 새 인스턴스로 안 쳐준다). `POLL_INTERVAL_MILLIS`(10초)는 `docs/`에 값이 없어 고정한 MVP 상수다 — Base의 블록 생성 주기(~2초)를 감안했다.
+- **`spring.batch.job.enabled: false`로 부팅 시 자동 1회 실행을 껐다** — Spring Boot의 `JobLauncherApplicationRunner`가 기본으로 하는 "Job Bean을 부팅 시 한 번 실행" 동작은, 계속 폴링해야 하는 이 Job에는 안 맞는다. 실행 시점은 전부 `BlockchainTransactionConfirmScheduler`가 정한다.
+- **Step에 `ResourcelessTransactionManager`를 쓴다** — 실제 DB 쓰기는 Tasklet 안에서 `ConfirmBlockchainTransactionUseCase`가 자기 트랜잭션(`TransactionManager.runInTransaction`)으로 이미 처리하므로, Step 레벨에서 Spring이 관리하는 진짜 트랜잭션으로 또 감싸면 안 된다(이중으로 걸린다). `JobRepository`(BATCH_* 테이블에 실행 기록을 남기는 쪽)는 이 트랜잭션 매니저와 무관하게 별도로 동작한다.
+- **하나가 실패해도 나머지를 계속 처리한다** — `ConfirmPendingBlockchainTransactionsTasklet`이 각 항목을 개별 `try/catch`로 감싸고, 실패하면 로그만 남기고 다음 항목으로 넘어간다. 다음 폴링에서 같은 항목을 다시 시도한다(Repository가 상태를 안 바꿨으니 여전히 대상 목록에 남아 있다).
+- **새 Repository 조회 `BlockchainTransactionRepository.findPendingConfirmation()`을 추가했다** — `SUBMITTED`/`DETECTED`/`CONFIRMING` 전부를 `updated_at` 오름차순으로 돌려준다. `docs/database/database-design.md`의 "Confirm Worker: `transaction_status + updated_at`" 인덱스와 정확히 대응한다.
+- **Spring Batch JobRepository 스키마를 위한 새 Flyway 마이그레이션(`V5__add_spring_batch_schema.sql`)을 추가했다** — 이 프로젝트가 설계한 도메인 테이블이 아니라 `spring-batch-core:6.0.4`의 공식 `schema-mysql.sql`(JAR 안에서 그대로 추출)이다. `db-core`의 jOOQ codegen `excludes`에 `BATCH_.*`를 더해서 이 테이블들은 jOOQ 코드가 생성되지 않는다 — Spring Batch가 자체 JDBC로만 관리하고 우리 코드는 손대지 않는다. `spring.batch.jdbc.initialize-schema: never`로 Spring Boot가 스키마를 자동 생성하는 것도 명시적으로 막았다 — "Migration → MySQL Schema → jOOQ Code Generation" 원칙을 프레임워크 테이블에도 그대로 적용했다.
+- **실제 RPC/DB로 끝까지 검증했다.** 로컬 DB에 실제 Base Sepolia 트랜잭션(과거 `Web3jBlockchainClient` 검증 때 썼던 것과 같은 Hash)을 가리키는 `Payment`+`BlockchainTransaction` 행을 수동으로 심고 `bootRun`으로 실제 앱을 띄워서, 스케줄러가 10초마다 Job을 실행하고(로그로 확인), 첫 폴링에서 그 거래를 실제로 조회해(`block_number=44280832`로 정확히 detect) `PaymentTransactionValidator`가 우리 USDC Contract와 다르다고 정확히 판단해(`TOKEN_CONTRACT_NOT_ALLOWED`) `BlockchainTransaction`/`Payment` 둘 다 `FAILED`로 저장하고, 다음 폴링부터는 대상 목록에서 빠지는 것까지 실제로 확인했다. 검증 후 스모크 테스트 행은 정리했다.
+- **테스트**: `ConfirmPendingBlockchainTransactionsTaskletTest`(단위, 대상 전부 호출/하나 실패해도 나머지 계속/빈 목록은 no-op), `BlockchainTransactionRepositoryAdapterTest`의 `findPendingConfirmation` 케이스(Testcontainers MySQL 통합, `SUBMITTED`/`DETECTED`/`CONFIRMING`은 포함하고 `CONFIRMED`는 제외하는 것까지 확인), `BatchApplicationTests`(Testcontainers, 전체 Spring 컨텍스트 — `JobRepository`/`Job`/`Step`/`Web3jConfiguration`/jOOQ가 다 같이 뜨는지). Job/Step의 실제 실행 자체(`spring-batch-test`의 `JobLauncherTestUtils` 등)는 별도 통합 테스트로 만들지 않았다 — 위 수동 `bootRun` 검증으로 대신했다(알려진 gap: 자동화된 Job 실행 테스트는 없다).
 
 ### IntelliJ HTTP Client(`.http` 파일)로 API 수동 테스트하기
 

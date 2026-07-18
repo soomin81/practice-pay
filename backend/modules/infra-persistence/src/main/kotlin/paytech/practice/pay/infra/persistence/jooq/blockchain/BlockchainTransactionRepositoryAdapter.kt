@@ -88,6 +88,14 @@ class BlockchainTransactionRepositoryAdapter(
 			.fetchOne()
 			?.toDomain()
 
+	override fun findPendingConfirmation(): List<BlockchainTransaction> =
+		dsl
+			.selectFrom(BLOCKCHAIN_TRANSACTION)
+			.where(BLOCKCHAIN_TRANSACTION.TRANSACTION_STATUS.`in`(PENDING_CONFIRMATION_STATUSES))
+			.orderBy(BLOCKCHAIN_TRANSACTION.UPDATED_AT.asc())
+			.fetch()
+			.map { it.toDomain() }
+
 	private fun resolvePaymentSeq(paymentId: PaymentId): Long =
 		dsl
 			.select(PAYMENT.PAYMENT_SEQ)
@@ -154,4 +162,13 @@ class BlockchainTransactionRepositoryAdapter(
 			confirmedAt = confirmedAt?.toUtcInstant(),
 			updatedAt = updatedAt!!.toUtcInstant(),
 		)
+
+	companion object {
+		private val PENDING_CONFIRMATION_STATUSES =
+			listOf(
+				BlockchainTransactionStatus.SUBMITTED.name,
+				BlockchainTransactionStatus.DETECTED.name,
+				BlockchainTransactionStatus.CONFIRMING.name,
+			)
+	}
 }

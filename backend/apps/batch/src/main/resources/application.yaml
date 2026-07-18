@@ -1,3 +1,25 @@
 spring:
   application:
     name: batch
+  datasource:
+    url: jdbc:mysql://localhost:3306/stablecoin_payment?useUnicode=true&characterEncoding=UTF-8
+    username: root
+    password: verysecret
+  batch:
+    # JobLauncherApplicationRunner가 부팅 시 자동으로 한 번 실행하는 기본 동작을
+    # 끈다 — 이 Job은 BlockchainTransactionConfirmScheduler가 주기적으로 직접
+    # 실행한다(JobOperator.start). 스키마는 Flyway 마이그레이션(V5)이 관리하므로
+    # jdbc.initialize-schema도 명시적으로 끈다("Migration → MySQL Schema → jOOQ
+    # Code Generation" 원칙, 프레임워크의 자동 스키마 생성에 맡기지 않는다).
+    job:
+      enabled: false
+    jdbc:
+      initialize-schema: never
+
+app:
+  blockchain:
+    base-sepolia:
+      # 로컬 개발용 공개 RPC placeholder다 — 실제 배포 전 전용 RPC 프로바이더
+      # (Alchemy/Infura 등)로 옮겨야 한다(요청 제한·안정성 문제로 공개 RPC를
+      # 운영에 그대로 쓰지 않는다).
+      rpc-url: https://sepolia.base.org

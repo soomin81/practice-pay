@@ -1,6 +1,8 @@
 package paytech.practice.pay.infra.persistence.jooq.blockchain
 
 import io.kotest.core.spec.style.FunSpec
+import io.kotest.matchers.collections.shouldContain
+import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -122,5 +124,33 @@ class BlockchainTransactionRepositoryAdapterTest :
 			val noSuchHash = TransactionHash("0x" + uniqueSuffix().padEnd(64, '0'))
 
 			adapter.findByNetworkAndTransactionHash(BlockchainNetwork.BASE_SEPOLIA, noSuchHash).shouldBeNull()
+		}
+
+		test("findPendingConfirmation includes SUBMITTED/DETECTED/CONFIRMING but not CONFIRMED") {
+			val submitted = newTransaction(savedPayment())
+			adapter.save(submitted)
+
+			val detected = newTransaction(savedPayment())
+			detected.detect(1_000L, NOW.plusSeconds(10))
+			adapter.save(detected)
+
+			val confirming = newTransaction(savedPayment())
+			confirming.detect(1_000L, NOW.plusSeconds(10))
+			confirming.startConfirming(NOW.plusSeconds(20))
+			adapter.save(confirming)
+
+			val confirmed = newTransaction(savedPayment())
+			confirmed.detect(1_000L, NOW.plusSeconds(10))
+			confirmed.startConfirming(NOW.plusSeconds(20))
+			confirmed.recordConfirmation(12, NOW.plusSeconds(30))
+			confirmed.confirm(NOW.plusSeconds(40))
+			adapter.save(confirmed)
+
+			val pendingIds = adapter.findPendingConfirmation().map { it.id }
+
+			pendingIds shouldContain submitted.id
+			pendingIds shouldContain detected.id
+			pendingIds shouldContain confirming.id
+			pendingIds shouldNotContain confirmed.id
 		}
 	})

@@ -1,0 +1,117 @@
+-- ============================================================
+-- Spring Batch JobRepository 메타데이터 스키마.
+--
+-- 이 프로젝트가 직접 설계한 도메인 테이블이 아니다 — org.springframework.batch:
+-- spring-batch-core:6.0.4의 공식 schema-mysql.sql(org/springframework/batch/core/
+-- schema-mysql.sql, JAR 안에 포함)을 그대로 가져온 것이다. apps:batch의 Confirm
+-- Worker(BlockchainTransaction 감지·Confirm 폴링, backend/CLAUDE.md 참고)가 첫
+-- 실제 Spring Batch Job이라 이 스키마가 처음 필요해졌다. 이 테이블들은 Spring
+-- Batch가 JDBC로 직접 관리하고(우리 jOOQ 코드로 건드리지 않는다 — db-core의 jOOQ
+-- codegen excludes에서 BATCH_.*를 뺐다), 우리 도메인 Aggregate와는 무관하다.
+--
+-- "Migration → MySQL Schema → jOOQ Code Generation → Compile"(docs/architecture/
+-- persistence-jooq.md) 원칙에 따라, Spring Boot의 `spring.batch.jdbc.
+-- initialize-schema` 자동 생성에 맡기지 않고 이 Flyway 마이그레이션으로 스키마를
+-- 명시적으로 관리한다.
+--
+-- spring-batch-core 버전을 올릴 때 이 스키마가 바뀌면(드물지만 major 버전에서
+-- 발생할 수 있다) 같은 방법으로(JAR에서 schema-mysql.sql을 다시 추출) 새 마이그레이션을
+-- 추가한다 — 이 파일을 직접 고치지 않는다(이미 적용된 마이그레이션은 불변).
+-- ============================================================
+
+CREATE TABLE BATCH_JOB_INSTANCE (
+	JOB_INSTANCE_ID BIGINT  NOT NULL PRIMARY KEY,
+	VERSION BIGINT,
+	JOB_NAME VARCHAR(100) NOT NULL,
+	JOB_KEY VARCHAR(32) NOT NULL,
+	constraint JOB_INST_UN unique (JOB_NAME, JOB_KEY)
+) ENGINE=InnoDB;
+
+CREATE TABLE BATCH_JOB_EXECUTION (
+	JOB_EXECUTION_ID BIGINT  NOT NULL PRIMARY KEY,
+	VERSION BIGINT,
+	JOB_INSTANCE_ID BIGINT NOT NULL,
+	CREATE_TIME DATETIME(6) NOT NULL,
+	START_TIME DATETIME(6) DEFAULT NULL,
+	END_TIME DATETIME(6) DEFAULT NULL,
+	STATUS VARCHAR(10),
+	EXIT_CODE VARCHAR(2500),
+	EXIT_MESSAGE VARCHAR(2500),
+	LAST_UPDATED DATETIME(6),
+	constraint JOB_INST_EXEC_FK foreign key (JOB_INSTANCE_ID)
+	references BATCH_JOB_INSTANCE(JOB_INSTANCE_ID)
+) ENGINE=InnoDB;
+
+CREATE TABLE BATCH_JOB_EXECUTION_PARAMS (
+	JOB_EXECUTION_ID BIGINT NOT NULL,
+	PARAMETER_NAME VARCHAR(100) NOT NULL,
+	PARAMETER_TYPE VARCHAR(100) NOT NULL,
+	PARAMETER_VALUE VARCHAR(2500),
+	IDENTIFYING CHAR(1) NOT NULL,
+	constraint JOB_EXEC_PARAMS_FK foreign key (JOB_EXECUTION_ID)
+	references BATCH_JOB_EXECUTION(JOB_EXECUTION_ID)
+) ENGINE=InnoDB;
+
+CREATE TABLE BATCH_STEP_EXECUTION (
+	STEP_EXECUTION_ID BIGINT  NOT NULL PRIMARY KEY,
+	VERSION BIGINT NOT NULL,
+	STEP_NAME VARCHAR(100) NOT NULL,
+	JOB_EXECUTION_ID BIGINT NOT NULL,
+	CREATE_TIME DATETIME(6) NOT NULL,
+	START_TIME DATETIME(6) DEFAULT NULL,
+	END_TIME DATETIME(6) DEFAULT NULL,
+	STATUS VARCHAR(10),
+	COMMIT_COUNT BIGINT,
+	READ_COUNT BIGINT,
+	FILTER_COUNT BIGINT,
+	WRITE_COUNT BIGINT,
+	READ_SKIP_COUNT BIGINT,
+	WRITE_SKIP_COUNT BIGINT,
+	PROCESS_SKIP_COUNT BIGINT,
+	ROLLBACK_COUNT BIGINT,
+	EXIT_CODE VARCHAR(2500),
+	EXIT_MESSAGE VARCHAR(2500),
+	LAST_UPDATED DATETIME(6),
+	constraint JOB_EXEC_STEP_FK foreign key (JOB_EXECUTION_ID)
+	references BATCH_JOB_EXECUTION(JOB_EXECUTION_ID)
+) ENGINE=InnoDB;
+
+CREATE TABLE BATCH_STEP_EXECUTION_CONTEXT (
+	STEP_EXECUTION_ID BIGINT NOT NULL PRIMARY KEY,
+	SHORT_CONTEXT VARCHAR(2500) NOT NULL,
+	SERIALIZED_CONTEXT TEXT,
+	constraint STEP_EXEC_CTX_FK foreign key (STEP_EXECUTION_ID)
+	references BATCH_STEP_EXECUTION(STEP_EXECUTION_ID)
+) ENGINE=InnoDB;
+
+CREATE TABLE BATCH_JOB_EXECUTION_CONTEXT (
+	JOB_EXECUTION_ID BIGINT NOT NULL PRIMARY KEY,
+	SHORT_CONTEXT VARCHAR(2500) NOT NULL,
+	SERIALIZED_CONTEXT TEXT,
+	constraint JOB_EXEC_CTX_FK foreign key (JOB_EXECUTION_ID)
+	references BATCH_JOB_EXECUTION(JOB_EXECUTION_ID)
+) ENGINE=InnoDB;
+
+CREATE TABLE BATCH_STEP_EXECUTION_SEQ (
+	ID BIGINT NOT NULL,
+	UNIQUE_KEY CHAR(1) NOT NULL,
+	constraint UNIQUE_KEY_UN unique (UNIQUE_KEY)
+) ENGINE=InnoDB;
+
+INSERT INTO BATCH_STEP_EXECUTION_SEQ (ID, UNIQUE_KEY) select * from (select 0 as ID, '0' as UNIQUE_KEY) as tmp where not exists(select * from BATCH_STEP_EXECUTION_SEQ);
+
+CREATE TABLE BATCH_JOB_EXECUTION_SEQ (
+	ID BIGINT NOT NULL,
+	UNIQUE_KEY CHAR(1) NOT NULL,
+	constraint UNIQUE_KEY_UN unique (UNIQUE_KEY)
+) ENGINE=InnoDB;
+
+INSERT INTO BATCH_JOB_EXECUTION_SEQ (ID, UNIQUE_KEY) select * from (select 0 as ID, '0' as UNIQUE_KEY) as tmp where not exists(select * from BATCH_JOB_EXECUTION_SEQ);
+
+CREATE TABLE BATCH_JOB_INSTANCE_SEQ (
+	ID BIGINT NOT NULL,
+	UNIQUE_KEY CHAR(1) NOT NULL,
+	constraint UNIQUE_KEY_UN unique (UNIQUE_KEY)
+) ENGINE=InnoDB;
+
+INSERT INTO BATCH_JOB_INSTANCE_SEQ (ID, UNIQUE_KEY) select * from (select 0 as ID, '0' as UNIQUE_KEY) as tmp where not exists(select * from BATCH_JOB_INSTANCE_SEQ);

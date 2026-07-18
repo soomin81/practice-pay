@@ -26,4 +26,13 @@ interface BlockchainTransactionRepository {
 		network: BlockchainNetwork,
 		transactionHash: TransactionHash,
 	): BlockchainTransaction?
+
+	/**
+	 * 아직 종료되지 않은(`SUBMITTED`/`DETECTED`/`CONFIRMING`) BlockchainTransaction을
+	 * 전부 찾는다 — Confirm Worker(`apps:batch`)가 폴링 대상 목록을 뽑을 때 쓴다.
+	 * `docs/database/database-design.md`의 "Confirm Worker: `transaction_status +
+	 * updated_at`" 인덱스와 대응하며, 오래 갱신되지 않은 것부터 먼저 처리하도록
+	 * `updated_at` 오름차순으로 반환한다.
+	 */
+	fun findPendingConfirmation(): List<BlockchainTransaction>
 }

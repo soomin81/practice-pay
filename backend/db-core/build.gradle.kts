@@ -60,8 +60,11 @@ jooq {
 			database {
 				name = "org.jooq.meta.mysql.MySQLDatabase"
 				inputSchema = "stablecoin_payment"
-				// Flyway's own bookkeeping table — not part of the application schema.
-				excludes = "flyway_schema_history"
+				// Flyway's own bookkeeping table and Spring Batch's JobRepository
+				// metadata tables — neither is part of the application schema. Spring
+				// Batch manages BATCH_* itself via plain JDBC; our code never touches
+				// them through jOOQ.
+				excludes = "flyway_schema_history|BATCH_.*"
 			}
 			target {
 				packageName = "paytech.practice.pay.dbcore.jooq"
