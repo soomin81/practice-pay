@@ -21,20 +21,22 @@ apps/
                      그걸 노출하는 컨트롤러(POST /merchant/login)가 있다(Apps 절 참고). 가맹점 등록, 하위
                      계정 발급, API Key 등 나머지 흐름은 아직 Use Case가 없다.
   batch/             실제 Gradle 서브프로젝트, 독립 배포 가능한 Spring Boot 앱 — spring-boot-starter-batch +
-                     jooq + modules:application/infra-persistence/infra-blockchain에 의존한다. Job 둘:
-                     confirmBlockchainTransactionJob(BlockchainTransaction 감지·Confirm 폴링 Worker)과
-                     publishOutboxEventJob(OutboxEvent 발행 Worker, Webhook HTTP 호출 포함) 둘 다
-                     10초 주기다(Apps 절의 "apps:batch의 Confirm 폴링 Worker"/"apps:batch의 OutboxEvent
-                     발행 Worker" 참고). 웹 스타터는 여전히 없다.
+                     jooq + modules:application/infra-persistence/infra-blockchain에 의존한다. Job 셋:
+                     confirmBlockchainTransactionJob(BlockchainTransaction 감지·Confirm 폴링 Worker),
+                     publishOutboxEventJob(OutboxEvent 발행 Worker, Webhook HTTP 호출 포함),
+                     sellToFakeExchangeJob(Fake Exchange 매도 폴링 Worker) 셋 다 10초 주기다(Apps 절의
+                     "apps:batch의 Confirm 폴링 Worker"/"apps:batch의 OutboxEvent 발행 Worker"/"apps:batch의
+                     Fake Exchange 매도 폴링 Worker" 참고). 웹 스타터는 여전히 없다.
 modules/
   application/       실제 Gradle 서브프로젝트, domain에 의존; ConnectCheckoutWalletUseCase(application.checkout,
                      지갑 연결 슬라이스), CreatePaymentUseCase(결제 생성 슬라이스),
                      SubmitPaymentTransactionUseCase(BlockchainTransaction 생성 슬라이스),
                      ConfirmBlockchainTransactionUseCase(감지·Confirm 슬라이스) + PaymentTransactionValidator
                      + PaymentNetworkConfig(공유 MVP 상수), PublishOutboxEventUseCase(application.outbox,
-                     OutboxEvent 발행 슬라이스), Identity/API Key Use Case(Authenticate*/IssueInternalUser),
-                     BlockchainClient(온체인 조회 Port, 구현체는 modules:infra-blockchain)
-                     + 그 outbound port들(Architecture 참고)
+                     OutboxEvent 발행 슬라이스), SellToFakeExchangeUseCase(application.exchange, Fake Exchange
+                     매도 슬라이스 — MVP 완료 경계의 마지막 조각), Identity/API Key Use Case
+                     (Authenticate*/IssueInternalUser), BlockchainClient(온체인 조회 Port, 구현체는
+                     modules:infra-blockchain) + 그 outbound port들(Architecture 참고)
   common/            실제 Gradle 서브프로젝트, 의존성 없음, src 비어 있음 — 어떤 레이어에서도 쓸 수 있는 공용
                      유틸리티가 실제로 필요해질 때 채운다(순환 의존을 피하려고 지금은 어떤 modules:*도
                      참조하지 않는다)
@@ -285,6 +287,89 @@ inbound adapter → application → domain ← outbound port ← outbound adapte
 - **새 Adapter `WebhookDeliveryRepositoryAdapter`(`modules:infra-persistence`, 새 패키지 `infra.persistence.jooq.webhook`)는 `PaymentRepositoryAdapter`와 같은 모양·같은 낙관적 잠금 한계를 가진다** — `webhook_delivery`는 (`outbox_event`와 달리) 진짜 `version` 컬럼이 있어서 UPDATE에 `VERSION.eq(existing.version)` 조건을 건다.
 - **실제 RPC/DB로 끝까지 검증했다.** 로컬 DB에 Merchant 셋(Webhook URL이 `https://httpbin.org/status/200`인 것, `NULL`인 것, `https://httpbin.org/status/500`인 것)과 각각의 `Payment`+`OutboxEvent(PENDING, aggregateType=Payment)` 행을 수동으로 심고 `bootRun`으로 실제 앱을 띄워서, 스케줄러 첫 폴링에서 세 이벤트를 모두 집어(`Outbox 발행 대상 2건` 로그, 이어서 3번째 이벤트는 별도로 심어 다음 폴링에서 `1건`으로 확인) 실제 HTTP 요청을 보내고: (1) 200 응답 → `WebhookDelivery.SUCCEEDED`(`last_http_status=200`) + `OutboxEvent.PUBLISHED`, (2) `webhookUrl=NULL` → `WebhookDelivery` 행 자체가 생기지 않고 `OutboxEvent.PUBLISHED`, (3) 500 응답 → `WebhookDelivery.RETRY_WAITING`(`last_http_status=500`, `next_retry_at`=1분 뒤) + `OutboxEvent.RETRY_WAITING`까지 DB에서 직접 확인했다. 검증 후 스모크 테스트 행은 정리하고 `bootRun` 프로세스를 종료했다.
 - **테스트**: `PublishOutboxEventUseCaseTest`(단위, Webhook 미설정 시 즉시 발행/2xx 응답 성공/비-2xx 응답 재시도 예약/재개된 `WebhookDelivery`가 시도 한도에 도달해 최종 실패/존재하지 않는 ID/이미 처리 중이거나 종료 상태), `PublishPendingOutboxEventsTaskletTest`(단위, 대상 전부 호출/하나 실패해도 나머지 계속/빈 목록은 no-op — `ConfirmPendingBlockchainTransactionsTaskletTest`와 같은 케이스 구성), `OutboxEventRepositoryAdapterTest`에 `findById`/`findPendingPublication`(`PENDING`과 기한 도래 `RETRY_WAITING`은 포함하고 미도래 `RETRY_WAITING`/`PUBLISHED`는 제외)/update 경로 케이스 추가, 새 `WebhookDeliveryRepositoryAdapterTest`(Testcontainers MySQL 통합 — insert/상태 전이 update/조회 없음).
+
+### "Fake Exchange 매도" Use Case(`SellToFakeExchangeUseCase`, `application.exchange`)
+
+`docs/architecture/mvp-scope.md`의 전체 흐름 중 마지막 구간 `Fake Exchange 매도 →
+SettlementReceivable READY`와, `docs/architecture/persistence-jooq.md`가 정의한
+세 번째이자 마지막 트랜잭션 경계 "환전 완료"(`ExchangeOrder COMPLETED +
+SettlementReceivable READY + OutboxEvent`)를 구현한다. 이 Use Case가 성공하면
+MVP 완료 경계(`Payment=SUCCEEDED`, `ExchangeOrder=COMPLETED`,
+`SettlementReceivable=READY`)가 처음으로 끝까지 채워진다. `ExchangeOrder`/
+`SettlementReceivable` 도메인 애그리게이트 자체는 이전부터 구현돼 있었다 — 이
+Use Case가 실제로 그 둘을 만들고 완료시키는 첫 호출부다.
+
+- **이미 `SUCCEEDED`인 Payment 하나를 대상으로 한 매도 시도 한 번이다** —
+  `ConfirmBlockchainTransactionUseCase`/`PublishOutboxEventUseCase`와 같은 모양.
+  `docs/decisions/ADR-004-fake-exchange.md`는 트리거 방식을 명시하지 않지만,
+  이 코드베이스에 이미 두 번 반복된 확립된 패턴(Use Case는 대상 하나에 대한
+  시도 한 번, `apps:batch`의 Worker가 반복 호출)을 세 번째로 그대로 따랐다 —
+  새 아이디어를 만들지 않았다.
+- **Fake Exchange는 `ExchangeOrder.create()` 직후 곧바로 `complete()`를 호출해
+  `SUBMITTED`/`PROCESSING`을 건너뛴다**(`ExchangeOrder.complete`의 KDoc, ADR-004에
+  이미 그렇게 설계돼 있었다). `clientOrderId`는 `"sell_" + paymentId`로
+  Payment ID에서 결정론적으로 만든다 — 같은 Payment로 재시도해도 항상 같은 값이라
+  `uk_exchange_client_order_id` Unique 제약과 충돌하지 않는다.
+- **Gross/Fee/Adjustment 금액 계산을 이 Use Case에 인라인했다, 별도 파일을 만들지
+  않았다.** `docs/domain/domain-model.md`는 이 계산을 `SettlementAmountCalculator`라는
+  별도 Domain Service로 분류하지만, 바로 옆에 나열된 `PaymentAmountCalculator`
+  (KRW→USDC 변환)도 실제로는 별도 파일 없이 `CreatePaymentUseCase`에 인라인돼
+  있다 — 그 기존 선례를 그대로 따랐다. `grossAmount`는 정산 기준 금액이라 정의상
+  매도 시점이 아니라 원래 주문 시점 KRW 금액(`Payment.orderAmount`)을 그대로
+  쓴다 — 결제 시점과 매도 시점 사이 시장 환율이 움직인 차이는
+  `SettlementReceivable.exchangeProfitLossAmount`(매도로 실제 확보한 KRW −
+  grossAmount)에 담긴다. `SETTLEMENT_FEE_RATE`(1.5%)도 `CreatePaymentUseCase`의
+  `SPREAD_RATE`와 같은 성격의 MVP 상수다(`docs/`에 값이 없어 고정).
+- **"환전 완료" Webhook용 `OutboxEvent`는 `aggregateType="Payment"`를 재사용한다,
+  새 aggregateType을 만들지 않았다.** `PublishOutboxEventUseCase.resolveMerchant()`가
+  오늘 `"Payment"`만 지원해서(다른 aggregateType이 생기면 그때 분기를 넓힌다고
+  이미 KDoc에 적혀 있었다), 여기서 `eventType="payment.settled"`로만 구분하고
+  `aggregateType`/`aggregateId`는 `ConfirmBlockchainTransactionUseCase`의
+  `payment.succeeded` 이벤트와 똑같이 Payment를 가리키게 했다 —
+  `PublishOutboxEventUseCase`를 고치지 않고 그대로 재사용했다.
+- **`PaymentRepository.findPendingExchangeSettlement()`를 새로 추가했다** —
+  `payment_status='SUCCEEDED'`이면서 아직 `exchange_order` 행이 없는 Payment를
+  찾는다(`PAYMENT`에 `NOT EXISTS(SELECT 1 FROM EXCHANGE_ORDER WHERE
+  EXCHANGE_ORDER.PAYMENT_SEQ = PAYMENT.PAYMENT_SEQ)`). `payment` 레코드에
+  정산 상태를 절대 추가하지 않는다는 루트 `CLAUDE.md`의 규칙 때문에 Payment
+  테이블만으로는 "이미 매도 처리됐는지"를 판단할 수 없어 불가피하게 크로스
+  애그리게이트 조회가 됐다 — Confirm Worker/Outbox 발행과 달리
+  `docs/database/database-design.md`에 이 폴링만을 위한 전용 인덱스가 명시돼
+  있지는 않다(알려진 gap, 다만 이 MVP 데이터량에서는 풀스캔으로도 문제없다).
+- **새 outbound Port 둘을 추가했다**: `ExchangeOrderRepository`(`save`/
+  `findByPaymentId`), `SettlementReceivableRepository`(`save`/`findByPaymentId`) —
+  둘 다 `payment_seq` Unique 제약(`uk_exchange_payment`/
+  `uk_settlement_receivable_payment`)과 대응하는 멱등성 조회다.
+- **새 Adapter `ExchangeOrderRepositoryAdapter`/`SettlementReceivableRepositoryAdapter`**
+  (`modules:infra-persistence`, 새 패키지 `infra.persistence.jooq.exchange`/
+  `.settlement`)는 `WebhookDeliveryRepositoryAdapter`와 같은 모양·같은 낙관적
+  잠금 한계를 가진다 — 둘 다 `version` 컬럼이 있다. `quote_currency`/
+  `settlement_currency` 컬럼은 `PaymentRepositoryAdapter`의 `order_currency`
+  하드코딩과 같은 이유로 `"KRW"` 리터럴로 채운다.
+- **`apps:batch`에도 `FakeExchangeRateProvider`를 복제했다** —
+  `IdGenerator`→`UuidIdGenerator`가 이미 앱마다 자기 `support` 패키지에 복제돼
+  있는 것과 같은 기존 관례를 따랐다(공유 모듈로 옮기는 대신 필요해지면 그때
+  옮긴다).
+- **테스트**: `SellToFakeExchangeUseCaseTest`(단위, 정상 처리/멱등 재실행/
+  존재하지 않는 Payment/SUCCEEDED가 아닌 상태), `ExchangeOrderRepositoryAdapterTest`
+  + `SettlementReceivableRepositoryAdapterTest`(Testcontainers MySQL 통합, insert/
+  상태 전이 update/`findByPaymentId`), `PaymentRepositoryAdapterTest`에
+  `findPendingExchangeSettlement` 케이스 추가(SUCCEEDED+ExchangeOrder 없음
+  포함/SUCCEEDED+ExchangeOrder 있음 제외/SUCCEEDED 아님 제외).
+
+### `apps:batch`의 Fake Exchange 매도 폴링 Worker
+
+`apps:batch`의 세 번째 Job이며, 앞선 두 Worker와 완전히 같은 골격(`Job`/`Step`/
+`Tasklet`, `JobOperator`, `ResourcelessTransactionManager`,
+`spring.batch.job.enabled: false`, 10초 `@Scheduled` 폴링, 하나 실패해도 나머지
+계속)을 그대로 재사용한다 — 그 골격 자체의 근거는 위 "apps:batch의 Confirm 폴링
+Worker" 절 참고. `SellPendingPaymentsToFakeExchangeTasklet`이
+`PaymentRepository.findPendingExchangeSettlement()`로 대상을 뽑아
+`SellToFakeExchangeUseCase`를 하나씩 호출한다.
+
+- **테스트**: `SellPendingPaymentsToFakeExchangeTaskletTest`(단위, 대상 전부
+  호출/하나 실패해도 나머지 계속/빈 목록은 no-op — `ConfirmPendingBlockchainTransactionsTaskletTest`/
+  `PublishPendingOutboxEventsTaskletTest`와 같은 케이스 구성).
 
 ### IntelliJ HTTP Client(`.http` 파일)로 API 수동 테스트하기
 

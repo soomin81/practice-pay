@@ -1,9 +1,15 @@
 package paytech.practice.pay.infra.persistence.jooq.payment
 
 import io.kotest.core.spec.style.FunSpec
+import io.kotest.matchers.collections.shouldContain
+import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import paytech.practice.pay.domain.exchange.ClientOrderId
+import paytech.practice.pay.domain.exchange.ExchangeOrder
+import paytech.practice.pay.domain.exchange.ExchangeOrderId
+import paytech.practice.pay.domain.exchange.OrderSide
 import paytech.practice.pay.domain.merchant.MerchantId
 import paytech.practice.pay.domain.payment.MerchantOrderId
 import paytech.practice.pay.domain.payment.Payment
@@ -15,6 +21,7 @@ import paytech.practice.pay.domain.shared.Money
 import paytech.practice.pay.domain.shared.TokenAmount
 import paytech.practice.pay.domain.shared.WalletAddress
 import paytech.practice.pay.infra.persistence.jooq.PersistenceTestSupport
+import paytech.practice.pay.infra.persistence.jooq.exchange.ExchangeOrderRepositoryAdapter
 import paytech.practice.pay.infra.persistence.jooq.insertTestMerchant
 import paytech.practice.pay.infra.persistence.jooq.uniqueSuffix
 import java.time.Instant
@@ -92,5 +99,46 @@ class PaymentRepositoryAdapterTest :
 
 		test("findById returns null when no such payment exists") {
 			adapter.findById(PaymentId("pay_no-such-payment")).shouldBeNull()
+		}
+
+		test("findPendingExchangeSettlement returns SUCCEEDED payments without an ExchangeOrder, excluding others") {
+			val merchantId = MerchantId(insertTestMerchant())
+			val exchangeOrderAdapter = ExchangeOrderRepositoryAdapter(PersistenceTestSupport.dsl)
+
+			val pendingPayment = newPayment(merchantId)
+			pendingPayment.ready(NOW.plusSeconds(1))
+			pendingPayment.submit(RECEIVING_WALLET, NOW.plusSeconds(2))
+			pendingPayment.startConfirmation(NOW.plusSeconds(3))
+			pendingPayment.succeed(NOW.plusSeconds(4))
+			adapter.save(pendingPayment)
+
+			val alreadySoldPayment = newPayment(merchantId)
+			alreadySoldPayment.ready(NOW.plusSeconds(1))
+			alreadySoldPayment.submit(RECEIVING_WALLET, NOW.plusSeconds(2))
+			alreadySoldPayment.startConfirmation(NOW.plusSeconds(3))
+			alreadySoldPayment.succeed(NOW.plusSeconds(4))
+			adapter.save(alreadySoldPayment)
+			exchangeOrderAdapter.save(
+				ExchangeOrder.create(
+					id = ExchangeOrderId("exo_${uniqueSuffix()}"),
+					paymentId = alreadySoldPayment.id,
+					exchangeProviderCode = "fake-exchange",
+					clientOrderId = ClientOrderId("sell_${alreadySoldPayment.id.value}"),
+					orderSide = OrderSide.SELL,
+					baseAsset = Asset.USDC,
+					requestedAmount = alreadySoldPayment.paymentAmount,
+					requestedAt = NOW.plusSeconds(5),
+				),
+			)
+
+			val readyPayment = newPayment(merchantId)
+			readyPayment.ready(NOW.plusSeconds(1))
+			adapter.save(readyPayment)
+
+			val result = adapter.findPendingExchangeSettlement()
+
+			result.map { it.id } shouldContain pendingPayment.id
+			result.map { it.id } shouldNotContain alreadySoldPayment.id
+			result.map { it.id } shouldNotContain readyPayment.id
 		}
 	})

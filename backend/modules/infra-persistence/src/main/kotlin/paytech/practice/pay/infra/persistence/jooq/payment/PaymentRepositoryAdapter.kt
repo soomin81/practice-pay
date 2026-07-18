@@ -3,6 +3,7 @@ package paytech.practice.pay.infra.persistence.jooq.payment
 import org.jooq.DSLContext
 import org.springframework.stereotype.Repository
 import paytech.practice.pay.application.port.outbound.PaymentRepository
+import paytech.practice.pay.dbcore.jooq.tables.ExchangeOrder.Companion.EXCHANGE_ORDER
 import paytech.practice.pay.dbcore.jooq.tables.Merchant.Companion.MERCHANT
 import paytech.practice.pay.dbcore.jooq.tables.Payment.Companion.PAYMENT
 import paytech.practice.pay.dbcore.jooq.tables.records.PaymentRecord
@@ -90,6 +91,18 @@ class PaymentRepositoryAdapter(
 			.and(PAYMENT.MERCHANT_SEQ.eq(resolveMerchantSeq(merchantId)))
 			.fetchOne()
 			?.toDomain()
+
+	override fun findPendingExchangeSettlement(): List<Payment> =
+		dsl
+			.selectFrom(PAYMENT)
+			.where(PAYMENT.PAYMENT_STATUS.eq(PaymentStatus.SUCCEEDED.name))
+			.andNotExists(
+				dsl
+					.selectOne()
+					.from(EXCHANGE_ORDER)
+					.where(EXCHANGE_ORDER.PAYMENT_SEQ.eq(PAYMENT.PAYMENT_SEQ)),
+			).fetch()
+			.map { it.toDomain() }
 
 	private fun resolveMerchantSeq(merchantId: MerchantId): Long =
 		dsl

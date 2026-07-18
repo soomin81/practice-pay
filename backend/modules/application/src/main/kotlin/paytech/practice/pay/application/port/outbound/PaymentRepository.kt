@@ -26,4 +26,17 @@ interface PaymentRepository {
 		merchantId: MerchantId,
 		merchantOrderId: MerchantOrderId,
 	): Payment?
+
+	/**
+	 * 아직 Fake Exchange 매도 처리가 안 된 `SUCCEEDED` Payment를 전부 찾는다 —
+	 * 발행 Worker(`apps:batch`)가 폴링 대상 목록을 뽑을 때 쓴다.
+	 *
+	 * `payment` 레코드에는 정산 상태를 두지 않는다는 규칙(루트 `CLAUDE.md`) 때문에
+	 * Payment 테이블만으로는 "이미 매도 처리됐는지"를 판단할 수 없다 — 그래서 이
+	 * 조회는 `exchange_order`(Payment 1건당 최대 1건, `uk_exchange_payment`)가
+	 * 아직 없는 `SUCCEEDED` Payment를 찾는 크로스 애그리게이트 Join으로 구현된다
+	 * (`docs/database/database-design.md`에 이 폴링만을 위한 전용 인덱스가 명시돼
+	 * 있지는 않다 — Confirm Worker/Outbox 발행과 달리 알려진 gap).
+	 */
+	fun findPendingExchangeSettlement(): List<Payment>
 }
