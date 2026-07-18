@@ -1,6 +1,7 @@
 package paytech.practice.pay.api.payment.web
 
 import org.springframework.http.HttpStatus
+import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.ResponseStatus
@@ -33,6 +34,19 @@ class PaymentApiExceptionHandler {
 				.joinToString("; ") { "${it.field}: ${it.defaultMessage}" }
 				.ifBlank { "요청이 올바르지 않습니다." },
 		)
+
+	/**
+	 * 요청 본문 자체를 읽지 못한 경우(JSON 문법 오류, 필수 필드 누락으로 인한 역직렬화
+	 * 실패, 잘못된 문자 인코딩 등)를 처리한다.
+	 *
+	 * 이 핸들러가 없으면 Spring의 기본 처리가 `response.sendError(400)`을 호출하고,
+	 * 그러면 컨테이너가 `/error`로 ERROR 디스패치를 돌리면서 응답 형식이 이 API의
+	 * `ErrorResponse`와 달라진다. 여기서 직접 응답을 쓰면 그 경로를 아예 타지 않는다
+	 * (`/error`가 인증을 요구해 401로 뒤바뀌던 문제는 SecurityConfig에서 따로 막았다).
+	 */
+	@ExceptionHandler(HttpMessageNotReadableException::class)
+	@ResponseStatus(HttpStatus.BAD_REQUEST)
+	fun handleUnreadableRequest(ex: HttpMessageNotReadableException): ErrorResponse = ErrorResponse("요청 본문을 읽을 수 없습니다.")
 
 	/** Value Object의 `init { require(...) }` 검증 실패(예: 지갑 주소 형식 오류)를 처리한다. */
 	@ExceptionHandler(IllegalArgumentException::class)

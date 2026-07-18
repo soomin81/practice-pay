@@ -47,6 +47,12 @@ class SecurityConfig {
 			sessionManagement { sessionCreationPolicy = SessionCreationPolicy.STATELESS }
 			exceptionHandling { authenticationEntryPoint = apiKeyAuthenticationEntryPoint }
 			authorizeHttpRequests {
+				// 컨테이너가 오류 응답을 만들 때 거치는 ERROR 디스패치 경로다. 인증을 요구하면
+				// 실제 오류가 전부 401로 가려진다 — ApiKeyAuthenticationFilter는
+				// OncePerRequestFilter 기본값상 ERROR 디스패치에서 실행되지 않아
+				// SecurityContext가 비어 있고, 그래서 잘못된 요청 본문(400)이나 404/405가
+				// 전부 "API Key가 유효하지 않습니다"(401)로 나갔다(실제 bootRun에서 확인).
+				authorize("/error", permitAll)
 				authorize(HttpMethod.POST, "/api/v1/payments", hasAuthority("SCOPE_PAYMENT_CREATE"))
 				authorize(anyRequest, authenticated)
 			}

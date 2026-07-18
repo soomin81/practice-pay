@@ -149,6 +149,31 @@ class PaymentControllerTest : FunSpec() {
 				).andExpect(status().isNotFound)
 		}
 
+		// 인증된 요청의 본문이 깨져 있으면 400이어야 한다. 이 핸들러가 없으면 Spring이
+		// response.sendError(400)로 처리하고, 그러면 컨테이너가 /error로 ERROR 디스패치를
+		// 도는데 그 경로에는 인증이 실려 있지 않아 실제 응답이 401로 뒤바뀐다 —
+		// 실제 bootRun에서 "본문이 잘못됐는데 API Key가 유효하지 않다"는 401을 받고 찾았다
+		// (SecurityConfig의 `/error` permitAll과 짝을 이루는 수정이다).
+		test("a malformed request body returns 400, not 401") {
+			mockMvc
+				.perform(
+					post("/api/v1/payments")
+						.with(authenticatedAs("SCOPE_PAYMENT_CREATE"))
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"merchantOrderId\": "),
+				).andExpect(status().isBadRequest)
+		}
+
+		test("a request body missing a required field returns 400, not 401") {
+			mockMvc
+				.perform(
+					post("/api/v1/payments")
+						.with(authenticatedAs("SCOPE_PAYMENT_CREATE"))
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"merchantOrderId\":\"order-1\",\"orderName\":\"n\",\"orderAmount\":1000}"),
+				).andExpect(status().isBadRequest)
+		}
+
 		test("MerchantCannotAcceptPaymentsException from the use case returns 409") {
 			every { createPaymentUseCase.execute(any()) } throws MerchantCannotAcceptPaymentsException(MERCHANT_ID)
 

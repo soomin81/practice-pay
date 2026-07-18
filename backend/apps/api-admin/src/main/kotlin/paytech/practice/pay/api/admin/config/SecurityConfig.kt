@@ -37,6 +37,9 @@ class SecurityConfig {
 		http {
 			csrf { disable() }
 			authorizeHttpRequests {
+				// 컨테이너의 ERROR 디스패치 경로 — 인증을 요구하면 실제 오류(400/404/405 등)가
+				// 전부 401/403으로 가려진다(`apps:api-payment`의 SecurityConfig 주석 참고).
+				authorize("/error", permitAll)
 				authorize("/admin/login", permitAll)
 				authorize("/admin/account-invitations/accept", permitAll)
 				authorize("/admin/internal-users", hasRole("SUPER_ADMIN"))
