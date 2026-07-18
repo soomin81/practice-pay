@@ -19,6 +19,12 @@ import org.springframework.boot.runApplication
 	scanBasePackages = [
 		"paytech.practice.pay.api.payment",
 		"paytech.practice.pay.infra.persistence.jooq",
+		// modules:infra-support는 통째로 스캔하지 않고 이 앱이 쓰는 Port 구현만
+		// 고른다 — `infra.support.security`의 HmacInvitationTokenHasher가 초대
+		// 흐름 전용 설정값(app.invitation-token.pepper)을 요구해서, 그것까지
+		// 스캔하면 이 앱의 컨텍스트가 뜨지 않는다.
+		"paytech.practice.pay.infra.support.id",
+		"paytech.practice.pay.infra.support.exchange",
 	],
 )
 class PaymentApiApplication

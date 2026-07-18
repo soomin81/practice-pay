@@ -12,6 +12,7 @@ dependencies {
 	implementation(project(":modules:domain"))
 	implementation(project(":modules:application"))
 	implementation(project(":modules:infra-persistence"))
+	implementation(project(":modules:infra-support"))
 	implementation(project(":modules:infra-blockchain"))
 
 	implementation("org.springframework.boot:spring-boot-starter-batch")

@@ -1,4 +1,4 @@
-package paytech.practice.pay.api.payment.support
+package paytech.practice.pay.infra.support.exchange
 
 import org.springframework.stereotype.Component
 import paytech.practice.pay.application.port.outbound.ExchangeRateProvider
@@ -13,6 +13,10 @@ import java.time.Clock
  * MVP는 실제 시장 환율 조회 없이 Fake Exchange로 결제를 처리한다(`docs/decisions/ADR-004-fake-exchange.md`).
  * 이 구현은 그 Fake Exchange의 시장 환율 부분을 대표한다 — 실거래소 연동이 생기면
  * 이 클래스를 교체하기만 하면 된다([ExchangeRateProvider]를 쓰는 쪽은 바뀌지 않는다).
+ *
+ * [Clock]은 이 모듈이 아니라 각 앱의 `UseCaseConfiguration`이 Bean으로 제공한다.
+ *
+ * 원래 `apps:api-payment`/`batch` 두 곳에 똑같이 복제돼 있던 구현이다.
  */
 @Component
 class FakeExchangeRateProvider(

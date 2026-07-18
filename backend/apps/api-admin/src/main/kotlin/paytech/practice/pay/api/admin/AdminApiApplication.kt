@@ -18,6 +18,10 @@ import org.springframework.boot.runApplication
 	scanBasePackages = [
 		"paytech.practice.pay.api.admin",
 		"paytech.practice.pay.infra.persistence.jooq",
+		// modules:infra-support에서 이 앱이 쓰는 Port 구현만 고른다
+		// (PaymentApiApplication의 같은 주석 참고 — 환율 Provider는 이 앱에 필요 없다).
+		"paytech.practice.pay.infra.support.id",
+		"paytech.practice.pay.infra.support.security",
 	],
 )
 class AdminApiApplication

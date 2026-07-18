@@ -22,6 +22,10 @@ import org.springframework.scheduling.annotation.EnableScheduling
 		"paytech.practice.pay.batch",
 		"paytech.practice.pay.infra.persistence.jooq",
 		"paytech.practice.pay.infra.blockchain",
+		// modules:infra-support에서 이 앱이 쓰는 Port 구현만 고른다
+		// (PaymentApiApplication의 같은 주석 참고).
+		"paytech.practice.pay.infra.support.id",
+		"paytech.practice.pay.infra.support.exchange",
 	],
 )
 class BatchApplication

@@ -16,6 +16,10 @@ import org.springframework.boot.runApplication
 	scanBasePackages = [
 		"paytech.practice.pay.api.merchant",
 		"paytech.practice.pay.infra.persistence.jooq",
+		// modules:infra-support에서 이 앱이 쓰는 Port 구현만 고른다 — 로그인(PasswordEncoder)과
+		// 초대 수락(InvitationTokenHasher) 둘 다 security 하위 패키지에 있다.
+		// 이 앱은 아직 ID를 새로 만드는 Use Case가 없어서 infra.support.id는 넣지 않는다.
+		"paytech.practice.pay.infra.support.security",
 	],
 )
 class MerchantApiApplication

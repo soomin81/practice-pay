@@ -18,7 +18,7 @@
 
 ## 현재 구현 상태
 
-`modules:domain`, `modules:application`, `modules:infra-persistence`, `modules:infra-blockchain`, `modules:common`, `db-core`, `architecture-tests`, 그리고 `apps:*` 4개 전부 실제 Gradle 서브프로젝트다(`settings.gradle.kts` 참고). `modules:common`만 아직 `src`가 비어 있다(빌드는 NO-SOURCE로 통과한다) — 실제로 필요해질 때까지 다른 모듈에 대한 의존성도 추가하지 않았다(아래 항목 참고). 빈 서브프로젝트에 코드/배선이 있다고 가정하지 말고, 참조하기 전에 먼저 확인한다. 이 구조가 이미 여러 번 재편됐으니 의존하기 전에 다시 확인한다:
+`modules:domain`, `modules:application`, `modules:infra-persistence`, `modules:infra-blockchain`, `modules:infra-support`, `modules:common`, `db-core`, `architecture-tests`, 그리고 `apps:*` 4개 전부 실제 Gradle 서브프로젝트다(`settings.gradle.kts` 참고). `modules:common`만 아직 `src`가 비어 있다(빌드는 NO-SOURCE로 통과한다) — 실제로 필요해질 때까지 다른 모듈에 대한 의존성도 추가하지 않았다(아래 항목 참고). 빈 서브프로젝트에 코드/배선이 있다고 가정하지 말고, 참조하기 전에 먼저 확인한다. 이 구조가 이미 여러 번 재편됐으니 의존하기 전에 다시 확인한다:
 
 ```
 apps/
@@ -62,6 +62,10 @@ modules/
                      (Base Sepolia RPC 조회, 아래 "온체인 Adapter" 참고). apps:batch가 이 모듈에
                      의존하는 첫 앱이다(RPC URL은 apps:batch의 application.yaml에 있다).
   infra-persistence/ 실제 Gradle 서브프로젝트 — modules:application의 outbound port를 구현하는 jOOQ Repository Adapter(Architecture 참고)
+  infra-support/     실제 Gradle 서브프로젝트, domain+application에 의존 — 특정 외부 시스템에 묶이지 않는
+                     자잘한 outbound Port 구현을 모은다(UuidIdGenerator/BCryptPasswordEncoderAdapter/
+                     HmacInvitationTokenHasher/FakeExchangeRateProvider). 원래 앱마다 복제돼 있던 것을
+                     모았다(아래 "modules:infra-support" 절 참고).
 db-core/             실제 Gradle 서브프로젝트 — Flyway 마이그레이션 + jOOQ 코드 생성(아래 참고)
 architecture-tests/  실제 Gradle 서브프로젝트, 테스트 전용(src/main 없음) — 다른 모듈의 컴파일된 클래스에 대한
                      ArchUnit 규칙(Spec 5개, 검사 대상은 modules:* 4개 + apps:* 4개 전부 — "ArchUnit" 절 참고)
@@ -77,11 +81,11 @@ architecture-tests/  실제 Gradle 서브프로젝트, 테스트 전용(src/main
 
 | 이름 | 내용 | 적용 대상 |
 |---|---|---|
-| `practicepay.kotlin-common` | `kotlin("jvm")`, Java 25 toolchain, 공통 `compilerOptions`, `useJUnitPlatform()` | 전체 11개 서브프로젝트 |
+| `practicepay.kotlin-common` | `kotlin("jvm")`, Java 25 toolchain, 공통 `compilerOptions`, `useJUnitPlatform()` | 전체 12개 서브프로젝트 |
 | `practicepay.kotest` | `testImplementation` kotest-runner-junit5/kotest-assertions-core | 테스트가 있는 곳(db-core 제외) |
-| `practicepay.mockk` | `testImplementation` mockk | domain/application/infra-blockchain/common/apps 4개(infra-persistence/db-core/architecture-tests는 각자 다른 테스트 전략이라 제외) |
-| `practicepay.spring-bom` | `io.spring.dependency-management` + Spring Boot BOM import | infra-persistence/infra-blockchain/db-core |
-| `practicepay.spring-library` | `practicepay.spring-bom` + `kotlin("plugin.spring")`(Bean을 open으로) | infra-persistence/infra-blockchain(db-core는 `@Component` Bean이 없어서 제외) |
+| `practicepay.mockk` | `testImplementation` mockk | domain/application/infra-blockchain/infra-support/common/apps 4개(infra-persistence/db-core/architecture-tests는 각자 다른 테스트 전략이라 제외) |
+| `practicepay.spring-bom` | `io.spring.dependency-management` + Spring Boot BOM import | infra-persistence/infra-blockchain/infra-support/db-core |
+| `practicepay.spring-library` | `practicepay.spring-bom` + `kotlin("plugin.spring")`(Bean을 open으로) | infra-persistence/infra-blockchain/infra-support(db-core는 `@Component` Bean이 없어서 제외) |
 | `practicepay.spring-boot-app` | `practicepay.kotlin-common` + `kotlin("plugin.spring")` + `org.springframework.boot` + `io.spring.dependency-management` + 4개 앱 공통 의존성(`spring-boot-starter-jooq`, `kotlin-reflect`, `jackson-module-kotlin`, `kotlin-logging-jvm`, `mysql-connector-j`, springmockk, testcontainers 3종, `kotest-extensions-spring`, `junit-platform-launcher`) | api-payment/api-admin/api-merchant/batch — 단 api-payment/api-admin/api-merchant는 아래 `spring-web-app`을 거쳐 간접 적용되고, batch만 직접 적용한다 |
 | `practicepay.spring-web-app` | `practicepay.spring-boot-app` + webmvc/security/validation 스타터 3종 + 대응 test 스타터 2종(`spring-boot-starter-webmvc-test`/`spring-boot-starter-security-test`) | api-payment/api-admin/api-merchant(batch는 웹 앱이 아니라서 `spring-boot-app`을 직접 쓴다) |
 
@@ -117,7 +121,7 @@ gradlew.bat ktlintFormat                                  # 모든 모듈 자동
 
 ## ArchUnit(`architecture-tests`)
 
-`architecture-tests`는 **검사 대상 모듈 전부**(`modules:domain`/`application`/`infra-persistence`/`infra-blockchain` + `apps:*` 4개)를 `testImplementation`으로 받아서, 컴파일된 클래스에 규칙을 건다. Spec 5개가 각각 하나의 관심사를 맡는다:
+`architecture-tests`는 **검사 대상 모듈 전부**(`modules:domain`/`application`/`infra-persistence`/`infra-blockchain`/`infra-support` + `apps:*` 4개)를 `testImplementation`으로 받아서, 컴파일된 클래스에 규칙을 건다. Spec 5개가 각각 하나의 관심사를 맡는다:
 
 | Spec | 무엇을 지키나 |
 |---|---|
@@ -168,6 +172,21 @@ inbound adapter → application → domain ← outbound port ← outbound adapte
 - 도메인에 대응 값이 없는 컬럼(`payment.order_currency`, `payment_quote.quote_currency`)은 Adapter 경계에서 `"KRW"` 리터럴로 하드코딩해서 채운다 — 이 코드베이스 전체에서 `Money`가 암묵적으로 항상 KRW를 뜻하는 것과 같은 맥락이다(MVP는 KRW→USDC 한 쌍만 지원).
 - **알려진 한계: `Payment`/`CheckoutSession`(`version` 낙관적 잠금 컬럼이 있는 두 애그리게이트)의 `save()`는 지금 진짜 낙관적 잠금 보호를 제공하지 않는다.** 도메인 애그리게이트는 `version` 필드를 갖고 있지 않다(영속성 관심사를 도메인 계층에 새지 않으려고 의도적으로 뺐다) — 그래서 Adapter는 UPDATE 직전에 DB의 현재 `version`을 다시 읽어 `current + 1`을 쓴다 — 이건 정확히 같은 Adapter 호출로의 동시 쓰기만 막을 뿐, "이 애그리게이트가 오래된 version에서 읽혔다"는 상황은 잡지 못한다. 기존 애그리게이트를 다시 저장하는 첫 상태 전이 Use Case가 생기면(Port를 통해 예상 version을 전달하거나, DB 쪽 `SELECT ... FOR UPDATE`를 전면적으로 쓰는 방향으로) 반드시 다시 검토한다 — 지금은 `CreatePaymentUseCase`만 `save()`를 부르고 항상 새 애그리게이트만 저장해서 이 한계가 실질적인 영향은 없다.
 - **테스트**: `infra-persistence`는 Mock이 아니라 실제 MySQL 통합 테스트를 쓴다 — 테스트 JVM 전체가 공유하는 Testcontainers MySQL 인스턴스(`PersistenceTestSupport`)를, `org.flywaydb.flyway` Gradle 플러그인이 아니라 `flyway-core` Java API로 직접(`Flyway.configure()...migrate()`) 마이그레이트한다(Gradle 9.5.1에서 깨진 건 그 플러그인이지 — 아래 "Database / jOOQ code generation" 참고 — 순수 Java 라이브러리 자체와는 무관하다). 테스트용 `DSLContext`는 Spring Boot의 `JooqAutoConfiguration`이 실제로 구성하는 방식과 똑같이(`DataSourceConnectionProvider` + `TransactionAwareDataSourceProxy` + `spring-boot-jooq` 모듈의 `org.springframework.boot.jooq.autoconfigure.SpringTransactionProvider` — Spring Boot 4.x가 jOOQ 자동 구성을 `spring-boot-autoconfigure`에서 이 전용 모듈로 옮겼다) 배선해서, `TransactionManagerAdapterTest`가 여러 Repository의 쓰기가 실제로 함께 롤백되는지까지 증명할 수 있다.
+
+### 공용 Port 구현(`modules:infra-support`)
+
+특정 외부 시스템(DB/블록체인)에 묶이지 않는 자잘한 outbound Port 구현을 모은 세 번째 `infra-*` 모듈이다. 원래 이 구현들은 **앱마다 자기 `support` 패키지에 복제**돼 있었는데(4개 클래스가 9곳), 앱이 넷으로 늘면서 복제본이 서로 어긋날 위험이 커져 공유 모듈로 옮겼다 — "필요해지면 그때 공유 위치로 옮긴다"고 각 KDoc에 적어뒀던 그 시점이다.
+
+| 하위 패키지 | 구현 | 쓰는 앱 |
+|---|---|---|
+| `infra.support.id` | `UuidIdGenerator`(`IdGenerator`) | api-payment/api-admin/batch |
+| `infra.support.security` | `BCryptPasswordEncoderAdapter`(`PasswordEncoder`), `HmacInvitationTokenHasher`(`InvitationTokenHasher`) | api-admin/api-merchant |
+| `infra.support.exchange` | `FakeExchangeRateProvider`(`ExchangeRateProvider`) | api-payment/batch |
+
+- **`modules:common`이 아니라 여기인 이유**: 이 클래스들은 전부 `application.port.outbound`의 Port 구현체(`@Component`)라서 `modules:application`과 Spring에 의존한다 — "의존성 없는 공용 유틸리티"라는 `modules:common`의 역할과 맞지 않는다. 헥사고날 관점에서도 outbound Adapter라 `infra-*` 자리가 맞고, `architecture-tests`의 `HexagonalLayerTest`가 정의한 Outbound Adapter 계층(`paytech.practice.pay.infra..`)에 자동으로 포함되는 실질적 이점도 있다. `modules:common`은 여전히 비어 있다.
+- **포트별로 하위 패키지를 나누고, 앱은 자기가 쓰는 것만 스캔한다**(`infra.persistence.jooq`/`infra.blockchain`을 통째로 스캔하는 것과 다른 점이다). `HmacInvitationTokenHasher`가 `@Value("\${app.invitation-token.pepper}")`로 **필수** 설정값을 요구하기 때문이다 — 초대 흐름이 없는 `api-payment`/`batch`가 이 Bean까지 스캔하면 그 설정이 없다며 컨텍스트가 뜨지 않는다. 앞으로 설정값을 요구하는 Port 구현을 추가할 때도 같은 이유로 하위 패키지를 나눈다.
+- **앱은 이 모듈의 클래스를 타입으로 참조하지 않는다** — 컴포넌트 스캔으로만 배선된다(`HexagonalLayerTest`의 "inbound/outbound Adapter는 서로를 모른다" 규칙이 이걸 강제한다).
+- 앱 하나에서만 쓰는 Port 구현은 옮기지 않고 그 앱에 그대로 뒀다 — `apps:api-payment`의 `HmacApiKeySecretHasher`(API Key 전용), `apps:batch`의 `HttpWebhookSender`(Webhook 전송). 두 번째 앱이 필요로 하면 그때 이 모듈로 옮긴다.
 
 ### 온체인 Adapter(`modules:infra-blockchain`) — `Web3jBlockchainClient`
 
@@ -282,7 +301,7 @@ inbound adapter → application → domain ← outbound port ← outbound adapte
 - **호출자 식별을 위해 `InternalUserPrincipal`을 새로 도입했다.** `AdminLoginController`는 원래 `Authentication.principal`에 로그인 아이디 문자열만 심었는데, 발급 감사 정보(`createdByInternalUserId`)로 쓸 `InternalUserId`가 필요해서 `apps:api-payment`의 `ApiKeyPrincipal` 패턴을 그대로 가져와 `InternalUserPrincipal(internalUserId, loginId, role)`을 로그인 성공 시 principal로 심도록 `AdminLoginController`를 바꿨다. `InternalUserIssuanceController`는 `@AuthenticationPrincipal InternalUserPrincipal`로 발급자를 바로 받는다 — `PaymentController`가 `merchantId`를 요청 본문 대신 `ApiKeyPrincipal`에서 가져오는 것과 같은 이유다.
 - **`SecurityConfig`에 역할 기반 인가가 처음 등장했다.** `authorize("/admin/internal-users", hasRole("SUPER_ADMIN"))`를 `anyRequest`보다 먼저 추가했다(Spring Security는 먼저 매칭되는 규칙을 쓴다). `SUPER_ADMIN`이 아닌 인증된 세션이 호출하면 Spring Security 기본 `AccessDeniedHandler`가 403을 돌려준다 — `apps:api-payment`의 Scope 인가(`PaymentControllerTest`의 403 케이스)와 같은 수준으로, 커스텀 JSON 바디를 만들지 않는다. 세션이 아예 없으면(로그인 안 함) 이 앱은 커스텀 `AuthenticationEntryPoint`가 없어서 Spring Security 기본 동작대로 403이 돈다(실제 `bootRun` + `curl`로 확인) — `api-payment`가 `ApiKeyAuthenticationEntryPoint`로 401 JSON 바디를 통일한 것과 달리, `api-admin`은 아직 이 부분을 커스텀하지 않았다.
 - **예외 핸들러 이름을 바꿨다.** `AdminAuthExceptionHandler` → `AdminApiExceptionHandler`(로그인 전용이 아니게 됐으므로 `PaymentApiExceptionHandler`와 이름 패턴을 맞췄다) — `DuplicateInternalUserException`(409)과 `IllegalArgumentException`(400, Value Object `require()` 실패나 `InternalUserRole.valueOf()` 실패를 공통 처리, `PaymentApiExceptionHandler`와 완전히 같은 패턴)을 새로 추가했다.
-- **`IdGenerator`가 `api-admin`에 처음 필요해져서** `apps:api-payment`의 `UuidIdGenerator`를 그대로 복제해 `api-admin`의 `support` 패키지에도 만들었다(각 앱이 자기 `support` 패키지에 자체 구현을 갖는 기존 관례를 따랐다 — 공유 모듈로 옮기지 않았다).
+- **`IdGenerator`가 `api-admin`에 처음 필요해졌다** — 당시에는 `apps:api-payment`의 `UuidIdGenerator`를 복제해 각 앱이 자기 `support` 패키지에 자체 구현을 갖게 했지만, 지금은 `modules:infra-support`의 공유 구현을 쓴다(아래 "modules:infra-support" 절 참고).
 - **`AccountInvitationRepositoryAdapter`**(`modules:infra-persistence`)는 `account_invitation`에 `version` 컬럼이 없어서(`AccountInvitation`의 KDoc 참고) `InternalUserRepositoryAdapter`와 달리 낙관적 잠금 없이 단순 UPDATE로 상태 전이를 반영한다. 발급(INSERT) 시점부터 Port 계약(`save`가 상태 전이도 반영해야 함)을 절반만 구현해 두지 않으려고 `accept`/`expire`/`revoke` 이후의 UPDATE 경로도 함께 만들어 뒀는데, `AcceptAccountInvitationUseCase`가 그 `accept` UPDATE 경로를 처음 실제로 호출하는 지점이 됐다(아래 "초대 수락(활성화) Use Case" 절 참고).
 - **테스트**: `IssueInternalUserUseCaseTest`(단위, 정상 발급/로그인 아이디 중복/이메일 중복), `AccountInvitationRepositoryAdapterTest`+`InternalUserRepositoryAdapterTest`의 `findByEmail` 케이스(Testcontainers MySQL 통합), `InternalUserIssuanceControllerTest`(`@WebMvcTest` + `@Import(SecurityConfig::class)`, `PaymentControllerTest`의 `SecurityMockMvcRequestPostProcessors.authentication(...)` 패턴으로 `InternalUserPrincipal`을 주입해 `SUPER_ADMIN`/`OPERATOR` 인가까지 검증). 여기에 더해 실제 `bootRun` + `curl`로 SUPER_ADMIN 로그인 → 발급(201, `invitationToken` 확인, DB에 `internal_user`+`account_invitation` 행 생성 확인) → 중복 loginId/email(둘 다 409) → 세션 없음(403) → 잘못된 role(400)까지 검증한 뒤 DB 행을 정리했다.
 - **단위 테스트에서 걸린 함정: MockK의 `any()`가 값 클래스(Value Class)를 만들지 못할 수 있다.** `every { internalUserRepository.findByEmail(any()) } returns null`처럼 `Email` 타입 매개변수에 `any()`를 쓰면, MockK가 매처 서명을 만들려고 무작위 문자열로 `Email` 인스턴스를 생성하려 시도하는데 `Email`의 `init { require(value.contains("@")) }` 검증에 걸려 `IllegalArgumentException`이 난다(`LoginId`처럼 검증이 "공백 아님" 정도로 느슨한 값 클래스는 무작위 문자열이 통과해서 문제가 없다). 해결: `any()` 대신 실제 값(`findByEmail(EMAIL)`)으로 정확히 매칭한다 — 이런 종류의 값 클래스 매개변수에는 앞으로도 `any()`를 피한다.
@@ -340,11 +359,12 @@ inbound adapter → application → domain ← outbound port ← outbound adapte
   `AccountInvitation.internalUserId`/`merchantUserId`로 대상 계정을 로드하는 데
   쓴다 — `MerchantUserRepositoryAdapter`에 이미 있었지만 지금까지 안 쓰이던
   private `resolveMerchantId(merchantSeq)` 헬퍼를 이 메서드가 처음 실제로 쓴다).
-- **`api-merchant`에는 `InvitationTokenHasher` 구현체가 아직 없었다** —
-  `api-admin`의 `HmacInvitationTokenHasher`를 그대로 복제해
-  `api-merchant/support/`에 추가하고(`BCryptPasswordEncoderAdapter`가 이미
-  앱마다 복제된 것과 같은 기존 관례), `api-merchant/application.yaml`에도
-  `app.invitation-token.pepper`를 추가했다.
+- **`api-merchant`에는 `InvitationTokenHasher` 구현체가 아직 없었다** — 당시에는
+  `api-admin`의 `HmacInvitationTokenHasher`를 복제해 `api-merchant/support/`에
+  추가했지만, 지금은 두 앱 다 `modules:infra-support`의 공유 구현을 쓴다
+  (아래 "modules:infra-support" 절 참고). `api-merchant/application.yaml`의
+  `app.invitation-token.pepper` 설정은 그대로 필요하다 — 그 값을 읽는 Bean이
+  공유 모듈로 옮겨졌을 뿐 설정 자체는 앱마다 있어야 한다.
 - **`AccountInvitation + (InternalUser 또는 MerchantUser)`를 함께 저장하는
   트랜잭션 경계는 `docs/architecture/persistence-jooq.md`가 명시한 세 경계
   어디에도 없다** — `IssueInternalUserUseCase`가 발급 시점에 이미 같은 방식으로
@@ -448,10 +468,10 @@ Use Case가 실제로 그 둘을 만들고 완료시키는 첫 호출부다.
   잠금 한계를 가진다 — 둘 다 `version` 컬럼이 있다. `quote_currency`/
   `settlement_currency` 컬럼은 `PaymentRepositoryAdapter`의 `order_currency`
   하드코딩과 같은 이유로 `"KRW"` 리터럴로 채운다.
-- **`apps:batch`에도 `FakeExchangeRateProvider`를 복제했다** —
-  `IdGenerator`→`UuidIdGenerator`가 이미 앱마다 자기 `support` 패키지에 복제돼
-  있는 것과 같은 기존 관례를 따랐다(공유 모듈로 옮기는 대신 필요해지면 그때
-  옮긴다).
+- **`apps:batch`에도 `FakeExchangeRateProvider`가 필요해졌다** — 당시에는
+  `apps:api-payment`의 구현을 복제했고("필요해지면 그때 공유 모듈로 옮긴다"),
+  실제로 그 시점이 와서 지금은 `modules:infra-support`의 공유 구현을 쓴다
+  (아래 "modules:infra-support" 절 참고).
 - **테스트**: `SellToFakeExchangeUseCaseTest`(단위, 정상 처리/멱등 재실행/
   존재하지 않는 Payment/SUCCEEDED가 아닌 상태), `ExchangeOrderRepositoryAdapterTest`
   + `SettlementReceivableRepositoryAdapterTest`(Testcontainers MySQL 통합, insert/

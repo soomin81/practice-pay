@@ -20,6 +20,7 @@ dependencies {
 	testImplementation(project(":modules:application"))
 	testImplementation(project(":modules:infra-persistence"))
 	testImplementation(project(":modules:infra-blockchain"))
+	testImplementation(project(":modules:infra-support"))
 
 	// inbound Adapter(계층 방향·네이밍 규칙의 대상). 이 네 앱은 Spring Boot 앱이지만
 	// 여기서는 실행하지 않고 컴파일된 클래스만 읽는다.
