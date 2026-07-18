@@ -11,9 +11,15 @@
 
 이 저장소는 최상위 디렉토리 3개로 구성된 모노레포다:
 
-- `backend/` — 지금까지 실제 코드가 있는 유일한 디렉토리다(Kotlin/Spring Boot Gradle 프로젝트).
+- `backend/` — 지금까지 실제 코드가 있는 유일한 디렉토리다(Kotlin/Spring Boot Gradle 프로젝트). **Gradle 빌드 루트는 저장소 루트가 아니라 이 디렉토리다** — `settings.gradle.kts`/`gradle.properties`/`gradlew`가 전부 여기 있고, Gradle 명령은 `backend/`에서 실행한다.
 - `frontend/` — 현재 비어 있고, 아직 프로젝트가 스캐폴딩되지 않았다.
 - `docs/` — 이 프로젝트의 설계 기준 문서다("Documentation" 참고). 한글로 작성돼 있다.
+
+저장소 전체에 걸리는 설정 파일은 루트에 둔다:
+
+- `.gitattributes` — 모든 파일의 줄바꿈을 **LF로 고정**한다(`*.bat`만 CRLF). 각자의 `core.autocrlf` 설정에 좌우되지 않게 하려는 것이다 — 이 파일이 backend 일부만 덮고 있던 동안 실제로 작업 트리에 LF/CRLF 파일이 섞였다.
+- `.gitignore` — IDE/에이전트 로컬 상태와 OS 산출물. 빌드 산출물(`build/`, `.gradle` 등)은 Gradle 프로젝트에 속하므로 `backend/.gitignore`가 담당한다.
+- `.editorconfig` — `docs/`와 루트 마크다운용. `backend/.editorconfig`는 `root = true`라 backend 아래는 이 파일의 영향을 받지 않는다(그쪽은 ktlint의 탭 들여쓰기 컨벤션을 따로 갖는다) — 의도적인 분리다.
 
 ## 문서 — 도메인 로직을 구현하기 전에 읽는다
 

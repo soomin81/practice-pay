@@ -1,2 +1,11 @@
+# IDE
 .idea/
+
+# 코딩 에이전트의 로컬 상태 — 프로젝트 산출물이 아니다.
+# `.claude/settings.json`(공유 설정)은 앞으로 커밋할 수 있게 일부러 통째로 무시하지 않는다.
 .claude/settings.local.json
+.claude/scheduled_tasks.lock
+
+# OS
+.DS_Store
+Thumbs.db

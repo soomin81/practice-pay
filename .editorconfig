@@ -1,0 +1,20 @@
+# 저장소 루트의 공통 편집기 설정 — docs/, frontend/, 루트 마크다운이 대상이다.
+#
+# `backend/.editorconfig`도 `root = true`라서 backend/ 아래는 이 파일의 영향을 받지
+# 않는다(그쪽은 ktlint가 강제하는 탭 들여쓰기 컨벤션을 따로 갖고 있다) — 두 파일은
+# 의도적으로 분리돼 있다.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# 마크다운은 줄 끝 공백 두 개가 줄바꿈을 뜻해서 제거하지 않는다.
+[*.md]
+trim_trailing_whitespace = false
+
+[*.{json,yaml,yml}]
+indent_style = space
+indent_size = 2

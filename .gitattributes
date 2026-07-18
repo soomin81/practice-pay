@@ -1,0 +1,29 @@
+# 저장소 전체(backend/docs/frontend)의 줄바꿈을 LF로 고정한다.
+#
+# 이 파일이 없으면 각자의 Git `core.autocrlf` 설정이 줄바꿈을 결정한다 — 실제로 이
+# 저장소에서 `core.autocrlf=true`인 Windows 환경이 체크아웃할 때마다 작업 트리를
+# CRLF로 바꿔놔서, 커밋할 때마다 "LF will be replaced by CRLF" 경고가 났고 작업
+# 트리에 LF 파일과 CRLF 파일이 섞였다. `.gitattributes`는 `core.autocrlf`보다
+# 우선하므로 여기서 한 번 고정하면 OS/설정과 무관하게 항상 같은 결과가 된다.
+#
+# 원래 `backend/.gitattributes`에 Gradle 관련 규칙만 있었는데, docs/frontend까지
+# 같은 규칙을 받도록 루트로 합쳤다.
+* text=auto eol=lf
+
+# Windows 배치 파일은 CRLF여야 정상 동작한다(gradlew.bat 포함).
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Gradle Wrapper: 스크립트는 LF, JAR은 바이너리.
+gradlew text eol=lf
+*.jar binary
+
+# 그 밖의 바이너리 — 줄바꿈 변환 대상이 아니다.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
