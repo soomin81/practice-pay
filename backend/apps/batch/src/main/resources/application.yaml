@@ -4,7 +4,12 @@ spring:
   datasource:
     # 기본값은 로컬 개발용(compose.yaml의 MySQL)이고, 운영에서는 아래 환경변수로
     # 덮어쓴다 — Pepper 설정과 같은 규칙이다(backend/CLAUDE.md의 "설정과 비밀값" 절).
-    url: "${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/stablecoin_payment?useUnicode=true&characterEncoding=UTF-8}"
+    #
+    # allowPublicKeyRetrieval=true는 로컬 개발 기본값 전용이다 — MySQL 9의
+    # caching_sha2_password가 새 볼륨의 첫 접속에서 RSA 공개키 교환을 요구해서
+    # 이 옵션이 없으면 연결이 실패한다. 자세한 배경은 apps/api-payment의
+    # application.yaml에 있는 같은 자리 주석 참고(운영에서는 TLS를 쓴다).
+    url: "${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/stablecoin_payment?useUnicode=true&characterEncoding=UTF-8&allowPublicKeyRetrieval=true}"
     username: ${SPRING_DATASOURCE_USERNAME:root}
     password: ${SPRING_DATASOURCE_PASSWORD:verysecret}
   batch:

@@ -25,7 +25,11 @@ dependencies {
 // the generated Korean COMMENTs was a `mysql` CLI import without
 // --default-character-set=utf8mb4, not this JDBC connection — but forcing UTF-8
 // here too is cheap insurance.)
-val dbCoreJdbcUrl = "jdbc:mysql://localhost:3306/stablecoin_payment?useUnicode=true&characterEncoding=UTF-8"
+// allowPublicKeyRetrieval=true: MySQL 9의 caching_sha2_password가 새로 만든 볼륨의
+// 첫 접속에서 RSA 공개키 교환을 요구해서, 없으면 codegen이 "RSA public key is not
+// available client side"로 실패한다(한 번 인증에 성공하면 서버가 캐싱해서 그 뒤로는
+// 드러나지 않는 함정이다). 이 접속은 로컬 개발 DB 전용이라 그대로 둔다.
+val dbCoreJdbcUrl = "jdbc:mysql://localhost:3306/stablecoin_payment?useUnicode=true&characterEncoding=UTF-8&allowPublicKeyRetrieval=true"
 val dbCoreUser = "root"
 val dbCorePassword = "verysecret"
 

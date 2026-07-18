@@ -4,7 +4,16 @@ spring:
   datasource:
     # 기본값은 로컬 개발용(compose.yaml의 MySQL)이고, 운영에서는 아래 환경변수로
     # 덮어쓴다 — Pepper 설정과 같은 규칙이다(backend/CLAUDE.md의 "설정과 비밀값" 절).
-    url: "${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/stablecoin_payment?useUnicode=true&characterEncoding=UTF-8}"
+    #
+    # allowPublicKeyRetrieval=true는 **로컬 개발 기본값 전용**이다. MySQL 9의
+    # caching_sha2_password는 서버가 비밀번호를 아직 캐싱하지 않은 상태(=새로 만든
+    # 볼륨의 첫 접속)에서 RSA 공개키 교환을 요구하는데, 이 옵션이 없으면
+    # "RSA public key is not available client side"로 연결이 실패한다. 한 번
+    # 인증에 성공하면 서버가 캐싱해서 그 뒤로는 옵션 없이도 붙기 때문에, 볼륨을
+    # 새로 만들었을 때만 드러나는 함정이다(docker compose down -v 후 실제로 겪었다).
+    # 운영에서는 이 옵션 대신 TLS로 접속한다 — 평문 채널의 공개키 교환은 MITM에
+    # 노출되므로 SPRING_DATASOURCE_URL로 덮어쓸 때 그대로 가져가지 않는다.
+    url: "${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/stablecoin_payment?useUnicode=true&characterEncoding=UTF-8&allowPublicKeyRetrieval=true}"
     username: ${SPRING_DATASOURCE_USERNAME:root}
     password: ${SPRING_DATASOURCE_PASSWORD:verysecret}
 

@@ -27,7 +27,7 @@ services:
     depends_on:
       - mysql
     environment:
-      - 'FLYWAY_URL=jdbc:mysql://mysql:3306/stablecoin_payment'
+      - 'FLYWAY_URL=jdbc:mysql://mysql:3306/stablecoin_payment?allowPublicKeyRetrieval=true'
       - 'FLYWAY_USER=root'
       - 'FLYWAY_PASSWORD=verysecret'
       - 'FLYWAY_CONNECT_RETRIES=10'
