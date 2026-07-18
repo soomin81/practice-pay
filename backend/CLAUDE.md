@@ -566,10 +566,8 @@ docker compose up -d                                    # MySQL 시작(DB: stabl
 # 1) 스키마 마이그레이션 — Flyway가 적용하고 flyway_schema_history에 기록한다.
 #    앱을 띄우면 자동으로 적용되지만(아래 "Flyway" 참고), jooqCodegen은 앱을 빌드하기
 #    전에 테이블이 있어야 해서(앱 빌드 → codegen → 테이블 순환) 최초 1회는 앱 없이
-#    적용해야 한다 — Flyway 공식 Docker 이미지를 쓴다(Gradle 플러그인은 아래 참고).
-MSYS_NO_PATHCONV=1 docker run --rm --network backend_default \
-  -v "$(pwd -W)/db-core/src/main/resources/db/migration:/flyway/sql" flyway/flyway \
-  -url=jdbc:mysql://mysql:3306/stablecoin_payment -user=root -password=verysecret migrate
+#    적용해야 한다 — compose.yaml의 flyway 도구 서비스를 쓴다.
+docker compose run --rm flyway migrate
 
 # 2) 로컬 개발용 시드 — 운영에는 절대 적용하지 않는다(db/seed/, 아래 "시드 데이터" 참고).
 #    순서가 있다: seed_dev_data.sql이 만드는 가맹점에 seed_dev_identity_data.sql이 계정을 얹는다.
@@ -587,15 +585,14 @@ gradlew.bat :db-core:build                                 # jooqCodegen이 먼�
 - **기본 위치 `classpath:db/migration`을 바꾸지 않는다** — 개발용 시드(`db/seed/`)가 운영에서 자동 제외되는 근거가 이 기본값이다(아래 "시드 데이터" 참고). 마이그레이션 파일은 `db-core`의 리소스인데, 앱이 `modules:infra-persistence` → `db-core`로 이어지는 의존성을 통해 classpath에 갖고 있어서 그대로 발견된다(실제 `bootRun`으로 확인).
 - **`flyway-mysql`은 starter에 없어서 따로 추가했다** — Flyway 10부터 DB별 지원이 별도 모듈로 분리됐다.
 - **네 앱이 같은 스키마를 공유하므로 넷 다 마이그레이션을 시도한다.** Flyway가 실행 중 DB 잠금을 잡아서 동시에 떠도 안전하지만, 운영에서는 배포 파이프라인의 별도 단계(또는 한 앱만)로 적용하는 쪽이 낫다 — 스키마 소유권이 네 배포 단위에 흩어져 있는 건 MVP 단계의 단순화다.
-- **jooqCodegen과의 순서 문제**: codegen은 실제 테이블을 읽어야 하고 앱 빌드는 codegen 결과에 의존하므로, "앱을 띄워 마이그레이션한다"로는 최초 부트스트랩이 순환에 빠진다. 그래서 위 작업 흐름은 앱 없이 도는 **Flyway 공식 Docker 이미지**로 최초 적용을 한다. Flyway가 이력을 남기므로 이후 앱 부팅 시에는 "No migration necessary"가 되고 두 경로가 충돌하지 않는다(실제로 확인).
+- **jooqCodegen과의 순서 문제**: codegen은 실제 테이블을 읽어야 하고 앱 빌드는 codegen 결과에 의존하므로, "앱을 띄워 마이그레이션한다"로는 최초 부트스트랩이 순환에 빠진다. 그래서 위 작업 흐름은 앱 없이 도는 **`compose.yaml`의 `flyway` 도구 서비스**(`docker compose run --rm flyway migrate`)로 최초 적용을 한다. Flyway가 이력을 남기므로 이후 앱 부팅 시에는 "No migration necessary"가 되고 두 경로가 충돌하지 않는다(실제로 확인).
+  - 이 서비스에는 `profiles: ['tools']`가 붙어 있어 `docker compose up -d`로는 뜨지 않는다(1회성 도구다). `migrate` 말고 `info`/`baseline`/`repair` 같은 다른 Flyway 명령도 같은 방식으로 쓴다 — 접속 정보는 `FLYWAY_*` 환경변수로 이미 들어가 있다.
+  - `docker run`을 직접 쓰지 않는 이유: 볼륨 마운트에 절대 경로가 필요해서 셸/OS마다 문법이 달라진다(Git Bash에서는 `MSYS_NO_PATHCONV=1`과 `$(pwd -W)`가 필요했다). compose가 상대 경로와 네트워크를 대신 처리해준다.
 - **`org.flywaydb.flyway` Gradle 플러그인은 여전히 쓰지 않는다.** 최신 배포(11.8.2)가 Gradle 9에서 제거된 `JavaPluginConvention`을 호출해서 이 프로젝트의 Gradle 9.5.1에서 태스크가 실패한다(업스트림 미해결: https://github.com/flyway/flyway/issues/3798). Docker 이미지를 쓰는 이유이기도 하다 — 나중에 플러그인이 고쳐졌는지 확인해볼 수 있다.
 - **`mysql` CLI로 스키마를 직접 적용하지 않는다**(시드는 예외다 — Flyway 관리 대상이 아니다). CLI로 적용하면 `flyway_schema_history`에 기록이 남지 않아, 앱을 띄울 때 Flyway가 `Found non-empty schema(s) ... but no schema history table`로 **기동을 거부한다**(아무것도 변경하지 않고 중단한다).
   - Flyway 도입 전에 CLI로 적용해 둔 기존 DB가 있다면, 데이터를 지우지 않고 되살리는 방법은 **baseline**이다 — 이미 적용된 최고 버전을 이력에 기록하고 그 이후만 적용하게 만든다:
     ```
-    MSYS_NO_PATHCONV=1 docker run --rm --network backend_default \
-      -v "$(pwd -W)/db-core/src/main/resources/db/migration:/flyway/sql" flyway/flyway \
-      -url=jdbc:mysql://mysql:3306/stablecoin_payment -user=root -password=verysecret \
-      -baselineVersion=5 baseline
+    docker compose run --rm flyway -baselineVersion=5 baseline
     ```
     되돌리려면 `flyway_schema_history` 테이블을 지우면 된다. DB를 새로 만들어도 되지만(`docker compose down -v`) 시드를 다시 심어야 한다.
 - **버전 번호가 V1/V3/V5로 비어 있는 건 정상이다.** 원래 V2/V4였던 개발용 시드를 `db/seed/`로 옮기면서 생긴 자리다(아래 "시드 데이터" 참고). 이미 적용된 이력을 깨뜨리지 않으려고 남은 파일의 번호는 그대로 뒀다 — Flyway는 버전이 연속이 아니어도 정상 동작한다.
