@@ -49,7 +49,8 @@ modules/
                      의존하는 첫 앱이다(RPC URL은 apps:batch의 application.yaml에 있다).
   infra-persistence/ 실제 Gradle 서브프로젝트 — modules:application의 outbound port를 구현하는 jOOQ Repository Adapter(Architecture 참고)
 db-core/             실제 Gradle 서브프로젝트 — Flyway 마이그레이션 + jOOQ 코드 생성(아래 참고)
-architecture-tests/  실제 Gradle 서브프로젝트, 테스트 전용(src/main 없음) — 다른 모듈의 컴파일된 클래스에 대한 ArchUnit 규칙
+architecture-tests/  실제 Gradle 서브프로젝트, 테스트 전용(src/main 없음) — 다른 모듈의 컴파일된 클래스에 대한
+                     ArchUnit 규칙(Spec 5개, 검사 대상은 modules:* 4개 + apps:* 4개 전부 — "ArchUnit" 절 참고)
 ```
 
 **루트 프로젝트에는 자체 코드가 없다.** 원래 Spring Initializr 스켈레톤 앱(`PracticePayApplication.kt`, 삭제됨)이었는데, `apps/api-payment`가 실제 결제 API 배포 단위 역할을 넘겨받으면서 중복이 됐다 — 그래서 중복으로 남겨두지 않고 삭제했다. `backend/build.gradle.kts`는 이제 모든 서브프로젝트에 적용되는 횡단 관심사 `allprojects {}` 블록(ktlint + `repositories {}`)만 갖고 있다 — 루트 프로젝트 자체에는 Kotlin이나 Spring Boot 플러그인을 적용하지 않는다. `backend/src/` 아래에 소스를 추가하지 말고, 해당하는 `apps:*` 또는 `modules:*` 서브프로젝트에 추가한다.
@@ -97,7 +98,24 @@ gradlew.bat ktlintFormat                                  # 모든 모듈 자동
 - Spring 컨텍스트 테스트는 Spec 본문 안에서 `extensions(SpringExtension)`으로 `io.kotest.extensions.spring.SpringExtension`을 등록하고, 평소처럼 `@SpringBootTest`/`@Import` 애노테이션도 함께 쓴다(`apps/api-payment/src/test/kotlin/paytech/practice/pay/api/payment/PaymentApiApplicationTests.kt` 참고). `@Autowired`로 필드 주입을 받아야 하는 테스트(예: `@WebMvcTest` 슬라이스)는 `FunSpec({ ... })` 트레일링 람다 대신 `FunSpec() { @Autowired lateinit var ...; init { ... } }` 형태를 쓴다 — 람다 생성자로는 `@Autowired` 필드를 선언할 자리가 없어서다(`PaymentControllerTest` 참고).
 - Mocking은 Mockito가 아니라 **MockK**(`io.mockk`)를 쓴다. Spring Boot Test 슬라이스에서 Bean을 Mock으로 바꿔야 할 때(`@MockBean`/`@SpyBean` 자리)는 Mockito 전용인 그 애노테이션 대신 MockK판인 `com.ninja-squad:springmockk`의 `@MockkBean`을 쓴다(`PaymentControllerTest` 참고) — 이 프로젝트 전체가 Mockito 없이 MockK 하나로 통일돼 있다.
 - Assertion은 `kotest-assertions-core`(`shouldBe` 등)를 쓴다.
-- 아키텍처 규칙(예: domain이 Spring/jOOQ에 의존하지 않는다, 아래의 헥사고날 계층 구조)은 **ArchUnit**(`com.tngtech.archunit:archunit`)으로 강제한다 — 별도의 `archunit-junit5` 엔진/`@AnalyzeClasses` 스타일이 아니라, 평범한 Kotest `test { }` 블록 안에서 `ClassFileImporter().importPackages(...)` + `.check(classes)`를 호출하는 방식이다. 프로젝트 전체가 하나의 테스트 작성 컨벤션(Kotest)을 유지하기 위해서다. 모듈 간 규칙(한 모듈의 컴파일된 클래스를 외부에서 검사)은 `architecture-tests`(테스트 전용 Gradle 서브프로젝트; 검사 대상 모듈을 `testImplementation` 의존성으로 추가한다 — `DomainPurityTest` 참고)에 둔다.
+- 아키텍처 규칙(예: domain이 Spring/jOOQ에 의존하지 않는다, 아래의 헥사고날 계층 구조)은 **ArchUnit**(`com.tngtech.archunit:archunit`)으로 강제한다 — 별도의 `archunit-junit5` 엔진/`@AnalyzeClasses` 스타일이 아니라, 평범한 Kotest `test { }` 블록 안에서 `ClassFileImporter().importPackages(...)` + `.check(classes)`를 호출하는 방식이다. 프로젝트 전체가 하나의 테스트 작성 컨벤션(Kotest)을 유지하기 위해서다. 모듈 간 규칙(한 모듈의 컴파일된 클래스를 외부에서 검사)은 `architecture-tests`(테스트 전용 Gradle 서브프로젝트)에 둔다 — 아래 절 참고.
+
+## ArchUnit(`architecture-tests`)
+
+`architecture-tests`는 **검사 대상 모듈 전부**(`modules:domain`/`application`/`infra-persistence`/`infra-blockchain` + `apps:*` 4개)를 `testImplementation`으로 받아서, 컴파일된 클래스에 규칙을 건다. Spec 5개가 각각 하나의 관심사를 맡는다:
+
+| Spec | 무엇을 지키나 |
+|---|---|
+| `HexagonalLayerTest` | 의존 방향 — `layeredArchitecture()`로 Domain/Application/Outbound Adapter/Inbound Adapter 4계층을 정의하고 "안쪽은 바깥쪽을 모른다"를 강제한다. inbound(`apps:*`)와 outbound(`modules:infra-*`) Adapter가 서로를 모른다는 규칙까지 포함한다 |
+| `DomainPurityTest` | 도메인 순수성 — 프레임워크·인프라 라이브러리 금지, 영속성 전용 시각 타입(`LocalDateTime`/`Date`) 금지, **"애그리게이트는 다른 애그리게이트를 `*Id`로만 참조한다"**(커스텀 `ArchCondition`) |
+| `ApplicationPurityTest` | 애플리케이션 순수성 — 같은 프레임워크 금지 목록, Repository Port는 인터페이스, Use Case가 다른 Use Case를 직접 호출하지 않음 |
+| `PersistenceAdapterTest` | jOOQ 생성 코드가 `infra.persistence.jooq` 밖으로 새지 않음, Adapter는 Spring Bean이자 outbound Port 구현체 |
+| `NamingConventionTest` | 이름이 정해지면 자리도 정해진다 — `*UseCase`→`application..`, `*RepositoryAdapter`→`infra.persistence.jooq..`, `@RestController(Advice)`→`..web..` |
+
+- **공용 패키지 상수와 임포트 결과는 `ArchitectureTestSupport.kt`(`Packages` 오브젝트 + `productionClasses`)에 모은다** — Spec마다 패키지 문자열을 직접 적거나 `ClassFileImporter`를 다시 돌리지 않는다.
+- **ArchUnit은 대상 클래스가 하나도 없으면 규칙을 조용히 통과시킨다** — 모듈이 classpath에서 빠지거나 패키지가 바뀌면 규칙 전체가 무력화되는데도 빌드는 초록색이 된다. `HexagonalLayerTest`의 `every layer must actually be imported` 테스트와 `layeredArchitecture()`의 기본 동작(빈 레이어는 실패)이 이 상황을 잡는다. 규칙을 새로 추가할 때는 **일부러 깨뜨려서 실제로 실패하는지 한 번 확인한다**(예: 패키지 이름을 존재하지 않는 값으로 바꿔보고 되돌린다).
+- `architecture-tests`는 `practicepay.spring-bom`도 적용한다 — 검사 대상 모듈들이 Spring Boot BOM으로 버전을 받는 좌표(`org.jooq:jooq` 등)를 transitive로 끌고 오는데, BOM이 없으면 버전 없이 도착해 `testRuntimeClasspath` resolve 자체가 실패한다.
+- 새 인프라 라이브러리를 도입하면 `DomainPurityTest.kt`의 `FORBIDDEN_IN_PURE_LAYERS` 목록에 추가한다(도메인/애플리케이션 두 Spec이 공유한다).
 
 ## 아키텍처(헥사고날)
 
