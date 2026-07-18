@@ -37,3 +37,6 @@ junitPlatform-launcher = { module = "org.junit.platform:junit-platform-launcher"
 [plugins]
 jooq-codegen = { id = "org.jooq.jooq-codegen-gradle", version.ref = "jooqCodegen" }
 ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint" }
+# 루트 build.gradle.kts가 `apply false`로만 쓴다(자기 Kotlin 소스는 없다) —
+# 서브프로젝트는 build-logic의 practicepay.kotlin-common을 통해 같은 버전을 받는다.
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }

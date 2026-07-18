@@ -5,8 +5,12 @@ plugins {
 	// NoClassDefFoundError on org.jetbrains.kotlin.gradle.dsl.KotlinProjectExtension
 	// — the ktlint plugin unconditionally touches that class on apply, even for a
 	// project that never applies kotlin("jvm") itself.
-	kotlin("jvm") version "2.3.21" apply false
-	id("org.jlleitschuh.gradle.ktlint") version "14.2.0" apply false
+	//
+	// 버전은 `gradle/libs.versions.toml`에서 온다 — 메인 빌드의 build.gradle.kts는
+	// 카탈로그 접근자를 정상적으로 쓸 수 있다(쓰지 못하는 건 build-logic의
+	// Precompiled Script Plugin뿐이다, backend/CLAUDE.md의 "build-logic" 절 참고).
+	alias(libs.plugins.kotlin.jvm) apply false
+	alias(libs.plugins.ktlint) apply false
 }
 
 group = "paytech"
