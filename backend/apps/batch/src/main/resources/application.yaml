@@ -2,9 +2,11 @@ spring:
   application:
     name: batch
   datasource:
-    url: jdbc:mysql://localhost:3306/stablecoin_payment?useUnicode=true&characterEncoding=UTF-8
-    username: root
-    password: verysecret
+    # 기본값은 로컬 개발용(compose.yaml의 MySQL)이고, 운영에서는 아래 환경변수로
+    # 덮어쓴다 — Pepper 설정과 같은 규칙이다(backend/CLAUDE.md의 "설정과 비밀값" 절).
+    url: "${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/stablecoin_payment?useUnicode=true&characterEncoding=UTF-8}"
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:verysecret}
   batch:
     # JobLauncherApplicationRunner가 부팅 시 자동으로 한 번 실행하는 기본 동작을
     # 끈다 — 이 Job은 BlockchainTransactionConfirmScheduler가 주기적으로 직접
@@ -19,7 +21,10 @@ spring:
 app:
   blockchain:
     base-sepolia:
-      # 로컬 개발용 공개 RPC placeholder다 — 실제 배포 전 전용 RPC 프로바이더
-      # (Alchemy/Infura 등)로 옮겨야 한다(요청 제한·안정성 문제로 공개 RPC를
-      # 운영에 그대로 쓰지 않는다).
-      rpc-url: https://sepolia.base.org
+      # 기본값은 Base Sepolia 공개 RPC다 — 운영에서는 APP_BLOCKCHAIN_BASE_SEPOLIA_RPC_URL
+      # 환경변수로 전용 RPC 프로바이더(Alchemy/Infura 등)를 주입한다. 공개 RPC는
+      # 요청 제한·안정성 문제로 운영에 그대로 쓰지 않는다.
+      #
+      # 전용 프로바이더 URL은 대개 API Key를 경로에 포함하므로(비밀값) 여기 직접
+      # 적지 않는다 — Pepper와 같은 취급이다(backend/CLAUDE.md의 "설정과 비밀값" 절).
+      rpc-url: ${APP_BLOCKCHAIN_BASE_SEPOLIA_RPC_URL:https://sepolia.base.org}

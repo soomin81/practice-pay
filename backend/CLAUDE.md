@@ -111,6 +111,22 @@ gradlew.bat ktlintFormat                                  # 모든 모듈 자동
 - 툴체인: Java 25, Kotlin 2.3.21, Spring Boot 4.1.0(각 `apps:*`/`db-core`/`modules:infra-persistence` 서브프로젝트 기준 — 루트 프로젝트 자체는 더 이상 Kotlin이나 Spring Boot 플러그인을 적용하지 않는다). 버전은 `backend/gradle/libs.versions.toml`에 모여 있다(위 "build-logic" 절 참고).
 - Lint/포맷: **ktlint**를 `org.jlleitschuh.gradle.ktlint` 플러그인(14.2.0)으로 모든 모듈에 적용한다(계층형 `modules:domain`/`modules:application` include를 위해 Gradle이 만드는 Phantom 부모 `:modules`도 포함) — 루트 `build.gradle.kts`의 `allprojects {}`를 통해서다. ktlint는 `build-logic`의 convention plugin으로 옮기지 않고 여기 그대로 뒀다 — `:modules` phantom project는 자기 `build.gradle.kts`가 없어서 convention plugin을 적용할 수 없고, 이미 잘 동작하고 문서화돼 있는 방식을 바꿀 이유가 없었다. `backend/.editorconfig`가 `indent_style = tab`을 고정해서(이 프로젝트의 기존 컨벤션) ktlint가 스페이스로 강제 포맷하지 않게 한다. `ktlintCheck`는 이미 `check`/`build`의 일부로 실행되므로, 빌드가 성공하면 Lint도 깨끗하다는 뜻이다. `db-core/build.gradle.kts`는 `generated-src`(jOOQ가 생성한 코드, 직접 수정하지 않음)를 Lint 대상에서 제외하고, 그걸 읽는 ktlint 태스크에 명시적으로 `dependsOn("jooqCodegen")`을 추가한다 — Gradle의 태스크 입력 검증이, 어떤 디렉토리를 읽는 태스크라면 그 디렉토리를 만드는 태스크에 대한 의존성 선언을 요구하기 때문이다.
 
+## 설정과 비밀값(`application.yaml`)
+
+각 앱의 `application.yaml`에 있는 값은 **전부 로컬 개발용 기본값**이고, 운영에서는 환경변수로 덮어쓴다. 소스에 실제 운영 값(DB 비밀번호, Pepper, 유료 RPC URL)을 적지 않는다.
+
+| 설정 | 환경변수 | 앱 |
+|---|---|---|
+| `spring.datasource.url`/`username`/`password` | `SPRING_DATASOURCE_URL`/`_USERNAME`/`_PASSWORD` | 4개 앱 전부 |
+| `app.api-key.pepper` | `APP_API_KEY_PEPPER` | api-payment |
+| `app.invitation-token.pepper` | `APP_INVITATION_TOKEN_PEPPER` | api-admin/api-merchant |
+| `app.blockchain.base-sepolia.rpc-url` | `APP_BLOCKCHAIN_BASE_SEPOLIA_RPC_URL` | batch |
+
+- **`${ENV:기본값}` 문법이 환경변수 덮어쓰기를 가능하게 하는 게 아니다.** Spring Boot는 환경변수를 `application.yaml`보다 우선하는 property source로 이미 읽고, `APP_INVITATION_TOKEN_PEPPER` 같은 이름을 `app.invitation-token.pepper`로 자동 매핑한다(relaxed binding) — `${...}` 없이 리터럴만 적어둬도 환경변수가 값을 덮어쓰는 것을 실제로 확인했다. 그럼에도 `${...}`로 적는 건 **환경변수 이름을 설정 파일만 보고 알 수 있게** 하고 "이 값은 주입받는 것"임을 드러내기 위해서다.
+- **`app.invitation-token.pepper`는 `api-admin`과 `api-merchant`가 반드시 같은 값이어야 한다.** 초대는 발급 시점에 `hash(원문 Token)`을 `account_invitation.token_hash`에 저장하고 수락 시점에 다시 `hash(원문 Token)`으로 조회하는데(`AcceptAccountInvitationUseCase`), 발급 앱과 수락 앱이 다르기 때문이다(가맹점 사용자 초대는 `api-merchant`가 수락하지만 발급은 다른 앱이 한다 — 가맹점 등록 Use Case가 생기면 실제로 갈린다). Pepper가 어긋나면 초대를 영영 찾지 못하고, 그때 나오는 예외는 원인을 숨기도록 설계된 `InvalidInvitationException`("유효하지 않은 초대")이라 추적이 매우 어렵다 — **한쪽만 교체하지 않는다.**
+- **Pepper 교체는 기존 데이터를 무효화한다.** `app.api-key.pepper`를 바꾸면 기존 API Key의 `secret_hash`가 전부 맞지 않게 되고(원문이 없어 재계산 불가), `app.invitation-token.pepper`를 바꾸면 아직 수락되지 않은 초대가 전부 무효가 된다. 교체하려면 각각 API Key 재발급/초대 재발급이 함께 필요하다.
+- 로컬 개발 기본값은 `compose.yaml`의 MySQL(`localhost:3306/stablecoin_payment`, `root`/`verysecret`)과 Base Sepolia 공개 RPC(`https://sepolia.base.org`)를 가리킨다 — 환경변수를 하나도 설정하지 않아도 `bootRun`이 그대로 동작해야 한다는 뜻이다.
+
 ## 테스트
 
 - 테스트 프레임워크는 **Kotest**(`FunSpec` 스타일)다 — JUnit5의 `@Test`/`kotlin-test`가 아니다. `gradlew.bat test`는 JUnit Platform 위의 `kotest-runner-junit5`를 통해 Kotest Spec을 자동으로 수집한다(`useJUnitPlatform()`이 이미 설정돼 있음, 추가 설정 불필요).
@@ -188,9 +204,7 @@ inbound adapter → application → domain ← outbound port ← outbound adapte
 | `infra.support.webhook` | `HttpWebhookSender`(`WebhookSender`) | batch |
 
 - **`modules:common`이 아니라 여기인 이유**: 이 클래스들은 전부 `application.port.outbound`의 Port 구현체(`@Component`)라서 `modules:application`과 Spring에 의존한다 — "의존성 없는 공용 유틸리티"라는 `modules:common`의 역할과 맞지 않는다. 헥사고날 관점에서도 outbound Adapter라 `infra-*` 자리가 맞고, `architecture-tests`의 `HexagonalLayerTest`가 정의한 Outbound Adapter 계층(`paytech.practice.pay.infra..`)에 자동으로 포함되는 실질적 이점도 있다. `modules:common`은 여전히 비어 있다.
-- **Pepper 설정 규칙**(`application.yaml`의 `app.*.pepper`): 값은 로컬 개발용 기본값만 두고 운영에서는 환경변수로 덮어쓴다(`APP_API_KEY_PEPPER`/`APP_INVITATION_TOKEN_PEPPER`). Spring Boot가 환경변수를 `application.yaml`보다 우선해서 읽고 이름을 자동 매핑하므로(relaxed binding) `${...}` 문법이 없어도 덮어쓰기는 동작한다 — 설정 파일에 `${...}`로 적어둔 건 환경변수 이름을 파일만 보고 알 수 있게 하려는 문서화 목적이다(실제로 리터럴 값도 환경변수가 덮어쓰는 것을 확인했다).
-  - **`app.invitation-token.pepper`는 `api-admin`과 `api-merchant`가 반드시 같은 값을 써야 한다.** 초대는 발급 시점에 `hash(원문 Token)`을 `account_invitation.token_hash`에 저장하고 수락 시점에 다시 `hash(원문 Token)`으로 조회하는데(`AcceptAccountInvitationUseCase`), 발급하는 앱과 수락하는 앱이 다르기 때문이다(가맹점 사용자 초대는 `api-merchant`가 수락하지만 발급은 다른 앱이 한다 — 가맹점 등록 Use Case가 생기면 실제로 갈린다). Pepper가 어긋나면 초대를 영영 찾지 못하고, 그때 나오는 예외는 원인을 숨기는 `InvalidInvitationException`이라 추적이 매우 어렵다 — 한쪽만 교체하지 않는다.
-  - `app.api-key.pepper`는 `api-payment` 전용이라 이런 제약이 없다. 다만 이 값을 바꾸면 기존 API Key의 `secret_hash`가 전부 무효가 된다(원문이 없어 재계산 불가) — 교체하려면 Key 재발급이 함께 필요하다.
+- Pepper 설정값(`app.api-key.pepper`/`app.invitation-token.pepper`)을 다루는 규칙은 아래 "설정과 비밀값" 절에 있다 — **특히 두 앱이 같은 Pepper를 써야 하는 제약**은 어기면 원인 추적이 어려운 방식으로 깨지므로 반드시 읽는다.
 - **포트별로 하위 패키지를 나누고, 앱은 자기가 쓰는 것만 스캔한다**(`infra.persistence.jooq`/`infra.blockchain`을 통째로 스캔하는 것과 다른 점이다). `HmacInvitationTokenHasher`가 `@Value("\${app.invitation-token.pepper}")`로 **필수** 설정값을 요구하기 때문이다 — 초대 흐름이 없는 `api-payment`/`batch`가 이 Bean까지 스캔하면 그 설정이 없다며 컨텍스트가 뜨지 않는다. 앞으로 설정값을 요구하는 Port 구현을 추가할 때도 같은 이유로 하위 패키지를 나눈다.
 - **앱은 이 모듈의 클래스를 타입으로 참조하지 않는다** — 컴포넌트 스캔으로만 배선된다(`HexagonalLayerTest`의 "inbound/outbound Adapter는 서로를 모른다" 규칙이 이걸 강제한다).
 - **한 앱에서만 쓰는 구현도 여기 둔다**(`HmacApiKeySecretHasher`는 api-payment만, `HttpWebhookSender`는 batch만 쓴다). 처음에는 "중복이 아니니 그 앱에 두고, 두 번째 앱이 필요로 하면 그때 옮긴다"로 갔다가 바꿨다 — 기준을 **중복 제거**가 아니라 **계층 일관성**으로 잡으면 사용처 수와 무관하게 Port 구현은 `infra-*`의 것이고, 그래야 위의 ArchUnit 규칙으로 잠글 수 있기 때문이다. `HmacApiKeySecretHasher`가 `infra.support.security`의 `HmacInvitationTokenHasher`와 같은 HMAC+Pepper 패턴인데도 다른 모듈에 흩어져 있던 것도 이 변경의 계기였다.

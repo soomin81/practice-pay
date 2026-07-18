@@ -2,9 +2,11 @@ spring:
   application:
     name: api-admin
   datasource:
-    url: jdbc:mysql://localhost:3306/stablecoin_payment?useUnicode=true&characterEncoding=UTF-8
-    username: root
-    password: verysecret
+    # 기본값은 로컬 개발용(compose.yaml의 MySQL)이고, 운영에서는 아래 환경변수로
+    # 덮어쓴다 — Pepper 설정과 같은 규칙이다(backend/CLAUDE.md의 "설정과 비밀값" 절).
+    url: "${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/stablecoin_payment?useUnicode=true&characterEncoding=UTF-8}"
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:verysecret}
 
 server:
   port: 8082
