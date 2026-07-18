@@ -21,16 +21,19 @@ apps/
                      그걸 노출하는 컨트롤러(POST /merchant/login)가 있다(Apps 절 참고). 가맹점 등록, 하위
                      계정 발급, API Key 등 나머지 흐름은 아직 Use Case가 없다.
   batch/             실제 Gradle 서브프로젝트, 독립 배포 가능한 Spring Boot 앱 — spring-boot-starter-batch +
-                     jooq + modules:application/infra-persistence/infra-blockchain에 의존한다. 첫 Job은
-                     confirmBlockchainTransactionJob(BlockchainTransaction 감지·Confirm 폴링 Worker,
-                     10초 주기, Apps 절의 "apps:batch의 Confirm 폴링 Worker" 참고). 웹 스타터는 여전히 없다.
+                     jooq + modules:application/infra-persistence/infra-blockchain에 의존한다. Job 둘:
+                     confirmBlockchainTransactionJob(BlockchainTransaction 감지·Confirm 폴링 Worker)과
+                     publishOutboxEventJob(OutboxEvent 발행 Worker, Webhook HTTP 호출 포함) 둘 다
+                     10초 주기다(Apps 절의 "apps:batch의 Confirm 폴링 Worker"/"apps:batch의 OutboxEvent
+                     발행 Worker" 참고). 웹 스타터는 여전히 없다.
 modules/
   application/       실제 Gradle 서브프로젝트, domain에 의존; ConnectCheckoutWalletUseCase(application.checkout,
                      지갑 연결 슬라이스), CreatePaymentUseCase(결제 생성 슬라이스),
                      SubmitPaymentTransactionUseCase(BlockchainTransaction 생성 슬라이스),
                      ConfirmBlockchainTransactionUseCase(감지·Confirm 슬라이스) + PaymentTransactionValidator
-                     + PaymentNetworkConfig(공유 MVP 상수), Identity/API Key Use Case(Authenticate*/
-                     IssueInternalUser), BlockchainClient(온체인 조회 Port, 구현체는 modules:infra-blockchain)
+                     + PaymentNetworkConfig(공유 MVP 상수), PublishOutboxEventUseCase(application.outbox,
+                     OutboxEvent 발행 슬라이스), Identity/API Key Use Case(Authenticate*/IssueInternalUser),
+                     BlockchainClient(온체인 조회 Port, 구현체는 modules:infra-blockchain)
                      + 그 outbound port들(Architecture 참고)
   common/            실제 Gradle 서브프로젝트, 의존성 없음, src 비어 있음 — 어떤 레이어에서도 쓸 수 있는 공용
                      유틸리티가 실제로 필요해질 때 채운다(순환 의존을 피하려고 지금은 어떤 modules:*도
@@ -248,6 +251,21 @@ inbound adapter → application → domain ← outbound port ← outbound adapte
 - **Spring Batch JobRepository 스키마를 위한 새 Flyway 마이그레이션(`V5__add_spring_batch_schema.sql`)을 추가했다** — 이 프로젝트가 설계한 도메인 테이블이 아니라 `spring-batch-core:6.0.4`의 공식 `schema-mysql.sql`(JAR 안에서 그대로 추출)이다. `db-core`의 jOOQ codegen `excludes`에 `BATCH_.*`를 더해서 이 테이블들은 jOOQ 코드가 생성되지 않는다 — Spring Batch가 자체 JDBC로만 관리하고 우리 코드는 손대지 않는다. `spring.batch.jdbc.initialize-schema: never`로 Spring Boot가 스키마를 자동 생성하는 것도 명시적으로 막았다 — "Migration → MySQL Schema → jOOQ Code Generation" 원칙을 프레임워크 테이블에도 그대로 적용했다.
 - **실제 RPC/DB로 끝까지 검증했다.** 로컬 DB에 실제 Base Sepolia 트랜잭션(과거 `Web3jBlockchainClient` 검증 때 썼던 것과 같은 Hash)을 가리키는 `Payment`+`BlockchainTransaction` 행을 수동으로 심고 `bootRun`으로 실제 앱을 띄워서, 스케줄러가 10초마다 Job을 실행하고(로그로 확인), 첫 폴링에서 그 거래를 실제로 조회해(`block_number=44280832`로 정확히 detect) `PaymentTransactionValidator`가 우리 USDC Contract와 다르다고 정확히 판단해(`TOKEN_CONTRACT_NOT_ALLOWED`) `BlockchainTransaction`/`Payment` 둘 다 `FAILED`로 저장하고, 다음 폴링부터는 대상 목록에서 빠지는 것까지 실제로 확인했다. 검증 후 스모크 테스트 행은 정리했다.
 - **테스트**: `ConfirmPendingBlockchainTransactionsTaskletTest`(단위, 대상 전부 호출/하나 실패해도 나머지 계속/빈 목록은 no-op), `BlockchainTransactionRepositoryAdapterTest`의 `findPendingConfirmation` 케이스(Testcontainers MySQL 통합, `SUBMITTED`/`DETECTED`/`CONFIRMING`은 포함하고 `CONFIRMED`는 제외하는 것까지 확인), `BatchApplicationTests`(Testcontainers, 전체 Spring 컨텍스트 — `JobRepository`/`Job`/`Step`/`Web3jConfiguration`/jOOQ가 다 같이 뜨는지). Job/Step의 실제 실행 자체(`spring-batch-test`의 `JobLauncherTestUtils` 등)는 별도 통합 테스트로 만들지 않았다 — 위 수동 `bootRun` 검증으로 대신했다(알려진 gap: 자동화된 Job 실행 테스트는 없다).
+
+### `apps:batch`의 OutboxEvent 발행 Worker
+
+`OutboxEvent`(`domain.outbox`)의 KDoc이 "별도 발행 Worker가 이 레코드를 읽어 실제 메시지 발행(예: Webhook 트리거)을 수행하고 상태를 갱신한다"고 남겨뒀던 그 Worker다. `apps:batch`의 두 번째 Job이며, Confirm 폴링 Worker와 정확히 같은 골격(`Job`/`Step`/`Tasklet`, `JobOperator`, `ResourcelessTransactionManager`, `spring.batch.job.enabled: false`, 10초 `@Scheduled` 폴링, 하나 실패해도 나머지 계속)을 그대로 재사용한다 — 그 골격 자체의 근거는 위 "apps:batch의 Confirm 폴링 Worker" 절 참고, 여기는 이 Worker에서만 다른 판단만 적는다.
+
+- **새 `modules:application` 패키지 `application.outbox`를 만들었다.** `PublishOutboxEventUseCase`가 이 Worker의 핵심 로직이다 — `OutboxEvent`를 대상으로 `PENDING`/`RETRY_WAITING` 체크 → `startPublishing()` → `aggregateType == "Payment"`로 `PaymentRepository.findById` → `Payment.merchantId`로 `MerchantRepository.findById`까지 이어서 수신 Merchant를 찾는다(`CreatePaymentUseCase`/`ConfirmBlockchainTransactionUseCase` 둘 다 지금은 `aggregateType = "Payment"`로만 이벤트를 만들어서 그 경우만 다룬다 — 다른 `aggregateType`이 생기면 그때 분기를 넓힌다).
+- **`Merchant.webhookUrl`이 없으면(가맹점이 Webhook을 설정하지 않은 정상적인 경우) `WebhookDelivery`를 아예 만들지 않고 바로 `OutboxEvent.publish()`로 끝낸다.** 이 분기를 실제 `bootRun`으로 확인했다(아래 "실제 RPC/DB로 끝까지 검증했다" 참고) — 보낼 곳이 없는 이벤트를 "발행 실패"로 취급하면 안 된다는 판단이다.
+- **`Merchant.webhookUrl`이 있으면 `(eventId, merchantId)`로 기존 `WebhookDelivery`를 먼저 찾는다(`WebhookDeliveryRepository.findByEventIdAndMerchantId`)** — 재시도로 다시 호출됐을 때 새 `WebhookDelivery`를 중복으로 만들지 않기 위해서다(`uk_webhook_event_merchant` DB 제약과 대응하는 애플리케이션 레벨 확인, `SubmitPaymentTransactionUseCase`가 `BlockchainTransaction`에 대해 하는 것과 같은 패턴). 없으면 새로 만든다.
+- **`WebhookSender.send()`의 결과에 따라 세 갈래로 나뉜다**: 2xx 응답 → `WebhookDelivery.succeed()` + `OutboxEvent.publish()`. 그 외(비-2xx 응답 또는 전송 자체 실패)면서 `attemptCount < MAX_WEBHOOK_ATTEMPTS`(5, `docs/`에 값이 없어 고정한 MVP 상수 — `WebhookDelivery`/`OutboxEvent`의 KDoc도 "최대 횟수"를 명시하지 않고 호출부 판단으로 남겨뒀다)면 → 둘 다 `scheduleRetry()`(`nextRetryAt = now + RETRY_DELAY`, 1분 고정 — 지수 백오프 없는 MVP 단순화). 그 이상이면 → 둘 다 `fail()`로 최종 실패 처리.
+- **`OutboxEvent + WebhookDelivery`를 함께 저장하는 트랜잭션 경계는 `docs/architecture/persistence-jooq.md`가 명시한 세 경계(결제 생성/결제 완료/환전 완료) 어디에도 없다** — `PublishOutboxEventUseCase`가 새로 정의한 경계다(`SubmitPaymentTransactionUseCase`의 "결제 제출" 경계, `IssueInternalUserUseCase`의 "발급" 경계와 같은 성격).
+- **`WebhookSender`를 JDK 내장 `java.net.http.HttpClient`로 구현했다(`apps:batch`의 `HttpWebhookSender`)** — 이 프로젝트에서 처음으로 아웃바운드 HTTP 호출이 필요해졌지만, `apps:batch`는 웹 앱이 아니라서(`spring-boot-starter-web*` 없음) Spring의 `RestClient`/`WebClient`를 새로 끌어오는 대신 별도 의존성이 필요 없는 JDK 내장 클라이언트를 썼다. 인스턴스 하나를 필드로 재사용하고(`HttpClient`는 스레드 안전·재사용 전제 타입), `connectTimeout=5초`/요청 `timeout=10초`를 둔다. 응답 본문은 필요 없어 `BodyHandlers.discarding()`을 쓴다.
+- **`OutboxEventRepositoryAdapter`를 insert-only에서 select-then-insert-or-update로 바꿨다.** 원래(`OutboxEvent`를 처음 만들 때) `save()`가 `.insert()` 하나뿐이었는데, 이 Worker가 처음으로 기존 `OutboxEvent`의 상태 전이(`PROCESSING`/`RETRY_WAITING`/`PUBLISHED`/`FAILED`)를 다시 저장해야 해서 UPDATE 경로를 추가했다. `outbox_event`는 `version` 컬럼이 없어서(`OutboxEvent`의 KDoc 참고) 낙관적 잠금 없이 단순 UPDATE다 — 여러 발행 Worker 인스턴스가 동시에 같은 행을 집어가는 경합은 막지 않는다(이 MVP는 배치 앱을 단일 인스턴스로만 돌린다고 전제한다, 알려진 gap).
+- **새 Adapter `WebhookDeliveryRepositoryAdapter`(`modules:infra-persistence`, 새 패키지 `infra.persistence.jooq.webhook`)는 `PaymentRepositoryAdapter`와 같은 모양·같은 낙관적 잠금 한계를 가진다** — `webhook_delivery`는 (`outbox_event`와 달리) 진짜 `version` 컬럼이 있어서 UPDATE에 `VERSION.eq(existing.version)` 조건을 건다.
+- **실제 RPC/DB로 끝까지 검증했다.** 로컬 DB에 Merchant 셋(Webhook URL이 `https://httpbin.org/status/200`인 것, `NULL`인 것, `https://httpbin.org/status/500`인 것)과 각각의 `Payment`+`OutboxEvent(PENDING, aggregateType=Payment)` 행을 수동으로 심고 `bootRun`으로 실제 앱을 띄워서, 스케줄러 첫 폴링에서 세 이벤트를 모두 집어(`Outbox 발행 대상 2건` 로그, 이어서 3번째 이벤트는 별도로 심어 다음 폴링에서 `1건`으로 확인) 실제 HTTP 요청을 보내고: (1) 200 응답 → `WebhookDelivery.SUCCEEDED`(`last_http_status=200`) + `OutboxEvent.PUBLISHED`, (2) `webhookUrl=NULL` → `WebhookDelivery` 행 자체가 생기지 않고 `OutboxEvent.PUBLISHED`, (3) 500 응답 → `WebhookDelivery.RETRY_WAITING`(`last_http_status=500`, `next_retry_at`=1분 뒤) + `OutboxEvent.RETRY_WAITING`까지 DB에서 직접 확인했다. 검증 후 스모크 테스트 행은 정리하고 `bootRun` 프로세스를 종료했다.
+- **테스트**: `PublishOutboxEventUseCaseTest`(단위, Webhook 미설정 시 즉시 발행/2xx 응답 성공/비-2xx 응답 재시도 예약/재개된 `WebhookDelivery`가 시도 한도에 도달해 최종 실패/존재하지 않는 ID/이미 처리 중이거나 종료 상태), `PublishPendingOutboxEventsTaskletTest`(단위, 대상 전부 호출/하나 실패해도 나머지 계속/빈 목록은 no-op — `ConfirmPendingBlockchainTransactionsTaskletTest`와 같은 케이스 구성), `OutboxEventRepositoryAdapterTest`에 `findById`/`findPendingPublication`(`PENDING`과 기한 도래 `RETRY_WAITING`은 포함하고 미도래 `RETRY_WAITING`/`PUBLISHED`는 제외)/update 경로 케이스 추가, 새 `WebhookDeliveryRepositoryAdapterTest`(Testcontainers MySQL 통합 — insert/상태 전이 update/조회 없음).
 
 ### IntelliJ HTTP Client(`.http` 파일)로 API 수동 테스트하기
 
