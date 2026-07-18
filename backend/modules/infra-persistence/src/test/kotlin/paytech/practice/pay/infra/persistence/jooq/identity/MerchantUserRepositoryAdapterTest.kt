@@ -90,6 +90,33 @@ class MerchantUserRepositoryAdapterTest :
 			adapter.findByMerchantIdAndLoginId(merchantId, LoginId("no-such-login-id")).shouldBeNull()
 		}
 
+		test("save inserts a new MerchantUser and findByMerchantIdAndEmail round-trips it") {
+			val merchantId = MerchantId(insertTestMerchant())
+			val email = Email("${uniqueSuffix()}@example.com")
+			val user =
+				MerchantUser.inviteInitialOwner(
+					id = MerchantUserId("mu_${uniqueSuffix()}"),
+					merchantId = merchantId,
+					loginId = LoginId("owner-${uniqueSuffix()}"),
+					email = email,
+					userName = "테스트 오너",
+					invitedByInternalUserId = insertTestInternalUser(),
+					createdAt = NOW,
+				)
+			adapter.save(user)
+
+			val found = adapter.findByMerchantIdAndEmail(merchantId, email)
+
+			found.shouldNotBeNull()
+			found.id shouldBe user.id
+		}
+
+		test("findByMerchantIdAndEmail returns null when no such email exists for the merchant") {
+			val merchantId = MerchantId(insertTestMerchant())
+
+			adapter.findByMerchantIdAndEmail(merchantId, Email("no-such-email@example.com")).shouldBeNull()
+		}
+
 		test("save inserts a new MerchantUser and findById round-trips it, resolving merchantId from the row") {
 			val merchantId = MerchantId(insertTestMerchant())
 			val id = MerchantUserId("mu_${uniqueSuffix()}")

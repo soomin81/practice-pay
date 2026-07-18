@@ -34,9 +34,10 @@ apps/
                      (Apps 절 참고).
   api-merchant/      실제 Gradle 서브프로젝트, 독립 배포 가능한 Spring Boot 앱 — webmvc + jooq + security,
                      modules:application + modules:infra-persistence에 의존한다. AuthenticateMerchantUserUseCase
-                     (POST /merchant/login)와 AcceptAccountInvitationUseCase(POST /merchant/account-invitations/accept,
-                     비인증, api-admin과 같은 공용 Use Case를 재사용)가 있다(Apps 절 참고). 가맹점 등록, 하위
-                     계정 발급, API Key 등 나머지 흐름은 아직 Use Case가 없다.
+                     (POST /merchant/login), AcceptAccountInvitationUseCase(POST /merchant/account-invitations/accept,
+                     비인증, api-admin과 같은 공용 Use Case를 재사용), InviteMerchantSubAccountUseCase
+                     (POST /merchant/merchant-users, OWNER/ADMIN)가 있다(Apps 절 참고). API Key 발급·폐기는
+                     아직 Use Case가 없다.
   batch/             실제 Gradle 서브프로젝트, 독립 배포 가능한 Spring Boot 앱 — spring-boot-starter-batch +
                      jooq + modules:application/infra-persistence/infra-blockchain에 의존한다. Job 셋:
                      confirmBlockchainTransactionJob(BlockchainTransaction 감지·Confirm 폴링 Worker),
@@ -362,6 +363,21 @@ inbound adapter → application → domain ← outbound port ← outbound adapte
 - **가맹점부터 특정해야 한다.** `login_id`는 가맹점 안에서만 유일하다(`merchant_seq + login_id`, "Idempotency keys" 참고) — `InternalUser`처럼 `loginId`만으로 계정을 찾을 수 없다. 그래서 `MerchantLoginRequest`/`AuthenticateMerchantUserCommand`는 `merchantCode`(사람이 읽는 가맹점 코드)를 함께 받고, Use Case가 `MerchantRepository.findByCode`로 가맹점을 먼저 확정한 다음 `MerchantUserRepository.findByMerchantIdAndLoginId`로 계정을 찾는다. 가맹점 코드가 틀려도 같은 `InvalidCredentialsException`을 던진다(가맹점 존재 여부도 노출하지 않는다) — 이걸 위해 `MerchantRepository` Port에 `findByCode`를 추가했다(기존엔 `findById`만 있었다).
 - **가맹점 자체의 상태는 로그인 가능 여부에 영향을 주지 않는다.** `Merchant`가 `SUSPENDED`여도 그 가맹점의 관리자는 이유를 확인하러 로그인할 수 있어야 한다는 판단이다 — 문서에 명시된 규칙은 아니고, `AuthenticateMerchantUserUseCase`의 KDoc에 그렇게 남겨뒀다.
 - **`MerchantUserRepositoryAdapter`**(`modules:infra-persistence`)는 `InternalUserRepositoryAdapter`와 같은 모양이지만 FK가 하나 더 있다 — `merchant_seq`(소속 가맹점)에 더해 `invited_by_internal_user_seq`/`invited_by_merchant_user_seq`(둘 다 nullable, 초대자 감사 정보)까지 resolve한다.
+- **`Authentication.principal`에 `MerchantUserPrincipal`을 심는다** — 원래는 `result.loginId.value`(문자열)만 심었지만, `InviteMerchantSubAccountUseCase`가 감사 정보(`invitedByMerchantUserId`)와 발급 대상 가맹점(`merchantId`)을 세션에서 바로 가져와야 해서 확장했다(아래 "하위 계정 발급 Use Case" 절 참고) — `api-admin`이 `InternalUserPrincipal`을 도입했던 것과 같은 이유·같은 시점의 변화다.
+
+### 하위 계정 발급 Use Case(`InviteMerchantSubAccountUseCase`, `application.identity`)와 `api-merchant`의 발급 컨트롤러
+
+`POST /merchant/merchant-users`(`docs/architecture/identity-access-api-key.md`의 "4.4 하위 계정 발급": "`OWNER`, `ADMIN`은 하위 계정을 발급할 수 있다")가 새 `InviteMerchantSubAccountUseCase`를 HTTP로 노출한다. `MerchantUser.inviteSubAccount`는 이전부터 있었다 — 이 Use Case가 그걸 실제로 처음 호출하는 자리다.
+
+- **발급 권한을 정적 역할 검사가 아니라 `MerchantUser.canInviteSubAccounts()`로 동적으로 확인한다 — `IssueInternalUserUseCase`/`RegisterMerchantUseCase`와 의도적으로 다른 선택이다.** 그 두 Use Case의 Command KDoc은 "발급 권한 확인은 inbound Adapter(세션의 역할)가 끝냈다고 전제한다"고 명시하는데, 여기서는 `invitedByMerchantUserId`로 요청자의 `MerchantUser`를 다시 읽어 `canInviteSubAccounts()`를 호출한다. `canInviteSubAccounts()`가 이미 도메인에 존재하는데 이 Use Case가 생기기 전까지 어디서도 호출되지 않고 있었다는 게 결정적 근거였다 — 정적 역할 검사만으로 충분했다면 이 메서드가 있을 이유가 없다. `ACTIVE` 상태까지 함께 검증하는 것 자체가 세션의 역할 스냅샷만으로는 부족하다는 뜻으로 읽었다.
+  - **실제로 이 차이가 의미 있는 상황을 `bootRun`으로 재현해서 확인했다.** ADMIN으로 로그인해 세션을 살려둔 채로 그 계정을 DB에서 직접 `SUSPENDED`로 바꾼 뒤 같은 세션으로 다시 하위 계정 발급을 시도했다 — `SecurityConfig`의 정적 `hasAnyRole("OWNER", "ADMIN")`은 세션에 캐싱된 `ROLE_ADMIN` 권한을 그대로 통과시켰지만, Use Case가 요청자를 다시 읽어 `canInviteSubAccounts()`를 호출한 덕분에 정확히 `MerchantUserCannotInviteSubAccountsException`(403, `"...role=ADMIN, status=SUSPENDED)."`)으로 막혔다. 정적 검사만 있었다면 이 요청은 그대로 통과했을 것이다.
+- **어느 가맹점에 계정을 만들지도 같은 조회로 함께 얻는다(`inviter.merchantId`) — 요청 본문으로 받지 않는다.** `RegisterMerchantUseCase`는 항상 새 가맹점을 만들어서 `merchantId` 문제가 없었지만, 이 Use Case는 기존 가맹점에 끼워 넣는 것이라 그 가맹점이 어디인지를 신뢰할 수 있는 곳(방금 DB에서 읽은 요청자 자신의 소속)에서 가져와야 한다 — 요청 본문에 `merchantId`를 받으면 호출자가 임의의 값을 실어 보내 남의 가맹점에 계정을 만드는 멀티테넌시 취약점이 생긴다(`MerchantUserPrincipal`의 KDoc에도 같은 내용을 남겼다).
+- **`loginId`/`email` 중복을 이번엔 사전에 확인해야 한다 — `RegisterMerchantUseCase`와 다른 점이다.** `RegisterMerchantUseCase`는 항상 새 `merchant_seq`를 만들어서 충돌할 기존 행이 없었지만, 이 Use Case는 기존 `merchant_seq`에 끼워 넣으므로 실제로 겹칠 수 있다. `MerchantUserRepository`에 (기존 `findByMerchantIdAndLoginId`에 더해) `findByMerchantIdAndEmail`을 추가해서 둘 다 사전 조회하고, 겹치면 `DuplicateMerchantUserException`(409)을 던진다.
+- **`OWNER`는 이 경로로 만들 수 없다.** `MerchantUser.inviteSubAccount` 자체가 `require(role != MerchantUserRole.OWNER)`를 갖고 있어서, 컨트롤러가 별도로 막지 않아도 `IllegalArgumentException`(400)으로 자연스럽게 걸린다 — 실제 `curl`로 `role: "OWNER"`를 보내 정확히 그 도메인 예외 메시지가 그대로 400 응답에 실리는 것까지 확인했다.
+- **예외 핸들러 이름을 바꿨다.** `MerchantAuthExceptionHandler` → `MerchantApiExceptionHandler`(로그인 전용이 아니게 됐으므로 `AdminAuthExceptionHandler` → `AdminApiExceptionHandler`와 같은 이름 패턴을 맞췄다) — 이 김에 이전까지 없었던 `IllegalArgumentException`(400) 핸들러도 추가했다(`AdminApiExceptionHandler`/`PaymentApiExceptionHandler`와 같은 패턴, 원래 gap이었다).
+- **`SecurityConfig`에 역할 기반 인가가 두 번째로 등장했다.** `authorize("/merchant/merchant-users", hasAnyRole("OWNER", "ADMIN"))`를 추가했다 — `VIEWER`가 호출하면 Use Case에 닿기도 전에 Spring Security가 403으로 막는다(실제 확인).
+- **`modules:infra-support`에서 `infra.support.id`를 처음으로 스캔에 추가했다.** 이 앱은 지금까지 새 ID를 만드는 Use Case가 없어서 `UuidIdGenerator` Bean을 스캔하지 않았다(`MerchantApiApplication`의 예전 KDoc에 그렇게 적혀 있었다) — 이 Use Case가 그 첫 사례다.
+- **테스트**: `InviteMerchantSubAccountUseCaseTest`(단위, OWNER가 ADMIN 발급/ADMIN도 발급 가능/VIEWER는 예외/`SUSPENDED` OWNER는 역할이 맞아도 예외/loginId 중복/email 중복/OWNER 발급 시도는 `IllegalArgumentException`), `MerchantUserRepositoryAdapterTest`에 `findByMerchantIdAndEmail` 케이스 추가(Testcontainers MySQL 통합), `MerchantSubAccountControllerTest`(`@WebMvcTest` + `@Import(SecurityConfig::class)`, OWNER/ADMIN 둘 다 201, VIEWER는 403, 인증 없음은 401/403, 각 예외의 상태 코드 매핑까지 검증). 여기에 더해 실제 `bootRun`(`api-merchant`만 기동, 시드 OWNER로 시작) + `curl`로 OWNER 로그인 → ADMIN 발급(201) → 수락(200) → ADMIN 로그인(200) → **그 ADMIN이 다시 VIEWER 발급(201)** → 수락 → VIEWER 로그인 → VIEWER의 발급 시도(403, `SecurityConfig` 차단) → loginId/email 중복(각각 409) → OWNER 역할 시도(400) → **위에 적은 `SUSPENDED` 동적 검사**까지 전부 확인한 뒤 DB 행을 정리했다. 이 과정에서 한글 `userName`을 담은 `curl` 요청이 Git Bash에서 CP949로 나가 파싱에 실패하는(이전에 이미 겪은) 문제를 다시 만났다 — ASCII로 바꿔 재확인했다.
 
 ### 초대 수락(활성화) Use Case(`AcceptAccountInvitationUseCase`, `application.identity`)
 

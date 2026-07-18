@@ -78,6 +78,17 @@ class MerchantUserRepositoryAdapter(
 			.fetchOne()
 			?.toDomain(merchantId)
 
+	override fun findByMerchantIdAndEmail(
+		merchantId: MerchantId,
+		email: Email,
+	): MerchantUser? =
+		dsl
+			.selectFrom(MERCHANT_USER)
+			.where(MERCHANT_USER.MERCHANT_SEQ.eq(resolveMerchantSeq(merchantId)))
+			.and(MERCHANT_USER.EMAIL.eq(email.value))
+			.fetchOne()
+			?.toDomain(merchantId)
+
 	override fun findById(merchantUserId: MerchantUserId): MerchantUser? =
 		dsl
 			.selectFrom(MERCHANT_USER)

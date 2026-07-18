@@ -4,7 +4,9 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import paytech.practice.pay.application.identity.AcceptAccountInvitationUseCase
 import paytech.practice.pay.application.identity.AuthenticateMerchantUserUseCase
+import paytech.practice.pay.application.identity.InviteMerchantSubAccountUseCase
 import paytech.practice.pay.application.port.outbound.AccountInvitationRepository
+import paytech.practice.pay.application.port.outbound.IdGenerator
 import paytech.practice.pay.application.port.outbound.InternalUserRepository
 import paytech.practice.pay.application.port.outbound.InvitationTokenHasher
 import paytech.practice.pay.application.port.outbound.MerchantRepository
@@ -53,6 +55,24 @@ class UseCaseConfiguration {
 			merchantUserRepository = merchantUserRepository,
 			invitationTokenHasher = invitationTokenHasher,
 			passwordEncoder = passwordEncoder,
+			transactionManager = transactionManager,
+			clock = clock,
+		)
+
+	@Bean
+	fun inviteMerchantSubAccountUseCase(
+		merchantUserRepository: MerchantUserRepository,
+		accountInvitationRepository: AccountInvitationRepository,
+		invitationTokenHasher: InvitationTokenHasher,
+		idGenerator: IdGenerator,
+		transactionManager: TransactionManager,
+		clock: Clock,
+	): InviteMerchantSubAccountUseCase =
+		InviteMerchantSubAccountUseCase(
+			merchantUserRepository = merchantUserRepository,
+			accountInvitationRepository = accountInvitationRepository,
+			invitationTokenHasher = invitationTokenHasher,
+			idGenerator = idGenerator,
 			transactionManager = transactionManager,
 			clock = clock,
 		)

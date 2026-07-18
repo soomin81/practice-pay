@@ -58,3 +58,62 @@ Content-Type: application/json
   "loginId": "{{devMerchantLoginId}}",
   "password": "{{devPassword}}"
 }
+
+### 하위 계정 발급 — OWNER 또는 ADMIN 세션으로 호출한다(위 로그인이 먼저 실행돼 있어야 한다).
+### 응답의 invitationToken을 POST /merchant/account-invitations/accept에 그대로 제출하면
+### 하위 계정을 활성화할 수 있다. userName은 반드시 ASCII로 쓴다 — Git Bash의 curl로 수동
+### 재현할 때 한글이 CP949로 나가 파싱 실패(400)를 401로 오인하기 쉽다(backend/CLAUDE.md의
+### "테스트가 잡지 못하는 층" 참고, IntelliJ HTTP Client 자체는 UTF-8로 보내 이 문제가 없다).
+POST {{apiMerchantBaseUrl}}/merchant/merchant-users
+Content-Type: application/json
+
+{
+  "loginId": "sub-admin-{{$timestamp}}",
+  "email": "sub-admin-{{$timestamp}}@example.com",
+  "userName": "Sub Admin",
+  "role": "ADMIN"
+}
+
+> {%
+    client.test("발급 성공 (201)", () => {
+        client.assert(response.status === 201, "예상: 201, 실제: " + response.status);
+    });
+    client.test("응답에 invitationToken이 있다", () => {
+        client.assert(!!response.body.invitationToken, "invitationToken이 비어 있음");
+    });
+    client.global.set("invitedSubAccountLoginId", response.body.loginId);
+%}
+
+### 같은 loginId로 재발급 — 409여야 한다(uk_merchant_user_login, merchant_seq 범위)
+POST {{apiMerchantBaseUrl}}/merchant/merchant-users
+Content-Type: application/json
+
+{
+  "loginId": "{{invitedSubAccountLoginId}}",
+  "email": "another-email-{{$timestamp}}@example.com",
+  "userName": "Duplicate Login",
+  "role": "ADMIN"
+}
+
+> {%
+    client.test("로그인 아이디 중복 (409)", () => {
+        client.assert(response.status === 409, "예상: 409, 실제: " + response.status);
+    });
+%}
+
+### OWNER로 발급 시도 — 400이어야 한다(MerchantUser.inviteSubAccount의 require 실패)
+POST {{apiMerchantBaseUrl}}/merchant/merchant-users
+Content-Type: application/json
+
+{
+  "loginId": "owner-attempt-{{$timestamp}}",
+  "email": "owner-attempt-{{$timestamp}}@example.com",
+  "userName": "Owner Attempt",
+  "role": "OWNER"
+}
+
+> {%
+    client.test("OWNER 발급 거부 (400)", () => {
+        client.assert(response.status === 400, "예상: 400, 실제: " + response.status);
+    });
+%}
