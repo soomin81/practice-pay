@@ -1,9 +1,15 @@
 -- ============================================================
--- Optional seed data for local development — Identity & API Key
+-- 로컬 개발용 시드 데이터 (2/2) — Identity & API Key
 --
--- V2가 만든 mrc_test_001 가맹점에 실제로 로그인/API 호출을 해볼 수 있는
--- 계정과 API Key를 얹는다. 전부 학습/로컬 개발 전용 값이다 — 운영 배포
--- 전에는 반드시 지우거나 교체한다.
+-- 이 파일은 Flyway 마이그레이션이 아니다(같은 폴더의 seed_dev_data.sql 헤더 참고 —
+-- 운영에서 자동으로 제외되도록 db/migration/ 밖에 둔다).
+--
+-- 적용 순서: seed_dev_data.sql을 먼저 적용해야 한다 — 그 파일이 만드는
+-- mrc_test_001 가맹점에 계정과 API Key를 얹는다.
+--   docker exec -i backend-mysql-1 mysql --default-character-set=utf8mb4 \
+--     -uroot -pverysecret stablecoin_payment < db-core/src/main/resources/db/seed/seed_dev_identity_data.sql
+--
+-- 전부 학습/로컬 개발 전용 값이다 — 운영 DB에는 절대 적용하지 않는다.
 --
 -- 로그인 비밀번호(둘 다 동일): DevPassword123!
 -- API Key(Authorization: Bearer): sk_test_devkey01_dev-secret-value

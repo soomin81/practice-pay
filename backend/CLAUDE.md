@@ -519,7 +519,7 @@ Worker" 절 참고. `SellPendingPaymentsToFakeExchangeTasklet`이
 각 `apps/*`에 `requests.http`가 있다(`apps/api-payment/requests.http`, `apps/api-admin/requests.http`, `apps/api-merchant/requests.http`) — IntelliJ가 인식하는 형식이다(에디터에서 열면 요청 옆에 ▶ 실행 아이콘이 뜬다). `backend/http-client.env.json`이 세 앱의 `baseUrl`과 로그인 아이디/비밀번호/API Key 같은 공용 변수를 "local" 환경으로 묶어 둔다 — 요청을 실행하기 전에 에디터 오른쪽 위에서 환경을 "local"로 고른다.
 
 - **먼저 해당 앱을 띄운다**: `gradlew.bat :apps:api-payment:bootRun`처럼 `.http` 파일이 있는 앱을 실행해야 요청이 응답을 받는다.
-- **자격증명은 `V4__seed_dev_identity_data.sql`이 심는다** — `db-core`가 처음부터 갖고 있던 `docker exec ... V1/V2/V3` 적용 순서에 이어서 이 파일도 같은 방식으로 적용해야 `.http` 파일의 요청들이 실제로 인증에 성공한다(아래 "Database / jOOQ code generation" 참고). 로그인 비밀번호는 `dev-admin`/`dev-owner` 둘 다 `DevPassword123!`이고, 결제 API Key는 `sk_test_devkey01_dev-secret-value`(scope: `PAYMENT_CREATE`+`PAYMENT_READ`)다 — 전부 로컬 개발 전용 값이고, 마이그레이션 파일 맨 위 주석에도 같은 내용이 있다.
+- **자격증명은 `db/seed/seed_dev_identity_data.sql`이 심는다** — 스키마 마이그레이션(`db/migration/`)을 적용한 뒤 `db/seed/`의 두 파일도 같은 방식(`docker exec ... < 파일`)으로 적용해야 `.http` 파일의 요청들이 실제로 인증에 성공한다. 시드는 Flyway 마이그레이션이 아니라서(운영에서 자동 제외되도록 분리했다) 스키마와 함께 자동으로 적용되지 않는다(아래 "Database / jOOQ code generation"의 "시드 데이터" 참고). 로그인 비밀번호는 `dev-admin`/`dev-owner` 둘 다 `DevPassword123!`이고, 결제 API Key는 `sk_test_devkey01_dev-secret-value`(scope: `PAYMENT_CREATE`+`PAYMENT_READ`)다 — 전부 로컬 개발 전용 값이고, 시드 파일 맨 위 주석에도 같은 내용이 있다.
 - 각 `.http` 파일은 성공 케이스 하나와 실패(인증 실패/검증 실패) 케이스 몇 개를 같이 담아뒀다 — `> {% client.test(...) %}` 응답 스크립트로 상태 코드를 자체 검증한다. `api-payment`의 결제 생성 요청은 `{{$timestamp}}`로 `merchantOrderId`를 매번 다르게 만들어서 재실행해도 멱등성 키가 겹치지 않게 했고, 멱등성 자체를 확인하는 요청은 고정된 `merchantOrderId`로 두 번 반복해 같은 `paymentId`가 나오는지 보게 했다.
 - `api-admin`/`api-merchant` 로그인이 성공하면 세션 쿠키(`JSESSIONID`)가 응답에 실린다 — IntelliJ HTTP Client는 같은 환경 안에서 쿠키를 자동으로 유지하므로, 로그인 다음에 그 세션이 필요한 요청을 이어서 만들면 별도 처리 없이 인증된 채로 나간다.
 
@@ -562,15 +562,31 @@ Worker" 절 참고. `SellPendingPaymentsToFakeExchangeTasklet`이
 
 ```
 docker compose up -d                                    # MySQL 시작(DB: stablecoin_payment, root 비밀번호: verysecret)
+# 1) 스키마 마이그레이션 — 모든 환경에 적용된다(db/migration/)
 docker exec -i backend-mysql-1 mysql --default-character-set=utf8mb4 -uroot -pverysecret stablecoin_payment < db-core/src/main/resources/db/migration/V1__init_schema.sql
-docker exec -i backend-mysql-1 mysql --default-character-set=utf8mb4 -uroot -pverysecret stablecoin_payment < db-core/src/main/resources/db/migration/V2__seed_dev_data.sql
 docker exec -i backend-mysql-1 mysql --default-character-set=utf8mb4 -uroot -pverysecret stablecoin_payment < db-core/src/main/resources/db/migration/V3__add_identity_access_and_merchant_api_key.sql
-docker exec -i backend-mysql-1 mysql --default-character-set=utf8mb4 -uroot -pverysecret stablecoin_payment < db-core/src/main/resources/db/migration/V4__seed_dev_identity_data.sql
+docker exec -i backend-mysql-1 mysql --default-character-set=utf8mb4 -uroot -pverysecret stablecoin_payment < db-core/src/main/resources/db/migration/V5__add_spring_batch_schema.sql
+
+# 2) 로컬 개발용 시드 — 운영에는 절대 적용하지 않는다(db/seed/, 아래 "시드 데이터" 참고).
+#    순서가 있다: seed_dev_data.sql이 만드는 가맹점에 seed_dev_identity_data.sql이 계정을 얹는다.
+docker exec -i backend-mysql-1 mysql --default-character-set=utf8mb4 -uroot -pverysecret stablecoin_payment < db-core/src/main/resources/db/seed/seed_dev_data.sql
+docker exec -i backend-mysql-1 mysql --default-character-set=utf8mb4 -uroot -pverysecret stablecoin_payment < db-core/src/main/resources/db/seed/seed_dev_identity_data.sql
+
 gradlew.bat :db-core:jooqCodegen                          # db-core/build/generated-src/jooq/main에 생성(gitignore 대상, 커밋하지 않음)
 gradlew.bat :db-core:build                                 # jooqCodegen이 먼저 실행되고(compileKotlin.dependsOn으로 연결), 그다음 컴파일된다
 ```
 
-- **마이그레이션은 지금 Flyway Gradle 플러그인이 아니라 수동으로 적용한다.** 공식 `org.flywaydb.flyway` 플러그인(최신 배포: 11.8.2)이 Gradle 9에서 제거된 Gradle API `JavaPluginConvention`을 여전히 호출해서, 이 프로젝트의 Gradle 9.5.1에서는 태스크가 그대로 실패한다(업스트림 미해결: https://github.com/flyway/flyway/issues/3798). `db-core/src/main/resources/db/migration/` 아래의 마이그레이션 파일들은 여전히 평범하고 번호가 올바르게 매겨진 Flyway 형식 SQL이다(`V1__init_schema.sql`, `V2__seed_dev_data.sql`, `V3__add_identity_access_and_merchant_api_key.sql`, `V4__seed_dev_identity_data.sql` — `V2`가 심는 `mrc_test_001` 가맹점에 실제로 로그인/API 호출을 해볼 수 있는 개발용 계정·API Key를 얹는다, 위 "IntelliJ HTTP Client" 참고) — 앱 모듈이 실제 `DataSource`를 갖게 되면 Spring Boot 자체의 Flyway 자동 구성(`spring-boot-starter-flyway`, 이 Gradle 플러그인과 무관함)이 자동으로 적용해줄 것이다. 여전히 깨져 있다고 가정하기 전에 더 최신 `flyway-gradle-plugin`이 고쳐졌는지 다시 확인한다.
+- **마이그레이션은 지금 Flyway Gradle 플러그인이 아니라 수동으로 적용한다.** 공식 `org.flywaydb.flyway` 플러그인(최신 배포: 11.8.2)이 Gradle 9에서 제거된 Gradle API `JavaPluginConvention`을 여전히 호출해서, 이 프로젝트의 Gradle 9.5.1에서는 태스크가 그대로 실패한다(업스트림 미해결: https://github.com/flyway/flyway/issues/3798). `db-core/src/main/resources/db/migration/` 아래의 마이그레이션 파일들은 여전히 평범한 Flyway 형식 SQL이다(`V1__init_schema.sql`, `V3__add_identity_access_and_merchant_api_key.sql`, `V5__add_spring_batch_schema.sql`) — 앱 모듈이 실제 `DataSource`를 갖게 되면 Spring Boot 자체의 Flyway 자동 구성(`spring-boot-starter-flyway`, 이 Gradle 플러그인과 무관함)이 자동으로 적용해줄 것이다. 여전히 깨져 있다고 가정하기 전에 더 최신 `flyway-gradle-plugin`이 고쳐졌는지 다시 확인한다.
+- **버전 번호가 V1/V3/V5로 비어 있는 건 정상이다.** 원래 V2/V4였던 개발용 시드를 `db/seed/`로 옮기면서 생긴 자리다(아래 "시드 데이터" 참고). 이미 적용된 이력을 깨뜨리지 않으려고 남은 파일의 번호는 그대로 뒀다 — Flyway는 버전이 연속이 아니어도 정상 동작한다.
+
+### 시드 데이터(`db/seed/`) — 운영에 적용하지 않는다
+
+`seed_dev_data.sql`(가맹점 `mrc_test_001`)과 `seed_dev_identity_data.sql`(로그인 계정·API Key)은 **Flyway 마이그레이션이 아니다.** 위 작업 흐름처럼 `mysql` CLI로 직접 적용한다(순서 있음 — 두 번째 파일이 첫 번째가 만든 가맹점을 참조한다).
+
+- **`db/migration/`이 아니라 별도 폴더에 둔 이유**: `spring-boot-starter-flyway`의 기본 위치가 `classpath:db/migration`이라, 시드가 그 밖에 있으면 **운영에서 설정을 아무것도 하지 않아도 자동으로 제외된다.** 운영 설정에서 시드 위치를 빼는 걸 "잊지 않아야" 안전한 구조가 아니라, **잊어도 안전한** 구조를 택한 것이다 — 개발 계정이 운영에 실리는 사고는 되돌리기 어렵다.
+- 시드는 스키마도 jOOQ 코드 생성도 건드리지 않으므로 "Migration → MySQL Schema → jOOQ Code Generation" 파이프라인에 있을 이유가 애초에 없다.
+- **`modules:infra-persistence`의 통합 테스트는 영향받지 않는다** — `PersistenceTestSupport`가 원래부터 `db/migration`만 가리켜서 시드가 자동으로 빠지고, 테스트는 시드 행에 의존하지 않는다(각자 필요한 데이터를 직접 넣는다).
+- **이미 V2/V4를 적용해 둔 로컬 DB가 있다면** `flyway_schema_history`에 그 기록이 남아 있어서, 나중에 Spring Boot Flyway를 붙였을 때 "적용됐는데 파일이 없다"는 validate 오류가 난다 — 로컬 DB를 재생성하면 해결된다(`docker compose down -v` 후 위 작업 흐름을 다시 실행).
 - **`mysql` CLI로 마이그레이션을 적용할 때는 항상 `--default-character-set=utf8mb4`를 넘긴다.** 넘기지 않으면 CLI의 기본 `latin1` 클라이언트 문자셋이 MySQL로 들어가는 한글 `COMMENT`/시드 텍스트를 조용히 깨뜨린다(손상은 jOOQ가 읽을 때가 아니라 쓸 때 일어난다 — 이미 한 번 겪었고, DB를 지우고 다시 시딩해야 했다).
 - `jooq { configuration { jdbc { url = ... } } }`의 URL에도 Codegen 커넥션 자체를 위한 값싼 추가 보험으로 `useUnicode=true&characterEncoding=UTF-8`을 붙여둔다.
 - `compileKotlin`은 자동으로 `jooqCodegen`에 의존하지 않고, 공식 플러그인도 자신의 출력 디렉토리를 Kotlin 소스셋에 자동으로 추가하지 않는다 — 둘 다 `db-core/build.gradle.kts`에서 명시적으로 연결했다(`tasks.named("compileKotlin") { dependsOn("jooqCodegen") }` + `sourceSets { main { kotlin { srcDir(...) } } }`). 새로 공식 플러그인을 설정하면 이게 자동으로 연결된다고 가정하지 않는다.
