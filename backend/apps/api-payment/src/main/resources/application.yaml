@@ -11,6 +11,17 @@ server:
 
 app:
   api-key:
-    # 로컬 개발용 평문 placeholder다 — 실제 배포 전에는 환경변수/Secret Manager로
-    # 옮겨야 한다(HmacApiKeySecretHasher의 KDoc 참고).
-    pepper: dev-only-api-key-pepper-change-in-production
+    # 기본값은 로컬 개발용 평문 placeholder다 — 운영에서는 APP_API_KEY_PEPPER
+    # 환경변수로 덮어쓴다(Secret Manager가 주입). 값을 여기 직접 적지 않는다.
+    #
+    # `${...}` 문법이 환경변수 덮어쓰기를 "가능하게" 하는 건 아니다 — Spring Boot가
+    # 환경변수를 application.yaml보다 우선해서 읽고 이름을 자동 매핑한다(relaxed
+    # binding). 여기 명시하는 건 환경변수 이름을 설정 파일만 보고 알 수 있게 하려는 것이다.
+    #
+    # 이 Pepper는 api-payment 전용이다 — API Key를 발급·검증하는 앱이 여기뿐이라
+    # 다른 앱과 값을 맞출 필요가 없다(초대 Token Pepper와 다른 점 —
+    # api-admin/api-merchant의 application.yaml 주석 참고).
+    #
+    # Pepper를 바꾸면 기존에 발급된 API Key의 secret_hash가 전부 무효가 된다
+    # (해시를 다시 계산할 원문이 없다) — 교체하려면 Key 재발급이 함께 필요하다.
+    pepper: ${APP_API_KEY_PEPPER:dev-only-api-key-pepper-change-in-production}
