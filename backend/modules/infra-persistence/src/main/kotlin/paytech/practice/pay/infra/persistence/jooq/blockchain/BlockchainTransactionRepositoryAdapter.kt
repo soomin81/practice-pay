@@ -77,6 +77,17 @@ class BlockchainTransactionRepositoryAdapter(
 			.fetchOne()
 			?.toDomain()
 
+	override fun findByNetworkAndTransactionHash(
+		network: BlockchainNetwork,
+		transactionHash: TransactionHash,
+	): BlockchainTransaction? =
+		dsl
+			.selectFrom(BLOCKCHAIN_TRANSACTION)
+			.where(BLOCKCHAIN_TRANSACTION.NETWORK_CODE.eq(network.code))
+			.and(BLOCKCHAIN_TRANSACTION.TRANSACTION_HASH.eq(transactionHash.value))
+			.fetchOne()
+			?.toDomain()
+
 	private fun resolvePaymentSeq(paymentId: PaymentId): Long =
 		dsl
 			.select(PAYMENT.PAYMENT_SEQ)

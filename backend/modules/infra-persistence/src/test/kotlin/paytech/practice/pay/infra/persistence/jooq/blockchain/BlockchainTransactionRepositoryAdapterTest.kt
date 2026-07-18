@@ -107,4 +107,20 @@ class BlockchainTransactionRepositoryAdapterTest :
 		test("findById returns null when no such transaction exists") {
 			adapter.findById(BlockchainTransactionId("btx_no-such-transaction")).shouldBeNull()
 		}
+
+		test("save inserts a new BlockchainTransaction and findByNetworkAndTransactionHash round-trips it") {
+			val tx = newTransaction(savedPayment())
+
+			adapter.save(tx)
+			val found = adapter.findByNetworkAndTransactionHash(BlockchainNetwork.BASE_SEPOLIA, tx.transactionHash)
+
+			found.shouldNotBeNull()
+			found.id shouldBe tx.id
+		}
+
+		test("findByNetworkAndTransactionHash returns null when no such hash exists") {
+			val noSuchHash = TransactionHash("0x" + uniqueSuffix().padEnd(64, '0'))
+
+			adapter.findByNetworkAndTransactionHash(BlockchainNetwork.BASE_SEPOLIA, noSuchHash).shouldBeNull()
+		}
 	})

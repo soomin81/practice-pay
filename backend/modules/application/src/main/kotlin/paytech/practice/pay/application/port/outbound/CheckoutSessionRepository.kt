@@ -1,6 +1,7 @@
 package paytech.practice.pay.application.port.outbound
 
 import paytech.practice.pay.domain.checkout.CheckoutSession
+import paytech.practice.pay.domain.checkout.CheckoutSessionId
 import paytech.practice.pay.domain.payment.PaymentId
 
 /**
@@ -9,6 +10,9 @@ import paytech.practice.pay.domain.payment.PaymentId
 interface CheckoutSessionRepository {
 	/** CheckoutSession을 저장한다(신규 생성·상태 변경 모두 이 메서드로 반영한다). */
 	fun save(checkoutSession: CheckoutSession)
+
+	/** `checkout_session_id`로 CheckoutSession을 찾는다. 없으면 `null`이다. */
+	fun findById(checkoutSessionId: CheckoutSessionId): CheckoutSession?
 
 	/**
 	 * `payment_seq`로 CheckoutSession을 찾는다. `Payment`와 1:1 관계라 최대 하나만 있다.

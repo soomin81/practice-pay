@@ -67,4 +67,21 @@ class CheckoutSessionRepositoryAdapterTest :
 
 			adapter.findByPaymentId(paymentId).shouldBeNull()
 		}
+
+		test("save inserts a new CheckoutSession and findById round-trips it") {
+			val merchantId = insertTestMerchant()
+			val paymentId = PaymentId(insertTestPayment(merchantId))
+			val session = newSession(paymentId)
+
+			adapter.save(session)
+			val found = adapter.findById(session.id)
+
+			found.shouldNotBeNull()
+			found.id shouldBe session.id
+			found.paymentId shouldBe paymentId
+		}
+
+		test("findById returns null when no such session exists") {
+			adapter.findById(CheckoutSessionId("cs_no-such-session")).shouldBeNull()
+		}
 	})

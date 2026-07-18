@@ -8,10 +8,8 @@ import paytech.practice.pay.application.port.outbound.PaymentRepository
 import paytech.practice.pay.application.port.outbound.TransactionManager
 import paytech.practice.pay.domain.blockchain.BlockchainTransaction
 import paytech.practice.pay.domain.blockchain.BlockchainTransactionStatus
-import paytech.practice.pay.domain.blockchain.ContractAddress
 import paytech.practice.pay.domain.outbox.OutboxEvent
 import paytech.practice.pay.domain.payment.Payment
-import paytech.practice.pay.domain.shared.BlockchainNetwork
 import paytech.practice.pay.domain.shared.EventId
 import java.time.Clock
 
@@ -48,10 +46,9 @@ import java.time.Clock
  *    `confirm()` + `Payment.succeed()`로 종료하고, "결제 완료" Webhook 트리거를 위한
  *    `OutboxEvent`를 함께 남긴다. 아직 부족하면 `CONFIRMING`으로 남는다.
  *
- * [EXPECTED_TOKEN_CONTRACT_ADDRESSES]는 `docs/`에 값이 정해져 있지 않아 이
- * Use Case가 상수로 고정했다 — `CreatePaymentUseCase`의 `TOKEN_DECIMALS`와 같은
- * 성격의 MVP 단순화다. Base Sepolia 값은 Circle 공식 문서(developers.circle.com/stablecoins/usdc-contract-addresses)의
- * Base Sepolia USDC Contract 주소를 그대로 썼다.
+ * 허용 USDC Contract 주소는 [PaymentNetworkConfig]의 네트워크별 MVP 상수를 그대로
+ * 쓴다 — [paytech.practice.pay.application.payment.SubmitPaymentTransactionUseCase]도
+ * 같은 상수를 쓴다([PaymentNetworkConfig]의 KDoc 참고).
  */
 class ConfirmBlockchainTransactionUseCase(
 	private val blockchainTransactionRepository: BlockchainTransactionRepository,
@@ -91,9 +88,7 @@ class ConfirmBlockchainTransactionUseCase(
 			payment.startConfirmation(now)
 		}
 
-		val expectedTokenContractAddress =
-			EXPECTED_TOKEN_CONTRACT_ADDRESSES[blockchainTransaction.network]
-				?: error("지원하지 않는 네트워크입니다: ${blockchainTransaction.network}")
+		val expectedTokenContractAddress = PaymentNetworkConfig.expectedUsdcContractAddress(blockchainTransaction.network)
 		val validation =
 			PaymentTransactionValidator.validate(payment, blockchainTransaction, onChainTransaction, expectedTokenContractAddress)
 		if (validation is PaymentTransactionValidationResult.Invalid) {
@@ -155,12 +150,6 @@ class ConfirmBlockchainTransactionUseCase(
 			""""transactionHash":"${blockchainTransaction.transactionHash.value}","status":"${payment.status}"}"""
 
 	companion object {
-		/** MVP가 지원하는 네트워크별 허용 USDC Contract 주소. */
-		private val EXPECTED_TOKEN_CONTRACT_ADDRESSES: Map<BlockchainNetwork, ContractAddress> =
-			mapOf(
-				BlockchainNetwork.BASE_SEPOLIA to ContractAddress("0x036CbD53842c5426634e7929541eC2318f3dCF7e"),
-			)
-
 		private const val PAYMENT_SUCCEEDED_EVENT_TYPE = "payment.succeeded"
 	}
 }

@@ -63,6 +63,13 @@ class CheckoutSessionRepositoryAdapter(
 		}
 	}
 
+	override fun findById(checkoutSessionId: CheckoutSessionId): CheckoutSession? =
+		dsl
+			.selectFrom(CHECKOUT_SESSION)
+			.where(CHECKOUT_SESSION.CHECKOUT_SESSION_ID.eq(checkoutSessionId.value))
+			.fetchOne()
+			?.let { it.toDomain(resolvePaymentId(it.paymentSeq!!)) }
+
 	override fun findByPaymentId(paymentId: PaymentId): CheckoutSession? =
 		dsl
 			.selectFrom(CHECKOUT_SESSION)
@@ -77,6 +84,15 @@ class CheckoutSessionRepositoryAdapter(
 			.where(PAYMENT.PAYMENT_ID.eq(paymentId))
 			.fetchOne(PAYMENT.PAYMENT_SEQ)
 			?: error("Payment($paymentId)를 찾을 수 없습니다.")
+
+	private fun resolvePaymentId(paymentSeq: Long): PaymentId =
+		dsl
+			.select(PAYMENT.PAYMENT_ID)
+			.from(PAYMENT)
+			.where(PAYMENT.PAYMENT_SEQ.eq(paymentSeq))
+			.fetchOne(PAYMENT.PAYMENT_ID)
+			?.let { PaymentId(it) }
+			?: error("Payment(seq=$paymentSeq)를 찾을 수 없습니다.")
 
 	private fun CheckoutSessionRecord.fillFrom(checkoutSession: CheckoutSession) {
 		checkoutSessionId = checkoutSession.id.value
