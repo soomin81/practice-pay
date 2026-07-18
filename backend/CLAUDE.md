@@ -2,6 +2,20 @@
 
 `backend/`에서 작업할 때의 지침이다. 공통 결제 도메인(애그리게이트, 상태 머신, MVP 범위)은 루트 `../CLAUDE.md`를 참고한다 — 이 문서는 백엔드 구현 컨벤션만 다룬다.
 
+## 최상위 디렉토리는 "역할"로 나눈다
+
+`backend/` 바로 아래의 구분 기준은 **Gradle 서브프로젝트냐 아니냐가 아니라 역할이 무엇이냐**다. `db-core`와 `architecture-tests`가 `modules/` 밖에 있는 건 정리가 덜 된 게 아니라 이 기준을 따른 결과다 — 일관성 문제로 보고 `modules/` 아래로 옮기지 않는다.
+
+| 위치 | 역할 | 판별 기준 |
+|---|---|---|
+| `apps/` | 배포 단위 | 자체 `@SpringBootApplication` 메인 클래스와 `application.yaml`을 갖고 독립 실행된다 |
+| `modules/` | 제품 라이브러리 | 헥사고날 계층(`domain` → `application` → `infra-*`)에 속하고, 다른 모듈이 의존해서 쓴다 |
+| `db-core/` | 스키마 원천 + 코드 생성 | 유일하게 **빌드에 외부 상태(실행 중인 MySQL)가 필요**하고, 소스가 사람이 쓴 Kotlin이 아니라 SQL 마이그레이션 + jOOQ 생성 코드다. 헥사고날 계층 어디에도 속하지 않는 그 아래층이다 |
+| `architecture-tests/` | 검증 하네스 | **아무도 의존하지 않고 자기가 전부를 의존한다**(의존 방향이 `modules/`와 정반대). `src/main`이 없다 |
+| `build-logic/` | 빌드 인프라 | Composite Build로 포함된 별도 빌드(convention plugin 제공) |
+
+새 서브프로젝트를 만들 때는 "Gradle 모듈이니까 `modules/`"가 아니라 위 판별 기준에 비춰 자리를 정한다.
+
 ## 현재 구현 상태
 
 `modules:domain`, `modules:application`, `modules:infra-persistence`, `modules:infra-blockchain`, `modules:common`, `db-core`, `architecture-tests`, 그리고 `apps:*` 4개 전부 실제 Gradle 서브프로젝트다(`settings.gradle.kts` 참고). `modules:common`만 아직 `src`가 비어 있다(빌드는 NO-SOURCE로 통과한다) — 실제로 필요해질 때까지 다른 모듈에 대한 의존성도 추가하지 않았다(아래 항목 참고). 빈 서브프로젝트에 코드/배선이 있다고 가정하지 말고, 참조하기 전에 먼저 확인한다. 이 구조가 이미 여러 번 재편됐으니 의존하기 전에 다시 확인한다:
