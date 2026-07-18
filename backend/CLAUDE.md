@@ -135,6 +135,21 @@ gradlew.bat ktlintFormat                                  # 모든 모듈 자동
 - Assertion은 `kotest-assertions-core`(`shouldBe` 등)를 쓴다.
 - 아키텍처 규칙(예: domain이 Spring/jOOQ에 의존하지 않는다, 아래의 헥사고날 계층 구조)은 **ArchUnit**(`com.tngtech.archunit:archunit`)으로 강제한다 — 별도의 `archunit-junit5` 엔진/`@AnalyzeClasses` 스타일이 아니라, 평범한 Kotest `test { }` 블록 안에서 `ClassFileImporter().importPackages(...)` + `.check(classes)`를 호출하는 방식이다. 프로젝트 전체가 하나의 테스트 작성 컨벤션(Kotest)을 유지하기 위해서다. 모듈 간 규칙(한 모듈의 컴파일된 클래스를 외부에서 검사)은 `architecture-tests`(테스트 전용 Gradle 서브프로젝트)에 둔다 — 아래 절 참고.
 
+## 테스트가 잡지 못하는 층 — 실제로 띄워서 확인한다
+
+**"테스트가 전부 통과한다"가 "동작한다"를 뜻하지 않는 영역이 있다.** 이 프로젝트에서 실제로 그렇게 새어 나간 버그가 셋이고, 셋 다 자동화된 테스트는 초록색인 채로 존재했다. 새 기능을 끝냈다고 판단하기 전에 아래 표에서 해당하는 층이 있는지 확인하고, 있으면 **한 번은 실물로 돌려본다.**
+
+| 무엇이 가려졌나 | 왜 테스트가 못 잡나 | 어떻게 드러났나 |
+|---|---|---|
+| `BigInteger.toLong()`이 `Long` 범위 초과분을 조용히 잘라 `TokenAmount`가 음수가 됨 | 유닛 테스트가 Mock한 응답은 **실제 RPC 응답의 값 범위**를 재현하지 않는다(18-decimals 토큰 전송량은 흔히 `Long.MAX_VALUE`를 넘는다) | 실제 Base Sepolia RPC에 진짜 Transaction Hash로 조회(아래 "온체인 Adapter" 절) |
+| 새로 만든 DB 볼륨에서 **모든 DB 연결 실패**(`RSA public key is not available client side`) | MySQL 9의 `caching_sha2_password`는 첫 인증 성공 후 서버가 캐싱해서, **기존 볼륨에서는 원리적으로 재현되지 않는다.** Testcontainers도 매번 새 컨테이너지만 JDBC 옵션이 달라 드러나지 않았다 | `docker compose down -v` 후 README 세팅 흐름을 처음부터 따라감 |
+| 잘못된 요청 본문에 400이 아니라 **401**이 나감(404/405/500도 마찬가지) | 컨테이너의 `/error` **ERROR 디스패치**에서 벌어지는 일인데, `@WebMvcTest`의 MockMvc는 그 디스패치를 재현하지 않는다 | 실제 `bootRun` + `curl` |
+
+- **실물 검증이 필요한 대표적인 층**: 외부 시스템 실제 응답(RPC/HTTP), DB 연결 옵션과 드라이버 동작, Spring Security 필터 체인과 오류 디스패치, 컴포넌트 스캔 배선, 설정값(`application.yaml`) 해석. 반대로 도메인 규칙·Use Case 분기·상태 전이는 유닛 테스트가 충분히 잡는다.
+- **`spring.datasource.*`는 테스트가 아예 검증하지 않는다** — 네 앱 모두 테스트에서 Testcontainers `@ServiceConnection`이 datasource를 덮어써서, `application.yaml`의 URL/계정이 깨져 있어도 전체 테스트가 통과한다. 이 값을 건드렸으면 반드시 `bootRun`으로 확인한다.
+- 검증에 쓴 임시 데이터(스모크 테스트 결제 행, 임시 DB)는 확인 후 정리하고, **그 과정에서 얻은 교훈은 이 표에 한 줄 추가한다.**
+- 실물 검증 중 셸에서 값을 만들어 DB에 넣을 때 주의: Windows Git Bash에서 `openssl base64`는 `\r\n`을 출력해서 `tr -d '\n'`만으로는 **`\r`가 남는다**. 이걸 해시 컬럼에 넣으면 눈에 보이지 않는 1바이트 차이로 인증이 실패하고, 로그로 출력해도 두 값이 똑같아 보인다(길이/HEX를 찍어야 드러난다). 진단하다가 도리어 데이터를 오염시킨 실제 사례다.
+
 ## ArchUnit(`architecture-tests`)
 
 `architecture-tests`는 **검사 대상 모듈 전부**(`modules:domain`/`application`/`infra-persistence`/`infra-blockchain`/`infra-support` + `apps:*` 4개)를 `testImplementation`으로 받아서, 컴파일된 클래스에 규칙을 건다. Spec 5개가 각각 하나의 관심사를 맡는다:
@@ -226,7 +241,7 @@ inbound adapter → application → domain ← outbound port ← outbound adapte
 
 - `eth_chainId`가 `84532`(Base Sepolia의 실제 Chain ID)를 정확히 반환하는 것,
 - `EventEncoder.encode`로 계산한 topic0이 실제 `eth_getLogs` 응답의 `Transfer` 로그 topic0(`0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef`)과 정확히 일치하는 것을 확인했고,
-- **이 검증에서 실제 버그를 하나 잡았다**: `BigInteger.toLong()`은 값이 `Long` 범위를 넘으면 예외 없이 하위 64비트로 조용히 잘라버린다(음수로 뒤집힐 수도 있다) — 18-decimals ERC-20 토큰(대부분의 토큰, USDC의 6-decimals가 오히려 예외)의 전송량은 흔히 `Long.MAX_VALUE`를 넘어서, 실제 Base Sepolia 트랜잭션을 조회하자마자 `TokenAmount는 음수일 수 없습니다: -6446744073709551616` 같은 값으로 터졌다. `toTokenTransferOrNull`에서 `amount`가 `Long` 범위를 넘으면 그 로그 하나만 건너뛰도록 고쳤다(전체 조회를 실패시키지 않는다 — 같은 Receipt에 우리가 찾는 USDC 전송이 함께 있을 수 있어서). 이 사례를 `Web3jBlockchainClientTest`의 회귀 테스트로 남겨뒀다. **유닛 테스트만으로는 못 잡는, 실제 RPC로 검증해야만 드러나는 종류의 버그였다는 점에서 이 단계를 생략하면 안 된다는 근거로 남긴다.**
+- **이 검증에서 실제 버그를 하나 잡았다**: `BigInteger.toLong()`은 값이 `Long` 범위를 넘으면 예외 없이 하위 64비트로 조용히 잘라버린다(음수로 뒤집힐 수도 있다) — 18-decimals ERC-20 토큰(대부분의 토큰, USDC의 6-decimals가 오히려 예외)의 전송량은 흔히 `Long.MAX_VALUE`를 넘어서, 실제 Base Sepolia 트랜잭션을 조회하자마자 `TokenAmount는 음수일 수 없습니다: -6446744073709551616` 같은 값으로 터졌다. `toTokenTransferOrNull`에서 `amount`가 `Long` 범위를 넘으면 그 로그 하나만 건너뛰도록 고쳤다(전체 조회를 실패시키지 않는다 — 같은 Receipt에 우리가 찾는 USDC 전송이 함께 있을 수 있어서). 이 사례를 `Web3jBlockchainClientTest`의 회귀 테스트로 남겨뒀다. **유닛 테스트만으로는 못 잡는, 실제 RPC로 검증해야만 드러나는 종류의 버그였다는 점에서 이 단계를 생략하면 안 된다는 근거로 남긴다**(같은 성격의 사례가 이후 둘 더 나왔다 — 위 "테스트가 잡지 못하는 층" 절 참고).
 
 ### "체크아웃 지갑 연결" Use Case(`ConnectCheckoutWalletUseCase`, `application.checkout`)
 
@@ -293,6 +308,7 @@ inbound adapter → application → domain ← outbound port ← outbound adapte
 - **`ApiKeySecretHasher`를 `PasswordEncoder`와 의도적으로 분리했다** — 사람 비밀번호는 BCrypt 같은 느린 적응형 해시가 맞지만, API Key는 매 요청 검증이라 그럴 필요가 없다. 문서가 명시한 대로 `HmacApiKeySecretHasher`(`modules:infra-support`의 `infra.support.apikey`, 원래는 `apps:api-payment` 안에 있었다)가 HMAC-SHA-256 + 서버 측 Pepper로 구현한다. Pepper는 `application.yaml`의 `app.api-key.pepper`에서 오고, 지금 값은 `db-core`의 `verysecret` DB 비밀번호와 같은 성격의 로컬 개발용 평문 placeholder다 — 실제 배포 전 환경변수/Secret Manager로 옮겨야 한다. 해시 비교는 타이밍 공격을 막기 위해 `String.equals` 대신 `MessageDigest.isEqual`(상수 시간 비교)로 한다.
 - **`MerchantApiKeyRepositoryAdapter`(`modules:infra-persistence`)는 이 프로젝트에서 처음으로 자식 컬렉션 테이블을 다루는 Adapter다.** `MerchantApiKey.scopes`는 `merchant_api_key_scope`(복합 PK, 자기 생명주기 없는 값 컬렉션)에 저장된다. 도메인에 Scope를 바꾸는 메서드가 없어서(발급 시 정해지면 끝) `save`의 INSERT 경로에서만 Scope 행을 쓰고, UPDATE 경로(`revoke`/`expire`/`recordUsage`)는 건드리지 않는다.
 - **인증은 Filter가 한다, 컨트롤러가 아니다.** `ApiKeyAuthenticationFilter`(`OncePerRequestFilter`)가 `Authorization` 헤더를 읽어 매 요청 `AuthenticateApiKeyUseCase`를 부르고, 성공하면 이번 요청의 `SecurityContext`에 `UsernamePasswordAuthenticationToken(principal = ApiKeyPrincipal(merchantId, merchantApiKeyId), authorities = ["SCOPE_<ApiKeyScope>", ...])`를 심는다. 실패해도 예외를 던지지 않고 `SecurityContext`만 비운 채 다음 필터로 넘긴다 — 그 뒤 `authorizeHttpRequests`가 401/403을 결정한다.
+- **`/error`는 세 API 앱 모두 `permitAll`이다** — 컨테이너가 오류 응답을 만들 때 도는 ERROR 디스패치 경로인데, 여기에 인증을 요구하면 실제 오류가 전부 401로 가려진다(인증 필터는 `OncePerRequestFilter` 기본값상 ERROR 디스패치에서 실행되지 않아 `SecurityContext`가 비어 있다). 잘못된 요청 본문은 여기에 더해 `HttpMessageNotReadableException` 핸들러가 `/error` 경로를 아예 타지 않고 `ErrorResponse` 형식으로 400을 반환한다. 인증 실패 자체는 그대로 401이다 — `/error`를 열어도 인가가 우회되지 않는 것은 실제 `bootRun`으로 확인했다(위 "테스트가 잡지 못하는 층" 참고).
 - **`SecurityConfig`**: `POST /api/v1/payments`에 `hasAuthority("SCOPE_PAYMENT_CREATE")`를 요구한다. `SessionCreationPolicy.STATELESS`로 세션을 아예 안 만든다 — `apps:api-admin`/`apps:api-merchant`의 세션 쿠키 로그인과 근본적으로 다른 인증 방식이라서다. **여기서 CSRF를 끄는 건 admin/merchant처럼 "아직 안 켠 gap"이 아니라 애초에 필요 없다** — CSRF는 브라우저가 쿠키를 자동으로 실어 보내는 상황을 노리는 공격인데, 이 앱은 세션 쿠키를 쓰지 않는 순수 Bearer 토큰 인증이라 공격 대상 자체가 성립하지 않는다.
 - **`ApiKeyAuthenticationEntryPoint`**가 인증 실패 401 응답을 `PaymentApiExceptionHandler`와 같은 `ErrorResponse` JSON 형식으로 통일한다 — 없으면 Spring Security 기본 엔트리 포인트가 다른 형식을 준다.
 - **`PaymentController`는 `merchantId`를 `@AuthenticationPrincipal ApiKeyPrincipal`에서 받는다** — 요청 본문에는 더 이상 없다.
