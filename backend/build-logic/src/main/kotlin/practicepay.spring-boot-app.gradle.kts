@@ -21,6 +21,17 @@ plugins {
 
 dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-jooq")
+
+	// 네 앱 모두 부팅 시 db/migration의 스키마 마이그레이션을 자동 적용한다
+	// (Spring Boot 4.x가 Flyway 자동 구성을 이 전용 starter로 분리했다 —
+	// spring-boot-jooq와 같은 개편이다). 기본 위치 classpath:db/migration을
+	// 바꾸지 않는다 — 개발용 시드(db/seed)가 운영에서 자동 제외되는 근거다
+	// (backend/CLAUDE.md의 "시드 데이터" 참고).
+	//
+	// flyway-mysql은 starter에 포함돼 있지 않다 — Flyway 10부터 DB별 지원이
+	// 별도 모듈로 분리돼서, MySQL을 쓰려면 명시적으로 추가해야 한다.
+	implementation("org.springframework.boot:spring-boot-starter-flyway")
+	runtimeOnly("org.flywaydb:flyway-mysql")
 	implementation("org.jetbrains.kotlin:kotlin-reflect")
 	implementation("tools.jackson.module:jackson-module-kotlin")
 	implementation("io.github.oshai:kotlin-logging-jvm:7.0.7")

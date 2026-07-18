@@ -86,7 +86,7 @@ architecture-tests/  실제 Gradle 서브프로젝트, 테스트 전용(src/main
 | `practicepay.mockk` | `testImplementation` mockk | domain/application/infra-blockchain/infra-support/common/apps 4개(infra-persistence/db-core/architecture-tests는 각자 다른 테스트 전략이라 제외) |
 | `practicepay.spring-bom` | `io.spring.dependency-management` + Spring Boot BOM import | infra-persistence/infra-blockchain/infra-support/db-core |
 | `practicepay.spring-library` | `practicepay.spring-bom` + `kotlin("plugin.spring")`(Bean을 open으로) | infra-persistence/infra-blockchain/infra-support(db-core는 `@Component` Bean이 없어서 제외) |
-| `practicepay.spring-boot-app` | `practicepay.kotlin-common` + `kotlin("plugin.spring")` + `org.springframework.boot` + `io.spring.dependency-management` + 4개 앱 공통 의존성(`spring-boot-starter-jooq`, `kotlin-reflect`, `jackson-module-kotlin`, `kotlin-logging-jvm`, `mysql-connector-j`, springmockk, testcontainers 3종, `kotest-extensions-spring`, `junit-platform-launcher`) | api-payment/api-admin/api-merchant/batch — 단 api-payment/api-admin/api-merchant는 아래 `spring-web-app`을 거쳐 간접 적용되고, batch만 직접 적용한다 |
+| `practicepay.spring-boot-app` | `practicepay.kotlin-common` + `kotlin("plugin.spring")` + `org.springframework.boot` + `io.spring.dependency-management` + 4개 앱 공통 의존성(`spring-boot-starter-jooq`, `spring-boot-starter-flyway`+`flyway-mysql`(부팅 시 스키마 자동 적용, "Flyway" 절 참고), `kotlin-reflect`, `jackson-module-kotlin`, `kotlin-logging-jvm`, `mysql-connector-j`, springmockk, testcontainers 3종, `kotest-extensions-spring`, `junit-platform-launcher`) | api-payment/api-admin/api-merchant/batch — 단 api-payment/api-admin/api-merchant는 아래 `spring-web-app`을 거쳐 간접 적용되고, batch만 직접 적용한다 |
 | `practicepay.spring-web-app` | `practicepay.spring-boot-app` + webmvc/security/validation 스타터 3종 + 대응 test 스타터 2종(`spring-boot-starter-webmvc-test`/`spring-boot-starter-security-test`) | api-payment/api-admin/api-merchant(batch는 웹 앱이 아니라서 `spring-boot-app`을 직접 쓴다) |
 
 **모듈마다 다른 부분은 그대로 각 `build.gradle.kts`에 남겨둔다** — `project(":modules:...")` 의존성 목록은 모듈 그래프를 그 파일만 보고 파악할 수 있어야 해서 convention plugin으로 감추지 않는다. 즉 "모듈마다 작은 설정을 중복한다"는 예전 컨벤션은, **버전·플러그인처럼 절대 갈릴 이유가 없는 설정**은 convention plugin으로 걷어내고(`webmvc`/`security`/`validation` 스타터도 세 웹 API 앱에서 똑같이 반복되던 것이라 `spring-web-app`으로 걷어냈다) **모듈마다 실제로 다른 의존성 그래프**는 여전히 각자 명시하는 쪽으로 갈렸다.
@@ -562,10 +562,14 @@ Worker" 절 참고. `SellPendingPaymentsToFakeExchangeTasklet`이
 
 ```
 docker compose up -d                                    # MySQL 시작(DB: stablecoin_payment, root 비밀번호: verysecret)
-# 1) 스키마 마이그레이션 — 모든 환경에 적용된다(db/migration/)
-docker exec -i backend-mysql-1 mysql --default-character-set=utf8mb4 -uroot -pverysecret stablecoin_payment < db-core/src/main/resources/db/migration/V1__init_schema.sql
-docker exec -i backend-mysql-1 mysql --default-character-set=utf8mb4 -uroot -pverysecret stablecoin_payment < db-core/src/main/resources/db/migration/V3__add_identity_access_and_merchant_api_key.sql
-docker exec -i backend-mysql-1 mysql --default-character-set=utf8mb4 -uroot -pverysecret stablecoin_payment < db-core/src/main/resources/db/migration/V5__add_spring_batch_schema.sql
+
+# 1) 스키마 마이그레이션 — Flyway가 적용하고 flyway_schema_history에 기록한다.
+#    앱을 띄우면 자동으로 적용되지만(아래 "Flyway" 참고), jooqCodegen은 앱을 빌드하기
+#    전에 테이블이 있어야 해서(앱 빌드 → codegen → 테이블 순환) 최초 1회는 앱 없이
+#    적용해야 한다 — Flyway 공식 Docker 이미지를 쓴다(Gradle 플러그인은 아래 참고).
+MSYS_NO_PATHCONV=1 docker run --rm --network backend_default \
+  -v "$(pwd -W)/db-core/src/main/resources/db/migration:/flyway/sql" flyway/flyway \
+  -url=jdbc:mysql://mysql:3306/stablecoin_payment -user=root -password=verysecret migrate
 
 # 2) 로컬 개발용 시드 — 운영에는 절대 적용하지 않는다(db/seed/, 아래 "시드 데이터" 참고).
 #    순서가 있다: seed_dev_data.sql이 만드는 가맹점에 seed_dev_identity_data.sql이 계정을 얹는다.
@@ -576,7 +580,24 @@ gradlew.bat :db-core:jooqCodegen                          # db-core/build/genera
 gradlew.bat :db-core:build                                 # jooqCodegen이 먼저 실행되고(compileKotlin.dependsOn으로 연결), 그다음 컴파일된다
 ```
 
-- **마이그레이션은 지금 Flyway Gradle 플러그인이 아니라 수동으로 적용한다.** 공식 `org.flywaydb.flyway` 플러그인(최신 배포: 11.8.2)이 Gradle 9에서 제거된 Gradle API `JavaPluginConvention`을 여전히 호출해서, 이 프로젝트의 Gradle 9.5.1에서는 태스크가 그대로 실패한다(업스트림 미해결: https://github.com/flyway/flyway/issues/3798). `db-core/src/main/resources/db/migration/` 아래의 마이그레이션 파일들은 여전히 평범한 Flyway 형식 SQL이다(`V1__init_schema.sql`, `V3__add_identity_access_and_merchant_api_key.sql`, `V5__add_spring_batch_schema.sql`) — 앱 모듈이 실제 `DataSource`를 갖게 되면 Spring Boot 자체의 Flyway 자동 구성(`spring-boot-starter-flyway`, 이 Gradle 플러그인과 무관함)이 자동으로 적용해줄 것이다. 여전히 깨져 있다고 가정하기 전에 더 최신 `flyway-gradle-plugin`이 고쳐졌는지 다시 확인한다.
+### Flyway — 앱이 부팅 시 스키마를 적용한다
+
+네 앱 모두 `spring-boot-starter-flyway`(+ `flyway-mysql`)를 갖고 있어서(`practicepay.spring-boot-app` convention plugin), **부팅 시 `classpath:db/migration`의 마이그레이션을 자동으로 적용한다.** 이미 최신이면 아무것도 하지 않는다.
+
+- **기본 위치 `classpath:db/migration`을 바꾸지 않는다** — 개발용 시드(`db/seed/`)가 운영에서 자동 제외되는 근거가 이 기본값이다(아래 "시드 데이터" 참고). 마이그레이션 파일은 `db-core`의 리소스인데, 앱이 `modules:infra-persistence` → `db-core`로 이어지는 의존성을 통해 classpath에 갖고 있어서 그대로 발견된다(실제 `bootRun`으로 확인).
+- **`flyway-mysql`은 starter에 없어서 따로 추가했다** — Flyway 10부터 DB별 지원이 별도 모듈로 분리됐다.
+- **네 앱이 같은 스키마를 공유하므로 넷 다 마이그레이션을 시도한다.** Flyway가 실행 중 DB 잠금을 잡아서 동시에 떠도 안전하지만, 운영에서는 배포 파이프라인의 별도 단계(또는 한 앱만)로 적용하는 쪽이 낫다 — 스키마 소유권이 네 배포 단위에 흩어져 있는 건 MVP 단계의 단순화다.
+- **jooqCodegen과의 순서 문제**: codegen은 실제 테이블을 읽어야 하고 앱 빌드는 codegen 결과에 의존하므로, "앱을 띄워 마이그레이션한다"로는 최초 부트스트랩이 순환에 빠진다. 그래서 위 작업 흐름은 앱 없이 도는 **Flyway 공식 Docker 이미지**로 최초 적용을 한다. Flyway가 이력을 남기므로 이후 앱 부팅 시에는 "No migration necessary"가 되고 두 경로가 충돌하지 않는다(실제로 확인).
+- **`org.flywaydb.flyway` Gradle 플러그인은 여전히 쓰지 않는다.** 최신 배포(11.8.2)가 Gradle 9에서 제거된 `JavaPluginConvention`을 호출해서 이 프로젝트의 Gradle 9.5.1에서 태스크가 실패한다(업스트림 미해결: https://github.com/flyway/flyway/issues/3798). Docker 이미지를 쓰는 이유이기도 하다 — 나중에 플러그인이 고쳐졌는지 확인해볼 수 있다.
+- **`mysql` CLI로 스키마를 직접 적용하지 않는다**(시드는 예외다 — Flyway 관리 대상이 아니다). CLI로 적용하면 `flyway_schema_history`에 기록이 남지 않아, 앱을 띄울 때 Flyway가 `Found non-empty schema(s) ... but no schema history table`로 **기동을 거부한다**(아무것도 변경하지 않고 중단한다).
+  - Flyway 도입 전에 CLI로 적용해 둔 기존 DB가 있다면, 데이터를 지우지 않고 되살리는 방법은 **baseline**이다 — 이미 적용된 최고 버전을 이력에 기록하고 그 이후만 적용하게 만든다:
+    ```
+    MSYS_NO_PATHCONV=1 docker run --rm --network backend_default \
+      -v "$(pwd -W)/db-core/src/main/resources/db/migration:/flyway/sql" flyway/flyway \
+      -url=jdbc:mysql://mysql:3306/stablecoin_payment -user=root -password=verysecret \
+      -baselineVersion=5 baseline
+    ```
+    되돌리려면 `flyway_schema_history` 테이블을 지우면 된다. DB를 새로 만들어도 되지만(`docker compose down -v`) 시드를 다시 심어야 한다.
 - **버전 번호가 V1/V3/V5로 비어 있는 건 정상이다.** 원래 V2/V4였던 개발용 시드를 `db/seed/`로 옮기면서 생긴 자리다(아래 "시드 데이터" 참고). 이미 적용된 이력을 깨뜨리지 않으려고 남은 파일의 번호는 그대로 뒀다 — Flyway는 버전이 연속이 아니어도 정상 동작한다.
 
 ### 시드 데이터(`db/seed/`) — 운영에 적용하지 않는다
