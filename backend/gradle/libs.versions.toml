@@ -1,0 +1,39 @@
+[versions]
+kotlin = "2.3.21"
+springBoot = "4.1.0"
+springDependencyManagement = "1.1.7"
+ktlint = "14.2.0"
+jooqCodegen = "3.20.3"
+kotest = "5.9.1"
+kotestExtensionsSpring = "1.3.0"
+mockk = "1.14.3"
+springmockk = "5.0.1"
+archunit = "1.4.1"
+web3j = "4.14.0"
+kotlinLogging = "7.0.7"
+
+[libraries]
+kotlin-gradlePlugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
+# kotlin("plugin.spring")(id `org.jetbrains.kotlin.plugin.spring`)의 실제 구현체다 —
+# kotlin-gradle-plugin 자체에는 이 플러그인 마커가 없다.
+kotlin-allopen = { module = "org.jetbrains.kotlin:kotlin-allopen", version.ref = "kotlin" }
+springBoot-gradlePlugin = { module = "org.springframework.boot:spring-boot-gradle-plugin", version.ref = "springBoot" }
+springDependencyManagement-gradlePlugin = { module = "io.spring.gradle:dependency-management-plugin", version.ref = "springDependencyManagement" }
+
+kotest-runnerJunit5 = { module = "io.kotest:kotest-runner-junit5", version.ref = "kotest" }
+kotest-assertionsCore = { module = "io.kotest:kotest-assertions-core", version.ref = "kotest" }
+kotest-extensionsSpring = { module = "io.kotest.extensions:kotest-extensions-spring", version.ref = "kotestExtensionsSpring" }
+mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
+springmockk = { module = "com.ninja-squad:springmockk", version.ref = "springmockk" }
+archunit = { module = "com.tngtech.archunit:archunit", version.ref = "archunit" }
+web3j-core = { module = "org.web3j:core", version.ref = "web3j" }
+kotlinLogging-jvm = { module = "io.github.oshai:kotlin-logging-jvm", version.ref = "kotlinLogging" }
+
+# Spring Boot BOM이 버전을 관리하는 좌표라 version이 없다.
+jackson-moduleKotlin = { module = "tools.jackson.module:jackson-module-kotlin" }
+mysql-connectorJ = { module = "com.mysql:mysql-connector-j" }
+junitPlatform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
+
+[plugins]
+jooq-codegen = { id = "org.jooq.jooq-codegen-gradle", version.ref = "jooqCodegen" }
+ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint" }

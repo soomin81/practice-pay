@@ -50,6 +50,25 @@ architecture-tests/  실제 Gradle 서브프로젝트, 테스트 전용(src/main
 
 **루트 프로젝트에는 자체 코드가 없다.** 원래 Spring Initializr 스켈레톤 앱(`PracticePayApplication.kt`, 삭제됨)이었는데, `apps/api-payment`가 실제 결제 API 배포 단위 역할을 넘겨받으면서 중복이 됐다 — 그래서 중복으로 남겨두지 않고 삭제했다. `backend/build.gradle.kts`는 이제 모든 서브프로젝트에 적용되는 횡단 관심사 `allprojects {}` 블록(ktlint + `repositories {}`)만 갖고 있다 — 루트 프로젝트 자체에는 Kotlin이나 Spring Boot 플러그인을 적용하지 않는다. `backend/src/` 아래에 소스를 추가하지 말고, 해당하는 `apps:*` 또는 `modules:*` 서브프로젝트에 추가한다.
 
+## `build-logic`(Gradle Convention Plugin)
+
+11개 서브프로젝트가 `kotlin("jvm")` 버전, Java 25 toolchain, `compilerOptions`, kotest/mockk 좌표, Spring Boot BOM, Spring 앱 공통 의존성을 그대로 반복하던 걸 `backend/build-logic/`(Composite Build로 포함된 빌드)의 Precompiled Script Plugin으로 뽑아냈다 — `buildSrc` 대신 포함된 빌드를 쓴 이유는 `buildSrc`가 바뀌면 루트 빌드 전체가 매번 무효화되지만, 포함된 빌드는 독립된 빌드라 그 캐시 이점이 그대로 유지되기 때문이다. `backend/settings.gradle.kts` 맨 앞의 `pluginManagement { includeBuild("build-logic") }`이 이 빌드를 끌어온다.
+
+`build-logic/src/main/kotlin/*.gradle.kts` 6개:
+
+| 이름 | 내용 | 적용 대상 |
+|---|---|---|
+| `practicepay.kotlin-common` | `kotlin("jvm")`, Java 25 toolchain, 공통 `compilerOptions`, `useJUnitPlatform()` | 전체 11개 서브프로젝트 |
+| `practicepay.kotest` | `testImplementation` kotest-runner-junit5/kotest-assertions-core | 테스트가 있는 곳(db-core 제외) |
+| `practicepay.mockk` | `testImplementation` mockk | domain/application/infra-blockchain/common/apps 4개(infra-persistence/db-core/architecture-tests는 각자 다른 테스트 전략이라 제외) |
+| `practicepay.spring-bom` | `io.spring.dependency-management` + Spring Boot BOM import | infra-persistence/infra-blockchain/db-core |
+| `practicepay.spring-library` | `practicepay.spring-bom` + `kotlin("plugin.spring")`(Bean을 open으로) | infra-persistence/infra-blockchain(db-core는 `@Component` Bean이 없어서 제외) |
+| `practicepay.spring-boot-app` | `practicepay.kotlin-common` + `kotlin("plugin.spring")` + `org.springframework.boot` + `io.spring.dependency-management` + 4개 앱 공통 의존성(`spring-boot-starter-jooq`, `kotlin-reflect`, `jackson-module-kotlin`, `kotlin-logging-jvm`, `mysql-connector-j`, springmockk, testcontainers 3종, `kotest-extensions-spring`, `junit-platform-launcher`) | api-payment/api-admin/api-merchant/batch |
+
+**모듈마다 다른 부분은 그대로 각 `build.gradle.kts`에 남겨둔다** — `webmvc`/`security`/`validation` 스타터는 batch에 없어서 `spring-boot-app`에 넣지 않았고, `project(":modules:...")` 의존성 목록은 모듈 그래프를 그 파일만 보고 파악할 수 있어야 해서 convention plugin으로 감추지 않는다. 즉 "모듈마다 작은 설정을 중복한다"는 예전 컨벤션은, **버전·플러그인처럼 절대 갈릴 이유가 없는 설정**은 convention plugin으로 걷어내고 **모듈마다 실제로 다른 의존성 그래프**는 여전히 각자 명시하는 쪽으로 갈렸다.
+
+**알려진 한계**: `build-logic/src/main/kotlin/*.gradle.kts`(Precompiled Script Plugin)는 `backend/gradle/libs.versions.toml` 버전 카탈로그의 `libs` 접근자를 쓸 수 없다(`build-logic/build.gradle.kts` 자신은 되지만, `kotlin-dsl`이 컴파일하는 이 스크립트들의 컴파일 classpath에는 카탈로그 접근자 클래스가 없다 — Gradle의 알려진 한계). 그래서 이 6개 파일 안의 버전 문자열은 `libs.versions.toml`과 값을 손으로 맞춰야 한다(각 파일 KDoc에 표시해뒀다). 반면 메인 빌드에 남아있는 개별 `build.gradle.kts`(예: `modules/infra-blockchain`의 `libs.web3j.core`, `architecture-tests`의 `libs.archunit`, `db-core`의 `alias(libs.plugins.jooq.codegen)`)는 카탈로그를 정상적으로 쓴다.
+
 ## 명령어
 
 `backend/`에서 실행한다(Windows: `gradlew.bat` 사용, POSIX 셸용 래퍼 스크립트 `gradlew`도 있다). 더 이상 빌드/실행할 단일 루트 앱이 없다 — 특정 서브프로젝트를 지정한다:
@@ -64,8 +83,8 @@ gradlew.bat ktlintFormat                                  # 모든 모듈 자동
 ```
 
 - 로컬 MySQL: `compose.yaml`이 `docker compose up`용 `mysql:latest` 서비스를 정의하고, `stablecoin_payment` DB로 시딩된다(스키마와 일치 — 아래 "Database / jOOQ code generation" 참고). `apps:*` 네 앱 전부 테스트에서는 대신 Testcontainers를 자동으로 쓴다(각자 `TestcontainersConfiguration.kt`가 `@ServiceConnection`으로 MySQL 컨테이너를 띄운다) — `apps:batch`도 Confirm Worker가 생기면서 `DataSource`가 필요해져 같은 패턴을 따라간다.
-- 툴체인: Java 25, Kotlin 2.3.21, Spring Boot 4.1.0(각 `apps:*`/`db-core`/`modules:infra-persistence` 서브프로젝트 기준 — 루트 프로젝트 자체는 더 이상 Kotlin이나 Spring Boot 플러그인을 적용하지 않는다).
-- Lint/포맷: **ktlint**를 `org.jlleitschuh.gradle.ktlint` 플러그인(14.2.0)으로 모든 모듈에 적용한다(계층형 `modules:domain`/`modules:application` include를 위해 Gradle이 만드는 Phantom 부모 `:modules`도 포함) — 루트 `build.gradle.kts`의 `allprojects {}`를 통해서다. ktlint 설정이 모듈마다 달라질 이유가 없어서, 이 프로젝트의 "모듈마다 작은 설정을 중복한다"는 스타일의 유일한 예외다. `backend/.editorconfig`가 `indent_style = tab`을 고정해서(이 프로젝트의 기존 컨벤션) ktlint가 스페이스로 강제 포맷하지 않게 한다. `ktlintCheck`는 이미 `check`/`build`의 일부로 실행되므로, 빌드가 성공하면 Lint도 깨끗하다는 뜻이다. `db-core/build.gradle.kts`는 `generated-src`(jOOQ가 생성한 코드, 직접 수정하지 않음)를 Lint 대상에서 제외하고, 그걸 읽는 ktlint 태스크에 명시적으로 `dependsOn("jooqCodegen")`을 추가한다 — Gradle의 태스크 입력 검증이, 어떤 디렉토리를 읽는 태스크라면 그 디렉토리를 만드는 태스크에 대한 의존성 선언을 요구하기 때문이다.
+- 툴체인: Java 25, Kotlin 2.3.21, Spring Boot 4.1.0(각 `apps:*`/`db-core`/`modules:infra-persistence` 서브프로젝트 기준 — 루트 프로젝트 자체는 더 이상 Kotlin이나 Spring Boot 플러그인을 적용하지 않는다). 버전은 `backend/gradle/libs.versions.toml`에 모여 있다(위 "build-logic" 절 참고).
+- Lint/포맷: **ktlint**를 `org.jlleitschuh.gradle.ktlint` 플러그인(14.2.0)으로 모든 모듈에 적용한다(계층형 `modules:domain`/`modules:application` include를 위해 Gradle이 만드는 Phantom 부모 `:modules`도 포함) — 루트 `build.gradle.kts`의 `allprojects {}`를 통해서다. ktlint는 `build-logic`의 convention plugin으로 옮기지 않고 여기 그대로 뒀다 — `:modules` phantom project는 자기 `build.gradle.kts`가 없어서 convention plugin을 적용할 수 없고, 이미 잘 동작하고 문서화돼 있는 방식을 바꿀 이유가 없었다. `backend/.editorconfig`가 `indent_style = tab`을 고정해서(이 프로젝트의 기존 컨벤션) ktlint가 스페이스로 강제 포맷하지 않게 한다. `ktlintCheck`는 이미 `check`/`build`의 일부로 실행되므로, 빌드가 성공하면 Lint도 깨끗하다는 뜻이다. `db-core/build.gradle.kts`는 `generated-src`(jOOQ가 생성한 코드, 직접 수정하지 않음)를 Lint 대상에서 제외하고, 그걸 읽는 ktlint 태스크에 명시적으로 `dependsOn("jooqCodegen")`을 추가한다 — Gradle의 태스크 입력 검증이, 어떤 디렉토리를 읽는 태스크라면 그 디렉토리를 만드는 태스크에 대한 의존성 선언을 요구하기 때문이다.
 
 ## 테스트
 

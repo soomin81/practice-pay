@@ -1,33 +1,6 @@
 plugins {
-	kotlin("jvm") version "2.3.21"
-	// Makes classes annotated with @Component (and anything meta-annotated with
-	// it, e.g. @Repository) implicitly `open` — Spring Boot defaults to CGLIB
-	// (subclass) proxies even for beans that implement an interface
-	// (`spring.aop.proxy-target-class=true`), which fails on Kotlin's
-	// final-by-default classes otherwise. Only surfaced once a real app
-	// (apps:api-payment) actually booted these adapters through Spring's
-	// container — this module's own tests instantiate them directly, bypassing
-	// DI/AOP entirely.
-	kotlin("plugin.spring") version "2.3.21"
-	id("io.spring.dependency-management") version "1.1.7"
-}
-
-java {
-	toolchain {
-		languageVersion = JavaLanguageVersion.of(25)
-	}
-}
-
-repositories {
-	mavenCentral()
-}
-
-// Reuses the same Spring Boot BOM as db-core/the root project so jOOQ/Spring
-// versions stay in lockstep with the versions the running app uses.
-dependencyManagement {
-	imports {
-		mavenBom("org.springframework.boot:spring-boot-dependencies:4.1.0")
-	}
+	id("practicepay.spring-library")
+	id("practicepay.kotest")
 }
 
 dependencies {
@@ -43,8 +16,6 @@ dependencies {
 	implementation("org.springframework:spring-tx")
 
 	testImplementation(project(":modules:domain"))
-	testImplementation("io.kotest:kotest-runner-junit5:5.9.1")
-	testImplementation("io.kotest:kotest-assertions-core:5.9.1")
 	testImplementation("org.testcontainers:testcontainers-junit-jupiter")
 	testImplementation("org.testcontainers:testcontainers-mysql")
 	testImplementation("com.mysql:mysql-connector-j")
@@ -65,14 +36,4 @@ dependencies {
 	// autoconfiguration out of spring-boot-autoconfigure into this dedicated module.
 	testImplementation("org.springframework.boot:spring-boot-jooq")
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-}
-
-kotlin {
-	compilerOptions {
-		freeCompilerArgs.addAll("-Xjsr305=strict", "-Xannotation-default-target=param-property")
-	}
-}
-
-tasks.withType<Test> {
-	useJUnitPlatform()
 }

@@ -8,27 +8,9 @@
 // own Flyway autoconfiguration once the app module has a DataSource — that path
 // doesn't go through this Gradle plugin at all.
 plugins {
-	kotlin("jvm") version "2.3.21"
-	id("io.spring.dependency-management") version "1.1.7"
-	id("org.jooq.jooq-codegen-gradle") version "3.20.3"
-}
-
-java {
-	toolchain {
-		languageVersion = JavaLanguageVersion.of(25)
-	}
-}
-
-repositories {
-	mavenCentral()
-}
-
-// Reuses the same Spring Boot BOM as the root project so the jOOQ/MySQL driver
-// versions used here stay in lockstep with the versions the running app uses.
-dependencyManagement {
-	imports {
-		mavenBom("org.springframework.boot:spring-boot-dependencies:4.1.0")
-	}
+	id("practicepay.kotlin-common")
+	id("practicepay.spring-bom")
+	alias(libs.plugins.jooq.codegen)
 }
 
 dependencies {
@@ -71,12 +53,6 @@ jooq {
 				directory = "build/generated-src/jooq/main"
 			}
 		}
-	}
-}
-
-kotlin {
-	compilerOptions {
-		freeCompilerArgs.addAll("-Xjsr305=strict", "-Xannotation-default-target=param-property")
 	}
 }
 
