@@ -15,7 +15,9 @@ dependencies {
 	// TransactionManagerAdapter wraps a Spring-managed PlatformTransactionManager.
 	implementation("org.springframework:spring-tx")
 
-	testImplementation(project(":modules:domain"))
+	// `testImplementation`은 `implementation`을 상속하므로 위에 이미 선언한
+	// project(":modules:domain")/(":modules:application")/(":db-core")를 여기서
+	// 다시 선언하지 않는다 — 테스트 코드에서도 그대로 쓸 수 있다.
 	testImplementation("org.testcontainers:testcontainers-junit-jupiter")
 	testImplementation("org.testcontainers:testcontainers-mysql")
 	testImplementation("com.mysql:mysql-connector-j")

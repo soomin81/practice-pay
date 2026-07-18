@@ -18,5 +18,7 @@ dependencies {
 	implementation("org.springframework:spring-context")
 	implementation(libs.web3j.core)
 
-	testImplementation(project(":modules:domain"))
+	// 테스트 전용 의존성은 없다 — `testImplementation`이 `implementation`을 상속해서
+	// 위 의존성(domain/application/web3j)이 테스트 컴파일 클래스패스에도 그대로 있고,
+	// Kotest/MockK는 practicepay.kotest/practicepay.mockk가 붙여준다.
 }
