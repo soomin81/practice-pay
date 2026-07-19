@@ -6,10 +6,10 @@
 `frontend/`가 이 계약에만 의존해 체크아웃 화면을 만들 수 있도록, 백엔드 소스를 읽지
 않아도 되는 수준까지 명시하는 것이 목적이다.
 
-이 문서는 **구현보다 먼저 작성됐다.** 대상 Use Case 중 둘(`ConnectCheckoutWalletUseCase`,
-`SubmitPaymentTransactionUseCase`)은 이미 `modules:application`에 있지만 어떤 앱에도
-배선되지 않았고, 조회용 Use Case는 아직 없다. 즉 여기 적힌 경로·응답은 현재 코드에서
-추출한 것이 아니라 **앞으로 구현할 계약**이다.
+이 문서는 **구현보다 먼저 작성됐고, 지금은 구현이 이 계약을 따라온 상태다**
+(`apps:api-payment`의 `api.payment.checkout.web`). 계약을 바꿀 때는 이 문서를 먼저
+고친다 — 프론트엔드가 백엔드 소스가 아니라 이 문서를 기준으로 작업하기 때문에,
+구현만 바꾸면 프론트가 조용히 어긋난다.
 
 ## 2. 다른 API와의 경계
 
@@ -261,21 +261,26 @@ successUrl로 이동
 `docs/domain/state-transitions.md`를 따른다. 프론트는 응답의 상태 값을 그대로 신뢰하고
 자체적으로 다음 상태를 추론하지 않는다.
 
-## 7. 구현에 필요한 것
+## 7. 구현 상태
 
-이 계약을 만족시키려면 백엔드에 다음이 필요하다.
+이 계약은 `apps:api-payment`에 구현돼 있다.
 
-- **`apps:api-payment`에 새 패키지** `api.payment.checkout.web`/`.config` — 새 앱을 만들지
-  않는다(2.1 참고). `SecurityConfig`에 `/checkout/**` `permitAll`과 그 경로 전용 CORS를 더한다.
-- **새 조회 Use Case**: 4.1/4.2를 위한 읽기 전용 Use Case. Command Repository가 아니라
-  전용 Projection을 쓴다(`MerchantListProjection`이 세운 선례) — `CheckoutSession` +
-  `Payment` + `PaymentQuote` + 최신 `BlockchainTransaction`을 한 번에 조인해야 해서
-  Aggregate 복원으로는 맞지 않는다.
-- **기존 Use Case 2개 배선**: `ConnectCheckoutWalletUseCase`,
-  `SubmitPaymentTransactionUseCase` — 구현은 이미 있고 컨트롤러·Bean만 없다.
-- **취소 Use Case**: `CheckoutSession.cancel()`을 호출하는 Use Case가 아직 없다.
-- **`confirmationCount` 노출 경로**: 지금은 `BlockchainTransaction`이 들고 있고 Confirm
-  Worker만 갱신한다. Projection이 이 값을 읽어야 한다.
+| 조각 | 위치 |
+|---|---|
+| 컨트롤러·DTO·예외 매핑 | `apps/api-payment` 의 `api.payment.checkout.web` |
+| 인가·CORS | `api.payment.config.SecurityConfig` |
+| 조회 Use Case | `application.checkout.GetCheckoutSessionUseCase`/`GetCheckoutStatusUseCase` |
+| 취소 Use Case | `application.checkout.CancelCheckoutSessionUseCase` |
+| 지갑 연결·Hash 제출 | 기존 `ConnectCheckoutWalletUseCase`/`SubmitPaymentTransactionUseCase`(이 API가 처음 노출한다) |
+| 조회 Projection | `CheckoutViewProjection` + `CheckoutViewProjectionAdapter` |
+
+- **조회는 Command Repository가 아니라 전용 Projection을 쓴다**(`MerchantListProjection`이
+  세운 선례) — 화면에 필요한 값이 `CheckoutSession` 하나에 없고 `Payment`/`PaymentQuote`/
+  `BlockchainTransaction`까지 걸쳐 있어서 Aggregate 복원으로는 맞지 않는다.
+- **`confirmationCount`는 `BlockchainTransaction`에서 읽는다.** 결제당 `PAYMENT` 거래는
+  스키마상 최대 한 건이라(`uk_blockchain_payment_type`) 타입으로 정확히 집는다.
+- 남은 gap: 만료된 세션을 `EXPIRED`로 전이시키는 Sweep Worker가 없어서, 만료 판단은
+  상태가 아니라 `expiresAt` 시각 비교로 한다.
 
 ## 8. 아직 정하지 않은 것
 

@@ -57,9 +57,10 @@ modules/
                      매도 슬라이스 — MVP 완료 경계의 마지막 조각), Identity/API Key Use Case
                      (Authenticate*/IssueInternalUser), BlockchainClient(온체인 조회 Port, 구현체는
                      modules:infra-blockchain) + 그 outbound port들(Architecture 참고).
-                     주의: ConnectCheckoutWalletUseCase와 SubmitPaymentTransactionUseCase는
-                     구현돼 있지만 어떤 앱에도 배선되지 않았다 — 이 둘을 노출할
-                     고객 대면 API가 아직 없어서다("Hosted Checkout API" 절 참고).
+                     체크아웃 슬라이스(application.checkout)의 GetCheckoutSession/
+                     GetCheckoutStatus/CancelCheckoutSession과 ConnectCheckoutWallet/
+                     SubmitPaymentTransaction은 apps:api-payment의 고객 대면 API가
+                     노출한다("Hosted Checkout API" 절 참고).
   common/            실제 Gradle 서브프로젝트, 의존성 없음, src 비어 있음 — 어떤 레이어에서도 쓸 수 있는 공용
                      유틸리티가 실제로 필요해질 때 채운다(순환 의존을 피하려고 지금은 어떤 modules:*도
                      참조하지 않는다)
@@ -261,15 +262,19 @@ inbound adapter → application → domain ← outbound port ← outbound adapte
 - 네 앱의 `application.yaml`은 `spring-boot-docker-compose` 자동 감지에 기대지 않고 `spring.datasource.*`를 `db-core`/`compose.yaml`이 이미 쓰는 것과 같은 로컬 개발 MySQL로 직접 가리킨다(`localhost:3306/stablecoin_payment`, `root`/`verysecret`) — 그 자동 감지 메커니즘은 실행 중인 앱 자신의 작업 디렉토리(예: `apps/api-payment/`)에서 `compose.yaml`을 찾지, `backend/`에서 찾지 않아서, 추가 경로 설정 없이는 공유 파일을 찾지 못한다.
 - 테스트는 전부 같은 모양을 따른다(`@SpringBootTest` + Kotest `SpringExtension`, 앱마다 `contextLoads` 테스트 하나 — 위 "테스트" 참고). 네 앱 다 만족시켜야 할 `DataSource`가 있어서 `TestcontainersConfiguration`도 추가로 import한다.
 
-## Hosted Checkout API — 계약은 있고 구현은 없다
+## Hosted Checkout API(`apps:api-payment`의 고객 대면 엔드포인트)
 
-고객 브라우저가 호출할 체크아웃 API의 계약이 `docs/architecture/checkout-api.md`에 **구현보다 먼저** 정의돼 있다. 이 저장소에서 계약 우선(contract-first)으로 간 첫 사례다 — 프론트엔드가 백엔드 소스를 읽지 않고도 작업할 수 있게 하려는 것이 목적이다.
+고객 브라우저가 호출하는 체크아웃 API다. 계약이 `docs/architecture/checkout-api.md`에 **구현보다 먼저** 정의됐고(이 저장소의 첫 contract-first 사례), 그 계약대로 `apps:api-payment`에 구현했다. 프론트엔드는 백엔드 소스가 아니라 그 문서를 기준으로 작업한다.
 
-- **`apps:api-payment`가 이걸 함께 제공한다 — 새 앱을 만들지 않는다.** 처음에는 다섯 번째 앱(`api-checkout`)으로 분리하려 했으나 뒤집었다: 체크아웃과 결제 생성은 같은 애그리게이트(`Payment`/`CheckoutSession`)를 다루는 같은 컨텍스트고, 앱 분리 근거인 "독립 스케일"은 트래픽 없는 MVP에서 선반영이며(이 문서의 "지금 실제로 하는 일에만 맞춘다"에 어긋난다), 인증 모델도 충돌하지 않는다 — `ApiKeyAuthenticationFilter`는 헤더가 없으면 `SecurityContext`만 비우고 통과시켜서 `/error`와 같은 방식으로 `permitAll`을 얹으면 된다. 분리 기준은 `docs/architecture/checkout-api.md`의 2.1에 적어뒀다.
-- **병합의 함정 둘**: CORS를 앱 전체가 아니라 `/checkout/**`에만 걸 것(전역으로 열면 API Key로 보호되는 결제 생성 API가 브라우저에 노출된다), 그리고 체크아웃 `permitAll`을 추가한 뒤 **`POST /api/v1/payments`가 여전히 `SCOPE_PAYMENT_CREATE`를 요구하는지** 같은 테스트에서 함께 검증할 것.
-- **패키지는 `api.payment.checkout.*`로 분리해서 만든다** — 기존 `api.payment.web`과 섞지 않으면 나중의 분리가 디렉토리 이동으로 끝난다.
-- **`ConnectCheckoutWalletUseCase`/`SubmitPaymentTransactionUseCase`는 이미 있다** — 컨트롤러와 Bean만 없다. 새로 만들어야 하는 건 조회용 Projection Use Case와 취소 Use Case다.
-- 계약을 바꿀 때는 `docs/`를 먼저 고친다 — 구현이 아직 없으므로 지금은 그 문서가 유일한 기준이다.
+- **새 앱을 만들지 않고 `api-payment`에 넣었다.** 처음에는 다섯 번째 앱(`api-checkout`)으로 분리하려 했으나 뒤집었다: 체크아웃과 결제 생성은 같은 애그리게이트(`Payment`/`CheckoutSession`)를 다루는 같은 컨텍스트고, 앱 분리 근거인 "독립 스케일"은 트래픽 없는 MVP에서 선반영이며(이 문서의 "지금 실제로 하는 일에만 맞춘다"에 어긋난다), 인증 모델도 충돌하지 않는다 — `ApiKeyAuthenticationFilter`는 헤더가 없으면 `SecurityContext`만 비우고 통과시켜서 `/error`와 같은 방식으로 `permitAll`을 얹으면 된다. 나중에 분리할 기준은 `docs/architecture/checkout-api.md`의 2.1에 적어뒀다.
+- **이 앱은 이제 인증 모델이 둘이다** — 가맹점 서버용 API Key(Bearer)와 자격증명 없는 고객 대면 체크아웃. `SecurityConfig` 하나가 둘을 관리하므로 **규칙 순서와 범위를 바꿀 때 특히 조심한다.**
+- **CORS는 체크아웃 경로에만 등록한다**(`SecurityConfig.checkoutCorsConfigurationSource`). 앱 전체에 걸면 API Key로 보호되는 `POST /api/v1/payments`가 브라우저 호출 대상이 된다 — 편의가 아니라 보안 경계다. 허용 Origin은 `app.checkout.allowed-origins`(환경변수 `APP_CHECKOUT_ALLOWED_ORIGINS`)이고 와일드카드를 쓰지 않는다.
+- **패키지를 `api.payment.checkout.*`로 분리했다** — 기존 `api.payment.web`과 섞지 않아서 나중의 앱 분리가 디렉토리 이동으로 끝난다.
+- **예외 매핑은 `basePackages`로 범위를 좁힌 `CheckoutApiExceptionHandler`가 한다.** 앱 전역 `PaymentApiExceptionHandler`와 같은 예외 타입을 두고 충돌하지 않게 하려는 것이다. 핵심은 `IllegalStateException` → `409` 매핑인데(도메인 `checkTransition`이 던진다) **체크아웃 경로에서만** 유효해야 한다 — 다른 곳의 `IllegalStateException`은 여전히 예상 못 한 오류(500)로 남는 게 맞다. 만료는 `409`가 아니라 `410 Gone`으로 구분해서 프론트가 만료 전용 화면을 그릴 수 있게 한다.
+- **`GET`은 종료 상태(만료·취소·완료)도 그대로 돌려준다** — 프론트가 그 화면을 그려야 한다. 상태로 막는 것은 변경 엔드포인트의 몫이다.
+- **통합 테스트가 스키마 제약 하나를 잡아줬다**: `uk_blockchain_payment_type`이 `(payment_seq, transaction_type)`을 UNIQUE로 걸어서 **결제당 `PAYMENT` 거래는 최대 한 건이다.** Projection을 처음에 "재제출로 여러 건이 생길 수 있다"고 보고 `created_at` 내림차순 1건으로 짰다가, 통합 테스트가 제약 위반으로 실패하면서 잘못된 가정임이 드러나 타입으로 정확히 집도록 고쳤다. 그 제약을 근거로 삼는다는 사실을 테스트로 남겨뒀다(제약이 사라지면 그 테스트가 먼저 깨진다).
+- **테스트**: `CancelCheckoutSessionUseCaseTest`/`GetCheckoutSessionUseCaseTest`(단위), `CheckoutViewProjectionAdapterTest`(Testcontainers MySQL 통합, 조인·Confirm 수·스키마 제약), `CheckoutControllerTest`(`@WebMvcTest` + `@Import(SecurityConfig::class)`, 13개 — **인가 회귀 2개 포함**). 여기에 더해 실제 `bootRun` + `curl`로 결제 생성(API Key) → 무인증 조회 → 지갑 연결 → 재연결 409 → Hash 제출 → 상태 폴링 → 제출 후 취소 409 → 재제출 409 → 없는 세션 404 → 취소 200과 취소 후 조회 200까지 전 흐름을 확인했고, **CORS가 체크아웃에만 걸리고 `/api/v1/payments`에는 헤더가 나오지 않는 것**과 **결제 생성이 여전히 401을 내는 것**을 직접 확인했다. 검증 데이터는 정리했다.
+- **계약을 바꿀 때는 `docs/architecture/checkout-api.md`를 먼저 고친다** — 프론트엔드가 그 문서만 보고 작업하기로 돼 있어서, 구현만 바꾸면 프론트가 조용히 어긋난다.
 
 ## 기능별 구현 기록은 별도 문서에 있다
 

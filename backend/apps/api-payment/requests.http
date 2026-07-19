@@ -102,3 +102,130 @@ Authorization: Bearer {{paymentApiKey}}
   "successUrl": "https://merchant.example.com/success",
   "cancelUrl": "https://merchant.example.com/cancel"
 }
+
+### ────────────────────────────────────────────────────────────────────────
+### Hosted Checkout API (docs/architecture/checkout-api.md)
+###
+### 위 결제 생성 API와 같은 앱이지만 **인증이 없다** — 고객은 계정이 없고
+### checkoutSessionId를 아는 것 자체가 권한이다. 아래 요청들에 Authorization
+### 헤더가 하나도 없는 것이 정상이며, 그게 이 API의 계약이다.
+### ────────────────────────────────────────────────────────────────────────
+
+### [체크아웃 0] 결제를 만들어 checkoutSessionId를 확보한다(가맹점 서버 역할, API Key 필요)
+POST {{apiPaymentBaseUrl}}/api/v1/payments
+Content-Type: application/json
+Authorization: Bearer {{paymentApiKey}}
+
+{
+  "merchantOrderId": "checkout-{{$timestamp}}",
+  "orderName": "Checkout Flow Test",
+  "orderAmount": 50000,
+  "network": "BASE_SEPOLIA",
+  "receivingWallet": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+  "successUrl": "https://merchant.example.com/done",
+  "cancelUrl": "https://merchant.example.com/cancel"
+}
+
+> {%
+    client.test("결제 생성 (201)", () => {
+        client.assert(response.status === 201, "예상: 201, 실제: " + response.status);
+    });
+    client.global.set("checkoutSessionId", response.body.checkoutSessionId);
+%}
+
+### [체크아웃 1] 화면 렌더용 조회 — 인증 없이 200이어야 한다
+GET {{apiPaymentBaseUrl}}/checkout/sessions/{{checkoutSessionId}}
+
+> {%
+    client.test("무인증 조회 성공 (200)", () => {
+        client.assert(response.status === 200, "예상: 200, 실제: " + response.status);
+    });
+    client.test("USDC 금액이 문자열이다", () => {
+        client.assert(typeof response.body.payment.amount === "string",
+            "amount 타입: " + typeof response.body.payment.amount);
+    });
+    client.test("체인 정보가 응답에 담겨 온다(프론트가 상수로 박지 않도록)", () => {
+        client.assert(response.body.payment.chainId === 84532, "chainId: " + response.body.payment.chainId);
+        client.assert(!!response.body.payment.tokenContractAddress, "tokenContractAddress가 비어 있음");
+    });
+%}
+
+### [체크아웃 2] 고객 지갑 연결
+POST {{apiPaymentBaseUrl}}/checkout/sessions/{{checkoutSessionId}}/wallet
+Content-Type: application/json
+
+{
+  "walletAddress": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+}
+
+> {%
+    client.test("지갑 연결 (200)", () => {
+        client.assert(response.status === 200, "예상: 200, 실제: " + response.status);
+    });
+    client.test("WALLET_CONNECTED로 전이", () => {
+        client.assert(response.body.checkoutSessionStatus === "WALLET_CONNECTED",
+            "status: " + response.body.checkoutSessionStatus);
+    });
+%}
+
+### [체크아웃 3] 지갑 재연결 시도 — 409여야 한다(도메인에 재연결 전이가 없다)
+POST {{apiPaymentBaseUrl}}/checkout/sessions/{{checkoutSessionId}}/wallet
+Content-Type: application/json
+
+{
+  "walletAddress": "0xcccccccccccccccccccccccccccccccccccccccc"
+}
+
+> {%
+    client.test("재연결 거부 (409)", () => {
+        client.assert(response.status === 409, "예상: 409, 실제: " + response.status);
+    });
+%}
+
+### [체크아웃 4] Transaction Hash 제출 — 실제 온체인 전송을 흉내낸 더미 Hash다.
+### 성공 응답은 "결제 완료"가 아니라 "제출 접수"라는 뜻이다.
+POST {{apiPaymentBaseUrl}}/checkout/sessions/{{checkoutSessionId}}/transaction
+Content-Type: application/json
+
+{
+  "transactionHash": "0x1111111111111111111111111111111111111111111111111111111111111111"
+}
+
+> {%
+    client.test("제출 접수 (200)", () => {
+        client.assert(response.status === 200, "예상: 200, 실제: " + response.status);
+    });
+    client.test("Payment가 PROCESSING으로 전이", () => {
+        client.assert(response.body.paymentStatus === "PROCESSING", "status: " + response.body.paymentStatus);
+    });
+%}
+
+### [체크아웃 5] 상태 폴링 — 프론트가 3초 간격으로 부르는 경량 조회
+GET {{apiPaymentBaseUrl}}/checkout/sessions/{{checkoutSessionId}}/status
+
+> {%
+    client.test("상태 조회 (200)", () => {
+        client.assert(response.status === 200, "예상: 200, 실제: " + response.status);
+    });
+    client.test("아직 SUCCEEDED가 아니라 redirectUrl이 없다", () => {
+        client.assert(!response.body.redirectUrl, "redirectUrl: " + response.body.redirectUrl);
+    });
+%}
+
+### [체크아웃 6] 제출 후 취소 시도 — 409여야 한다(온체인 전송은 되돌릴 수 없다)
+POST {{apiPaymentBaseUrl}}/checkout/sessions/{{checkoutSessionId}}/cancel
+
+> {%
+    client.test("제출 후 취소 거부 (409)", () => {
+        client.assert(response.status === 409, "예상: 409, 실제: " + response.status);
+    });
+%}
+
+### [체크아웃 7] 없는 세션 — 404여야 한다(접근 불가와 구분해서 노출하지 않는다)
+GET {{apiPaymentBaseUrl}}/checkout/sessions/cs_no_such_session
+
+> {%
+    client.test("없는 세션 (404)", () => {
+        client.assert(response.status === 404, "예상: 404, 실제: " + response.status);
+    });
+%}

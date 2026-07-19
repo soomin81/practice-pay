@@ -12,7 +12,8 @@
 
 **백엔드 소스를 읽어서 API 형태를 추론하지 않는다.** 고객 브라우저가 호출하는 5개 엔드포인트의 경로·요청·응답·오류 코드는 전부 `docs/architecture/checkout-api.md`에 정의돼 있다.
 
-- **아직 그 API는 구현되지 않았다** — 계약을 먼저 정하고 프론트와 백엔드가 각자 맞춰가는 순서다. 백엔드에서는 `apps:api-payment`(포트 **8081**)가 이걸 함께 제공한다 — 별도 체크아웃 앱을 만들지 않기로 했고(그 문서 2.1), 경로·요청·응답은 그 결정과 무관하게 계약 그대로다.
+- **API는 구현돼 있다** — `apps:api-payment`(포트 **8081**)가 제공한다. 별도 체크아웃 앱은 만들지 않았다(그 문서 2.1). 로컬에서 `gradlew.bat :apps:api-payment:bootRun`으로 띄우고, 호출 예시는 `backend/apps/api-payment/requests.http`의 "Hosted Checkout API" 절에 전 흐름이 있다.
+- **CORS는 `app.checkout.allowed-origins`에 등록된 Origin만 허용한다** — 기본값은 `http://localhost:3000`, `http://localhost:5173`이다. 다른 포트로 개발 서버를 띄우면 브라우저가 막으므로 그 설정(또는 `APP_CHECKOUT_ALLOWED_ORIGINS`)에 추가해야 한다.
 - **인증이 없다.** 고객은 계정이 없고 `checkoutSessionId`가 곧 자격이다 — 로그인 화면을 만들지 않는다.
 - **`chainId`/`tokenContractAddress`/`receivingWallet`을 코드에 상수로 박지 않는다.** 전부 `GET /checkout/sessions/{id}` 응답에서 받아 쓴다(토큰을 Symbol로 판단하지 않는다는 도메인 규칙이 프론트에도 적용된다).
 - **USDC 금액은 문자열로 온다** — Minor Unit 정수가 JavaScript `Number`의 안전 범위를 넘을 수 있어서다. `BigInt`나 문자열로 다루고 `Number`로 변환하지 않는다.

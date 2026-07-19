@@ -40,3 +40,17 @@ app:
     # Pepper를 바꾸면 기존에 발급된 API Key의 secret_hash가 전부 무효가 된다
     # (해시를 다시 계산할 원문이 없다) — 교체하려면 Key 재발급이 함께 필요하다.
     pepper: ${APP_API_KEY_PEPPER:dev-only-api-key-pepper-change-in-production}
+  checkout:
+    # 고객 대면 체크아웃(/checkout/**)만을 위한 CORS 허용 Origin이다.
+    # 기본값은 로컬 프론트엔드 개발 서버를 가리키고, 운영에서는
+    # APP_CHECKOUT_ALLOWED_ORIGINS로 덮어쓴다(쉼표로 구분).
+    #
+    # !! 이 CORS는 /checkout/** 경로에만 등록된다 — SecurityConfig 참고 !!
+    # 앱 전체에 걸면 API Key로 보호되는 POST /api/v1/payments까지 브라우저에서
+    # 호출 가능한 표면이 된다. 가맹점 서버 전용이어야 할 API가 웹 페이지로
+    # 넓어지는 것이라, 이 분리는 편의가 아니라 보안 경계다
+    # (docs/architecture/checkout-api.md의 2.1).
+    #
+    # 와일드카드(*)를 쓰지 않는다 — 체크아웃 응답에는 수취 지갑 주소와 결제 금액이
+    # 담겨 있어서 아무 사이트나 읽게 두지 않는다.
+    allowed-origins: ${APP_CHECKOUT_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}

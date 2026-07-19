@@ -3,9 +3,16 @@ package paytech.practice.pay.api.payment.config
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import paytech.practice.pay.application.apikey.AuthenticateApiKeyUseCase
+import paytech.practice.pay.application.checkout.CancelCheckoutSessionUseCase
+import paytech.practice.pay.application.checkout.ConnectCheckoutWalletUseCase
+import paytech.practice.pay.application.checkout.GetCheckoutSessionUseCase
+import paytech.practice.pay.application.checkout.GetCheckoutStatusUseCase
 import paytech.practice.pay.application.payment.CreatePaymentUseCase
+import paytech.practice.pay.application.payment.SubmitPaymentTransactionUseCase
 import paytech.practice.pay.application.port.outbound.ApiKeySecretHasher
+import paytech.practice.pay.application.port.outbound.BlockchainTransactionRepository
 import paytech.practice.pay.application.port.outbound.CheckoutSessionRepository
+import paytech.practice.pay.application.port.outbound.CheckoutViewProjection
 import paytech.practice.pay.application.port.outbound.ExchangeRateProvider
 import paytech.practice.pay.application.port.outbound.IdGenerator
 import paytech.practice.pay.application.port.outbound.MerchantApiKeyRepository
@@ -64,6 +71,57 @@ class UseCaseConfiguration {
 			exchangeRateProvider = exchangeRateProvider,
 			idGenerator = idGenerator,
 			transactionManager = transactionManager,
+			clock = clock,
+		)
+
+	// ── 고객 대면 체크아웃(docs/architecture/checkout-api.md) ─────────────────
+	// ConnectCheckoutWalletUseCase와 SubmitPaymentTransactionUseCase는 이전부터
+	// modules:application에 구현돼 있었지만 어떤 앱도 배선하지 않아 호출된 적이
+	// 없었다 — 이 앱이 그 둘을 처음 노출하는 자리다.
+
+	@Bean
+	fun getCheckoutSessionUseCase(checkoutViewProjection: CheckoutViewProjection): GetCheckoutSessionUseCase =
+		GetCheckoutSessionUseCase(checkoutViewProjection = checkoutViewProjection)
+
+	@Bean
+	fun getCheckoutStatusUseCase(checkoutViewProjection: CheckoutViewProjection): GetCheckoutStatusUseCase =
+		GetCheckoutStatusUseCase(checkoutViewProjection = checkoutViewProjection)
+
+	@Bean
+	fun connectCheckoutWalletUseCase(
+		checkoutSessionRepository: CheckoutSessionRepository,
+		clock: Clock,
+	): ConnectCheckoutWalletUseCase =
+		ConnectCheckoutWalletUseCase(
+			checkoutSessionRepository = checkoutSessionRepository,
+			clock = clock,
+		)
+
+	@Bean
+	fun submitPaymentTransactionUseCase(
+		checkoutSessionRepository: CheckoutSessionRepository,
+		paymentRepository: PaymentRepository,
+		blockchainTransactionRepository: BlockchainTransactionRepository,
+		idGenerator: IdGenerator,
+		transactionManager: TransactionManager,
+		clock: Clock,
+	): SubmitPaymentTransactionUseCase =
+		SubmitPaymentTransactionUseCase(
+			checkoutSessionRepository = checkoutSessionRepository,
+			paymentRepository = paymentRepository,
+			blockchainTransactionRepository = blockchainTransactionRepository,
+			idGenerator = idGenerator,
+			transactionManager = transactionManager,
+			clock = clock,
+		)
+
+	@Bean
+	fun cancelCheckoutSessionUseCase(
+		checkoutSessionRepository: CheckoutSessionRepository,
+		clock: Clock,
+	): CancelCheckoutSessionUseCase =
+		CancelCheckoutSessionUseCase(
+			checkoutSessionRepository = checkoutSessionRepository,
 			clock = clock,
 		)
 }
