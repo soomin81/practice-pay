@@ -19,7 +19,18 @@
 - **USDC 금액은 문자열로 온다** — Minor Unit 정수가 JavaScript `Number`의 안전 범위를 넘을 수 있어서다. `BigInt`나 문자열로 다루고 `Number`로 변환하지 않는다.
 - 상태 전이의 의미는 API 문서가 아니라 `docs/domain/state-transitions.md`에 있다 — 화면 진행은 그쪽을 따른다.
 
-API가 구현되고 나면 OpenAPI 스펙(Spring REST Docs 기반)을 생성해 타입까지 받아오는 것을 목표로 한다 — 그때 이 절을 갱신한다.
+## 타입은 OpenAPI 스펙에서 생성한다
+
+백엔드가 **통과한 테스트에서 OpenAPI 스펙을 생성**한다(Spring REST Docs 기반이라 실제 응답과 어긋날 수 없다).
+
+```
+cd backend && gradlew.bat :apps:api-payment:openapi3
+# → backend/apps/api-payment/build/api-spec/openapi3.yaml
+```
+
+- **스펙은 저장소에 커밋돼 있지 않다**(생성물이라 `build/` 아래). 프론트 빌드에서 위 태스크를 먼저 돌리거나, 생성된 파일을 프론트 쪽으로 복사해 쓴다.
+- `openapi-generator`(또는 `openapi-typescript`)로 타입을 뽑아 쓰는 것을 권한다 — 필드명·nullable 불일치가 컴파일 단계에서 잡힌다. **특히 `payment.amount`는 스펙에 `type: string`으로 선언돼 있다**(Minor Unit이 `Number` 안전 범위를 넘을 수 있어서다) — 타입 생성기를 쓰면 이걸 실수로 숫자로 다루는 것을 막아준다.
+- **오류 응답(400/404/409/410)은 스펙에 없다.** `@WebMvcTest`의 MockMvc가 컨테이너 오류 디스패치를 재현하지 않아 잘못 문서화될 위험이 있어서 의도적으로 뺐다 — 오류 코드는 `docs/architecture/checkout-api.md`의 5절이 기준이고, 그쪽은 실제 `bootRun`으로 확인한 값이다.
 
 ## 명령어
 

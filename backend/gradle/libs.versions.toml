@@ -11,6 +11,7 @@ springmockk = "5.0.1"
 archunit = "1.4.1"
 web3j = "4.14.0"
 kotlinLogging = "7.0.7"
+restdocsApiSpec = "0.20.1"
 
 [libraries]
 kotlin-gradlePlugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
@@ -34,9 +35,17 @@ jackson-moduleKotlin = { module = "tools.jackson.module:jackson-module-kotlin" }
 mysql-connectorJ = { module = "com.mysql:mysql-connector-j" }
 junitPlatform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
 
+# Spring REST Docs 스니펫에 OpenAPI 메타데이터를 얹는다(spring-restdocs 자체는 Boot BOM이 관리).
+restdocsApiSpec-mockmvc = { module = "com.epages:restdocs-api-spec-mockmvc", version.ref = "restdocsApiSpec" }
+springBoot-starterRestdocs = { module = "org.springframework.boot:spring-boot-starter-restdocs" }
+# starter는 spring-restdocs-core만 가져오고, restdocs-api-spec-mockmvc는 이걸 runtime
+# scope로만 선언한다 — 컴파일 시점에 RestDocumentationResultHandler를 못 봐서 명시한다.
+springRestdocs-mockmvc = { module = "org.springframework.restdocs:spring-restdocs-mockmvc" }
+
 [plugins]
 jooq-codegen = { id = "org.jooq.jooq-codegen-gradle", version.ref = "jooqCodegen" }
 ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint" }
+restdocs-apiSpec = { id = "com.epages.restdocs-api-spec", version.ref = "restdocsApiSpec" }
 # 루트 build.gradle.kts가 `apply false`로만 쓴다(자기 Kotlin 소스는 없다) —
 # 서브프로젝트는 build-logic의 practicepay.kotlin-common을 통해 같은 버전을 받는다.
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }

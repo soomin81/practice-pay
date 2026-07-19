@@ -284,6 +284,32 @@ Use Case·Adapter를 하나씩 구현하며 내린 판단(왜 그 상수를 골�
 - **비슷한 상황의 선례를 찾을 때**: `IMPLEMENTATION-NOTES.md`를 본다. 다만 새 작업을 하려고 그 문서를 통째로 읽을 필요는 없다.
 - **재사용 가능한 규칙이 나오면 이 문서에 쓴다** — 기능별 기록 쪽에 묻어두지 않는다.
 
+## OpenAPI 스펙 생성(`apps:api-payment`의 `openapi3`)
+
+프론트엔드가 백엔드 소스를 읽지 않고 작업할 수 있게, **통과한 테스트에서 OpenAPI 스펙을 생성한다.**
+
+```
+gradlew.bat :apps:api-payment:openapi3     # → apps/api-payment/build/api-spec/openapi3.yaml
+```
+
+- **애노테이션(springdoc)이 아니라 REST Docs 기반을 골랐다 — 스펙이 거짓말을 할 수 없기 때문이다.** 애노테이션은 실제 응답과 어긋나도 빌드가 통과하지만, 이 방식은 실제로 요청을 보내고 응답을 받아야 스니펫이 나온다. 응답에 없는 필드를 문서화하면 그 자리에서 테스트가 깨진다.
+- **문서화 전용 테스트를 따로 둔다**(`CheckoutApiDocumentationTest`). 동작 검증은 `CheckoutControllerTest`가 하고, 필드별 설명이 붙는 문서화는 분리했다 — 한곳에 합치면 인가 회귀 같은 동작 의도가 설명 더미에 묻힌다.
+- **생성물은 커밋하지 않는다**(`build/` 아래 = gitignore). jOOQ 생성 코드와 같은 원칙이다 — 필요할 때 태스크로 만든다.
+- **`openapi3` 태스크만 Configuration Cache 예외로 표시했다**(`apps/api-payment/build.gradle.kts`). `restdocs-api-spec` 0.20.1의 태스크가 직렬화되지 않는 Jackson `ObjectMapper`를 들고 있어서다. 개발자가 `--no-configuration-cache`를 외우는 대신 태스크 하나만 예외 처리했고, 나머지 빌드는 캐시 이점을 유지한다.
+
+**이 스택에서 걸렸던 것 셋**(다시 만나면 이 순서로 의심한다):
+
+| 증상 | 원인 |
+|---|---|
+| `Cannot access class RestDocumentationResultHandler` | `spring-boot-starter-restdocs`는 `spring-restdocs-core`만 가져오고, `restdocs-api-spec-mockmvc`는 `spring-restdocs-mockmvc`를 **runtime scope**로만 선언한다 — `testImplementation`에 명시해야 컴파일 classpath에 올라온다 |
+| 스펙의 스키마가 전부 빈 `type: object` | 빌더를 `document(id, resourceDetails)` 오버로드에 그대로 넘기면 `responseFields`/`pathParameters`가 **조용히 사라진다**(그 오버로드는 부모 타입만 읽는다). `ResourceDocumentation.resource(builder.build())`로 감싸 Snippet으로 넘겨야 한다 |
+| path parameter 설명이 빈 문자열 | Spring REST Docs의 `parameterWithName`이 아니라 **`ResourceDocumentation.parameterWithName`**을 써야 OpenAPI로 넘어간다(오버로드가 둘 다 있어서 컴파일은 통과한다) |
+| 클린 상태에서 경로 0개짜리 12줄 스펙이 나옴 | 플러그인이 `openapi3`에 `test` 의존을 걸어주지 않아, 스니펫이 없는 채로 **`BUILD SUCCESSFUL`과 함께 빈 스펙**이 생성된다. `build.gradle.kts`에서 `dependsOn(tasks.test)`를 직접 걸었다 |
+
+넷 다 **컴파일과 테스트는 통과하고 생성물만 조용히 비는** 종류였다 — 스펙을 눈으로 열어보지 않으면 그대로 넘어간다. 스펙을 바꾼 뒤에는 `openapi3.yaml`의 경로 수·스키마 필드를 직접 확인한다.
+
+**한계 — 오류 응답은 스펙에 없다.** `@WebMvcTest`의 MockMvc가 컨테이너의 ERROR 디스패치를 재현하지 않아서(위 "테스트가 잡지 못하는 층"의 401 사고와 같은 층), 여기서 4xx를 문서화하면 실제와 다를 수 있다. 그래서 스펙은 성공 응답만 담고, **오류 코드는 `docs/architecture/checkout-api.md`의 5절에 두고 `bootRun` + `curl`로 확인한다.**
+
 ## IntelliJ HTTP Client(`.http` 파일)로 API 수동 테스트하기
 
 각 `apps/*`에 `requests.http`가 있다(`apps/api-payment/requests.http`, `apps/api-admin/requests.http`, `apps/api-merchant/requests.http`) — IntelliJ가 인식하는 형식이다(에디터에서 열면 요청 옆에 ▶ 실행 아이콘이 뜬다). `backend/http-client.env.json`이 세 앱의 `baseUrl`과 로그인 아이디/비밀번호/API Key 같은 공용 변수를 "local" 환경으로 묶어 둔다 — 요청을 실행하기 전에 에디터 오른쪽 위에서 환경을 "local"로 고른다.
