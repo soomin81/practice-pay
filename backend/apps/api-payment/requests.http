@@ -9,6 +9,11 @@
 ### 않은 것이다 — backend/에서 순서대로 한 번 실행한다:
 ###   docker exec -i backend-mysql-1 mysql --default-character-set=utf8mb4 -uroot -pverysecret stablecoin_payment < db-core/src/main/resources/db/seed/seed_dev_data.sql
 ###   docker exec -i backend-mysql-1 mysql --default-character-set=utf8mb4 -uroot -pverysecret stablecoin_payment < db-core/src/main/resources/db/seed/seed_dev_identity_data.sql
+###
+### 시드 Key 대신 새로 발급한 Key로 테스트하고 싶으면 apps:api-merchant의
+### POST /merchant/api-keys(../api-merchant/requests.http)로 발급받아 그 rawApiKey를
+### Authorization 헤더에 쓰면 된다 — api-payment/api-merchant 둘 다 app.api-key.pepper가
+### 같아야 동작한다(backend/CLAUDE.md의 "설정과 비밀값" 절 참고).
 
 ### 결제 생성 — scope: PAYMENT_CREATE인 API Key로 인증한다
 POST {{apiPaymentBaseUrl}}/api/v1/payments

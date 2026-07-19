@@ -17,7 +17,11 @@ import org.springframework.security.web.context.SecurityContextRepository
  * "4.4 하위 계정 발급": "`OWNER`, `ADMIN`은 하위 계정을 발급할 수 있다") — 이건
  * 정적인 1차 관문일 뿐이고, `ACTIVE` 상태까지 포함한 최종 판단은
  * `InviteMerchantSubAccountUseCase`가 요청자의 `MerchantUser`를 다시 읽어서 한다
- * (그 Use Case의 KDoc 참고).
+ * (그 Use Case의 KDoc 참고). `/merchant/api-keys` 아래의 와일드카드 규칙(발급·폐기)도
+ * 같은 역할 요구를 갖는다 — 그 와일드카드가 `POST /merchant/api-keys`(경로 변수
+ * 없음)와 `DELETE /merchant/api-keys/{merchantApiKeyId}`(경로 변수 있음)를 한
+ * 규칙으로 함께 덮는다(Spring의 `PathPattern`에서 이 와일드카드는 0개 이상의
+ * 하위 경로에 매칭된다 — 실제 `bootRun`으로 두 메서드 다 확인했다).
  */
 @Configuration
 @EnableWebSecurity
@@ -33,6 +37,7 @@ class SecurityConfig {
 				authorize("/merchant/login", permitAll)
 				authorize("/merchant/account-invitations/accept", permitAll)
 				authorize("/merchant/merchant-users", hasAnyRole("OWNER", "ADMIN"))
+				authorize("/merchant/api-keys/**", hasAnyRole("OWNER", "ADMIN"))
 				authorize(anyRequest, authenticated)
 			}
 		}

@@ -31,3 +31,14 @@ app:
     # 수락 때 쓰는 Pepper가 다르면 token_hash가 달라져 초대를 찾지 못한다 —
     # 자세한 배경은 api-admin/application.yaml의 같은 자리 주석 참고.
     pepper: ${APP_INVITATION_TOKEN_PEPPER:dev-only-invitation-token-pepper-change-in-production}
+  api-key:
+    # 기본값은 로컬 개발용 평문 placeholder다 — 운영에서는 APP_API_KEY_PEPPER
+    # 환경변수로 덮어쓴다(Secret Manager가 주입). 값을 여기 직접 적지 않는다.
+    #
+    # !! 이 값은 api-payment의 같은 설정과 반드시 일치해야 한다 !!
+    # 이 앱은 API Key를 "발급"만 하고(secretHash = hash(rawApiKey)), 그 Key로
+    # 실제 결제 API를 호출할 때 "검증"하는 쪽은 api-payment다(matches(rawApiKey,
+    # secretHash)). 두 앱의 Pepper가 다르면 같은 rawApiKey로 계산한 해시가 서로
+    # 달라져, 방금 발급한 Key로 결제 API를 호출해도 곧바로 401이 난다 — 자세한
+    # 배경은 api-payment/application.yaml의 같은 자리 주석 참고.
+    pepper: ${APP_API_KEY_PEPPER:dev-only-api-key-pepper-change-in-production}

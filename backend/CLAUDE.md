@@ -36,8 +36,9 @@ apps/
                      modules:application + modules:infra-persistence에 의존한다. AuthenticateMerchantUserUseCase
                      (POST /merchant/login), AcceptAccountInvitationUseCase(POST /merchant/account-invitations/accept,
                      비인증, api-admin과 같은 공용 Use Case를 재사용), InviteMerchantSubAccountUseCase
-                     (POST /merchant/merchant-users, OWNER/ADMIN)가 있다(Apps 절 참고). API Key 발급·폐기는
-                     아직 Use Case가 없다.
+                     (POST /merchant/merchant-users, OWNER/ADMIN), IssueMerchantApiKeyUseCase/
+                     RevokeMerchantApiKeyUseCase(POST·DELETE /merchant/api-keys, OWNER/ADMIN)가
+                     있다(Apps 절 참고). 이 앱의 MVP 흐름이 전부 구현됐다.
   batch/             실제 Gradle 서브프로젝트, 독립 배포 가능한 Spring Boot 앱 — spring-boot-starter-batch +
                      jooq + modules:application/infra-persistence/infra-blockchain에 의존한다. Job 셋:
                      confirmBlockchainTransactionJob(BlockchainTransaction 감지·Confirm 폴링 Worker),
@@ -120,12 +121,13 @@ gradlew.bat ktlintFormat                                  # 모든 모듈 자동
 | 설정 | 환경변수 | 앱 |
 |---|---|---|
 | `spring.datasource.url`/`username`/`password` | `SPRING_DATASOURCE_URL`/`_USERNAME`/`_PASSWORD` | 4개 앱 전부 |
-| `app.api-key.pepper` | `APP_API_KEY_PEPPER` | api-payment |
+| `app.api-key.pepper` | `APP_API_KEY_PEPPER` | api-payment/api-merchant |
 | `app.invitation-token.pepper` | `APP_INVITATION_TOKEN_PEPPER` | api-admin/api-merchant |
 | `app.blockchain.base-sepolia.rpc-url` | `APP_BLOCKCHAIN_BASE_SEPOLIA_RPC_URL` | batch |
 
 - **`${ENV:기본값}` 문법이 환경변수 덮어쓰기를 가능하게 하는 게 아니다.** Spring Boot는 환경변수를 `application.yaml`보다 우선하는 property source로 이미 읽고, `APP_INVITATION_TOKEN_PEPPER` 같은 이름을 `app.invitation-token.pepper`로 자동 매핑한다(relaxed binding) — `${...}` 없이 리터럴만 적어둬도 환경변수가 값을 덮어쓰는 것을 실제로 확인했다. 그럼에도 `${...}`로 적는 건 **환경변수 이름을 설정 파일만 보고 알 수 있게** 하고 "이 값은 주입받는 것"임을 드러내기 위해서다.
-- **`app.invitation-token.pepper`는 `api-admin`과 `api-merchant`가 반드시 같은 값이어야 한다.** 초대는 발급 시점에 `hash(원문 Token)`을 `account_invitation.token_hash`에 저장하고 수락 시점에 다시 `hash(원문 Token)`으로 조회하는데(`AcceptAccountInvitationUseCase`), 발급 앱과 수락 앱이 다르기 때문이다(가맹점 사용자 초대는 `api-merchant`가 수락하지만 발급은 다른 앱이 한다 — 가맹점 등록 Use Case가 생기면 실제로 갈린다). Pepper가 어긋나면 초대를 영영 찾지 못하고, 그때 나오는 예외는 원인을 숨기도록 설계된 `InvalidInvitationException`("유효하지 않은 초대")이라 추적이 매우 어렵다 — **한쪽만 교체하지 않는다.**
+- **`app.invitation-token.pepper`는 `api-admin`과 `api-merchant`가 반드시 같은 값이어야 한다.** 초대는 발급 시점에 `hash(원문 Token)`을 `account_invitation.token_hash`에 저장하고 수락 시점에 다시 `hash(원문 Token)`으로 조회하는데(`AcceptAccountInvitationUseCase`), 발급 앱과 수락 앱이 다르기 때문이다(가맹점 등록은 `api-admin`이 발급하고 `api-merchant`가 수락한다 — `RegisterMerchantUseCase` 절 참고). Pepper가 어긋나면 초대를 영영 찾지 못하고, 그때 나오는 예외는 원인을 숨기도록 설계된 `InvalidInvitationException`("유효하지 않은 초대")이라 추적이 매우 어렵다 — **한쪽만 교체하지 않는다.** 실제로 `bootRun`으로 발급→수락 전체 흐름을 검증했다.
+- **`app.api-key.pepper`도 같은 이유로 `api-payment`와 `api-merchant`가 반드시 같은 값이어야 한다.** `api-merchant`가 발급(`hash(rawApiKey)`)하고 `api-payment`가 인증(`matches(rawApiKey, secretHash)`)한다(`IssueMerchantApiKeyUseCase`/`RevokeMerchantApiKeyUseCase` 절 참고) — 두 앱의 Pepper가 다르면 방금 발급한 Key로 결제 API를 호출해도 401이 난다. 이것도 `bootRun`으로 발급→결제 생성 전체 흐름을 검증했다.
 - **Pepper 교체는 기존 데이터를 무효화한다.** `app.api-key.pepper`를 바꾸면 기존 API Key의 `secret_hash`가 전부 맞지 않게 되고(원문이 없어 재계산 불가), `app.invitation-token.pepper`를 바꾸면 아직 수락되지 않은 초대가 전부 무효가 된다. 교체하려면 각각 API Key 재발급/초대 재발급이 함께 필요하다.
 - 로컬 개발 기본값은 `compose.yaml`의 MySQL(`localhost:3306/stablecoin_payment`, `root`/`verysecret`)과 Base Sepolia 공개 RPC(`https://sepolia.base.org`)를 가리킨다 — 환경변수를 하나도 설정하지 않아도 `bootRun`이 그대로 동작해야 한다는 뜻이다.
 
@@ -378,6 +380,20 @@ inbound adapter → application → domain ← outbound port ← outbound adapte
 - **`SecurityConfig`에 역할 기반 인가가 두 번째로 등장했다.** `authorize("/merchant/merchant-users", hasAnyRole("OWNER", "ADMIN"))`를 추가했다 — `VIEWER`가 호출하면 Use Case에 닿기도 전에 Spring Security가 403으로 막는다(실제 확인).
 - **`modules:infra-support`에서 `infra.support.id`를 처음으로 스캔에 추가했다.** 이 앱은 지금까지 새 ID를 만드는 Use Case가 없어서 `UuidIdGenerator` Bean을 스캔하지 않았다(`MerchantApiApplication`의 예전 KDoc에 그렇게 적혀 있었다) — 이 Use Case가 그 첫 사례다.
 - **테스트**: `InviteMerchantSubAccountUseCaseTest`(단위, OWNER가 ADMIN 발급/ADMIN도 발급 가능/VIEWER는 예외/`SUSPENDED` OWNER는 역할이 맞아도 예외/loginId 중복/email 중복/OWNER 발급 시도는 `IllegalArgumentException`), `MerchantUserRepositoryAdapterTest`에 `findByMerchantIdAndEmail` 케이스 추가(Testcontainers MySQL 통합), `MerchantSubAccountControllerTest`(`@WebMvcTest` + `@Import(SecurityConfig::class)`, OWNER/ADMIN 둘 다 201, VIEWER는 403, 인증 없음은 401/403, 각 예외의 상태 코드 매핑까지 검증). 여기에 더해 실제 `bootRun`(`api-merchant`만 기동, 시드 OWNER로 시작) + `curl`로 OWNER 로그인 → ADMIN 발급(201) → 수락(200) → ADMIN 로그인(200) → **그 ADMIN이 다시 VIEWER 발급(201)** → 수락 → VIEWER 로그인 → VIEWER의 발급 시도(403, `SecurityConfig` 차단) → loginId/email 중복(각각 409) → OWNER 역할 시도(400) → **위에 적은 `SUSPENDED` 동적 검사**까지 전부 확인한 뒤 DB 행을 정리했다. 이 과정에서 한글 `userName`을 담은 `curl` 요청이 Git Bash에서 CP949로 나가 파싱에 실패하는(이전에 이미 겪은) 문제를 다시 만났다 — ASCII로 바꿔 재확인했다.
+
+### API Key 발급/폐기 Use Case(`IssueMerchantApiKeyUseCase`/`RevokeMerchantApiKeyUseCase`, `application.apikey`)와 `api-merchant`의 발급/폐기 컨트롤러
+
+`POST /merchant/api-keys`(발급)와 `DELETE /merchant/api-keys/{merchantApiKeyId}`(폐기)가 `docs/architecture/identity-access-api-key.md`의 "6.6 발급 권한"("`OWNER`, `ADMIN`은 발급/폐기할 수 있다")을 구현한다. `MerchantApiKey.create`/`revoke`는 이전부터 있었다 — 이 두 Use Case가 그걸 실제로 처음 호출하는 자리다. `AuthenticateApiKeyUseCase`(인증, `api-payment`가 씀)와 같은 `application.apikey` 패키지에 둔다.
+
+- **발급 권한 확인은 `InviteMerchantSubAccountUseCase`와 완전히 같은 방식이다** — 정적 역할 검사가 아니라 요청자의 `MerchantUser`를 다시 읽어 `canManageApiKeys()`를 동적으로 호출한다(그 Use Case의 KDoc에 적은 이유와 같다: 이 도메인 메서드도 지금까지 어디서도 호출되지 않고 있었다). `SecurityConfig`의 `hasAnyRole("OWNER", "ADMIN")`은 1차 정적 관문일 뿐이다.
+  - **`SUSPENDED` 동적 검사를 API Key 발급에서도 실제로 재현해 확인했다.** 시드 OWNER로 로그인해 세션을 살려둔 채 그 계정을 DB에서 직접 `SUSPENDED`로 바꾸고 같은 세션으로 발급을 시도했더니, 정적 역할 검사는 그대로 통과시켰지만 Use Case가 정확히 `MerchantUserCannotManageApiKeysException`(403, `"...role=OWNER, status=SUSPENDED)."`)으로 막았다 — `InviteMerchantSubAccountUseCase`에서 확인한 것과 같은 결과다.
+- **폐기는 대상이 요청자와 같은 가맹점 소속인지 직접 검사한다.** `MerchantApiKeyRepository.findById`는 ID로만 조회해서 다른 가맹점의 Key도 그대로 돌려주므로, `RevokeMerchantApiKeyUseCase`가 `apiKey.merchantId == revoker.merchantId`를 확인한다. 존재하지 않음과 다른 가맹점 소속을 같은 `MerchantApiKeyNotFoundException`(404)으로 가린다 — 다른 가맹점의 Key ID를 무차별 대입으로 탐색하지 못하게 하려는 것이다(`AcceptAccountInvitationUseCase`의 `InvalidInvitationException`과 같은 철학).
+- **`MerchantApiKey.revoke()`를 부르기 전에 `isUsable()`을 먼저 확인한다.** 이미 `REVOKED`/`EXPIRED`인 Key를 그대로 다시 부르면 도메인의 `checkTransition`이 `IllegalStateException`을 던지는데, 이 예외는 어느 컨트롤러도 매핑을 갖고 있지 않아 그대로 두면 raw 500으로 샌다 — `AcceptAccountInvitationUseCase`가 `AccountInvitation.accept()`를 부르기 전에 `status == PENDING`을 먼저 확인하는 것과 같은 이유로, `MerchantApiKeyNotActiveException`(409)을 먼저 던진다.
+- **`scopes`를 MVP가 허용하는 값(`PAYMENT_CREATE`/`PAYMENT_READ`)으로 제한한다.** `ApiKeyScope`에는 `REFUND_CREATE`/`REFUND_READ`/`SETTLEMENT_READ`도 있지만(스키마의 CHECK 제약이 이미 나열해 둔 값들, `docs/`의 "MVP에서는 쓰지 않는다") 도메인 레벨의 `require`가 없어서, `IssueMerchantApiKeyUseCase`가 직접 검증해 벗어나면 `IllegalArgumentException`(400)을 던진다 — `MerchantUser.inviteSubAccount`가 `require(role != OWNER)`로 스스로를 지키는 것과 달리 이 제약은 Use Case가 대신 짊어진다.
+- **API Key 형식(`sk_test_<prefixToken>_<secret>`)이 `AuthenticateApiKeyUseCase.extractPrefix()`의 파싱 규칙과 정확히 맞아야 한다.** `prefixToken`은 `idGenerator.newId().take(8)`(`ApiKeyPrefix`의 KDoc 예시 `sk_test_ab12cd34`와 같은 길이), `secret`은 `idGenerator.newId()` 그대로다. 단위 테스트가 발급 결과를 `extractPrefix`와 같은 방식(`split("_", limit=4)`)으로 되잘라 같은 `keyPrefix`가 나오는지 확인한다 — 발급이 만드는 형식과 인증이 파싱하는 형식이 어긋나면 방금 발급한 Key로 곧바로 인증에 실패하는 상황이 생긴다.
+- **새로 생긴 Pepper 공유 제약: `app.api-key.pepper`를 이제 `api-payment`와 `api-merchant`가 공유해야 한다.** `api-payment`의 그 설정 주석이 원래 "API Key를 발급·검증하는 앱이 여기뿐이라 다른 앱과 값을 맞출 필요가 없다"고 적혀 있었는데, 이 Use Case가 생기면서 그 전제가 깨졌다 — `api-merchant`가 발급(`hash(rawApiKey)`)하고 `api-payment`가 인증(`matches(rawApiKey, secretHash)`)하므로, 두 앱의 Pepper가 다르면 방금 발급한 Key로 결제 API를 호출해도 401이 난다(초대 Token Pepper와 같은 구조의 제약, "설정과 비밀값" 절 참고). 두 앱의 `application.yaml` 주석을 서로를 가리키도록 갱신했다.
+- **`api-merchant`의 컴포넌트 스캔에 `infra.support.apikey`를 처음 추가했다.** `HmacApiKeySecretHasher`가 이 하위 패키지에 있는데, 지금까지 이 앱은 API Key를 다루지 않아 스캔하지 않았다.
+- **테스트**: `IssueMerchantApiKeyUseCaseTest`(단위, OWNER 발급/VIEWER는 예외/`SUSPENDED` OWNER는 예외/빈 scopes는 `IllegalArgumentException`/MVP 밖 scope는 `IllegalArgumentException`/`extractPrefix`와의 형식 일치), `RevokeMerchantApiKeyUseCaseTest`(단위, OWNER가 자기 가맹점 Key 폐기/VIEWER는 예외/존재하지 않는 Key/다른 가맹점 Key는 같은 404/이미 REVOKED인 Key는 409), `MerchantApiKeyRepositoryAdapterTest`에 `findById` 케이스 추가(Testcontainers MySQL 통합), `MerchantApiKeyControllerTest`(`@WebMvcTest` + `@Import(SecurityConfig::class)`, 발급 POST와 폐기 DELETE 양쪽 다 같은 와일드카드 인가 규칙에 걸리는지 포함해 13개 케이스). 여기에 더해 실제 `bootRun`(`api-merchant` + `api-payment` 동시 기동, 시드 OWNER로 시작) + `curl`로 OWNER 로그인 → API Key 발급(201) → **그 원문 Key로 `api-payment`의 `POST /api/v1/payments` 호출해 결제 생성 성공(201)** → 폐기(200) → **폐기된 Key로 재시도해 401** → 이미 폐기된 Key 재폐기(409) → 존재하지 않는 Key 폐기(404) → MVP 밖 scope 발급 시도(400) → 위에 적은 `SUSPENDED` 동적 검사(403)까지 두 앱에 걸쳐 실전 확인했다. 검증 데이터는 정리했다.
 
 ### 초대 수락(활성화) Use Case(`AcceptAccountInvitationUseCase`, `application.identity`)
 

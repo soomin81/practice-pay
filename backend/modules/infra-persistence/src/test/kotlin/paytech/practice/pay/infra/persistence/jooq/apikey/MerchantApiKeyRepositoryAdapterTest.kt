@@ -118,4 +118,35 @@ class MerchantApiKeyRepositoryAdapterTest :
 		test("findByPrefix returns null for a nonexistent prefix") {
 			adapter.findByPrefix(ApiKeyPrefix("sk_test_no_such_prefix")).shouldBeNull()
 		}
+
+		test("save inserts a new MerchantApiKey and findById round-trips it") {
+			val merchantId = MerchantId(insertTestMerchant())
+			val createdBy = insertTestMerchantUser(merchantId)
+			val id = MerchantApiKeyId("mak_${uniqueSuffix()}")
+			val key =
+				MerchantApiKey.create(
+					id = id,
+					merchantId = merchantId,
+					keyName = "테스트 Key",
+					environment = ApiEnvironment.TEST,
+					keyPrefix = ApiKeyPrefix("sk_test_${uniqueSuffix().take(8)}"),
+					secretHash = "hashed-secret",
+					hashAlgorithm = "HMAC-SHA256",
+					scopes = setOf(ApiKeyScope.PAYMENT_CREATE),
+					createdByMerchantUserId = createdBy,
+					expiresAt = null,
+					createdAt = NOW,
+				)
+			adapter.save(key)
+
+			val found = adapter.findById(id)
+
+			found.shouldNotBeNull()
+			found.id shouldBe id
+			found.merchantId shouldBe merchantId
+		}
+
+		test("findById returns null for a nonexistent id") {
+			adapter.findById(MerchantApiKeyId("mak_no_such_id")).shouldBeNull()
+		}
 	})

@@ -117,3 +117,61 @@ Content-Type: application/json
         client.assert(response.status === 400, "예상: 400, 실제: " + response.status);
     });
 %}
+
+### API Key 발급 — OWNER 또는 ADMIN 세션으로 호출한다. 응답의 rawApiKey는 이 응답에서만
+### 원문으로 보인다 — 즉시 apps:api-payment의 Authorization: Bearer 헤더에 그대로 쓸 수 있다
+### (apps/api-payment/requests.http 참고). 실제로 방금 발급한 Key로 결제 생성까지
+### bootRun으로 검증했다(backend/CLAUDE.md의 "API Key 발급/폐기 Use Case" 절 참고).
+POST {{apiMerchantBaseUrl}}/merchant/api-keys
+Content-Type: application/json
+
+{
+  "keyName": "requests.http Test Key",
+  "scopes": ["PAYMENT_CREATE", "PAYMENT_READ"]
+}
+
+> {%
+    client.test("발급 성공 (201)", () => {
+        client.assert(response.status === 201, "예상: 201, 실제: " + response.status);
+    });
+    client.test("응답에 rawApiKey가 있다", () => {
+        client.assert(!!response.body.rawApiKey, "rawApiKey가 비어 있음");
+    });
+    client.global.set("issuedApiKeyId", response.body.merchantApiKeyId);
+%}
+
+### MVP 밖 scope로 발급 시도 — 400이어야 한다(REFUND_CREATE는 스키마엔 있지만 아직 발급하지 않는다)
+POST {{apiMerchantBaseUrl}}/merchant/api-keys
+Content-Type: application/json
+
+{
+  "keyName": "Bad Scope Key",
+  "scopes": ["REFUND_CREATE"]
+}
+
+> {%
+    client.test("MVP 밖 Scope 거부 (400)", () => {
+        client.assert(response.status === 400, "예상: 400, 실제: " + response.status);
+    });
+%}
+
+### 방금 발급한 API Key 폐기 — 200이어야 한다
+DELETE {{apiMerchantBaseUrl}}/merchant/api-keys/{{issuedApiKeyId}}
+
+> {%
+    client.test("폐기 성공 (200)", () => {
+        client.assert(response.status === 200, "예상: 200, 실제: " + response.status);
+    });
+%}
+
+### 같은 Key를 다시 폐기 — 409여야 한다(이미 REVOKED)
+DELETE {{apiMerchantBaseUrl}}/merchant/api-keys/{{issuedApiKeyId}}
+
+> {%
+    client.test("이미 폐기됨 (409)", () => {
+        client.assert(response.status === 409, "예상: 409, 실제: " + response.status);
+    });
+%}
+
+### 존재하지 않는 Key 폐기 — 404여야 한다
+DELETE {{apiMerchantBaseUrl}}/merchant/api-keys/mak_no_such_key

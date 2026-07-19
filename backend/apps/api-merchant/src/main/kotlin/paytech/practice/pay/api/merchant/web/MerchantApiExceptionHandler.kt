@@ -5,6 +5,9 @@ import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestControllerAdvice
+import paytech.practice.pay.application.apikey.MerchantApiKeyNotActiveException
+import paytech.practice.pay.application.apikey.MerchantApiKeyNotFoundException
+import paytech.practice.pay.application.apikey.MerchantUserCannotManageApiKeysException
 import paytech.practice.pay.application.identity.AccountLockedException
 import paytech.practice.pay.application.identity.DuplicateMerchantUserException
 import paytech.practice.pay.application.identity.InvalidCredentialsException
@@ -44,6 +47,20 @@ class MerchantApiExceptionHandler {
 	@ResponseStatus(HttpStatus.FORBIDDEN)
 	fun handleMerchantUserCannotInviteSubAccounts(ex: MerchantUserCannotInviteSubAccountsException): ErrorResponse =
 		ErrorResponse(ex.message ?: "하위 계정을 발급할 권한이 없습니다.")
+
+	@ExceptionHandler(MerchantUserCannotManageApiKeysException::class)
+	@ResponseStatus(HttpStatus.FORBIDDEN)
+	fun handleMerchantUserCannotManageApiKeys(ex: MerchantUserCannotManageApiKeysException): ErrorResponse =
+		ErrorResponse(ex.message ?: "API Key를 관리할 권한이 없습니다.")
+
+	@ExceptionHandler(MerchantApiKeyNotFoundException::class)
+	@ResponseStatus(HttpStatus.NOT_FOUND)
+	fun handleMerchantApiKeyNotFound(ex: MerchantApiKeyNotFoundException): ErrorResponse = ErrorResponse(ex.message ?: "API Key를 찾을 수 없습니다.")
+
+	@ExceptionHandler(MerchantApiKeyNotActiveException::class)
+	@ResponseStatus(HttpStatus.CONFLICT)
+	fun handleMerchantApiKeyNotActive(ex: MerchantApiKeyNotActiveException): ErrorResponse =
+		ErrorResponse(ex.message ?: "이미 폐기되었거나 만료된 API Key입니다.")
 
 	@ExceptionHandler(MethodArgumentNotValidException::class)
 	@ResponseStatus(HttpStatus.BAD_REQUEST)

@@ -90,6 +90,13 @@ class MerchantApiKeyRepositoryAdapter(
 			.fetchOne()
 			?.toDomain()
 
+	override fun findById(merchantApiKeyId: MerchantApiKeyId): MerchantApiKey? =
+		dsl
+			.selectFrom(MERCHANT_API_KEY)
+			.where(MERCHANT_API_KEY.MERCHANT_API_KEY_ID.eq(merchantApiKeyId.value))
+			.fetchOne()
+			?.toDomain()
+
 	private fun resolveMerchantSeq(merchantId: MerchantId): Long =
 		dsl
 			.select(MERCHANT.MERCHANT_SEQ)

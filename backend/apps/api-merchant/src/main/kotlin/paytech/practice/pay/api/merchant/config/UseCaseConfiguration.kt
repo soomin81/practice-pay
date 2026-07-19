@@ -2,13 +2,17 @@ package paytech.practice.pay.api.merchant.config
 
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import paytech.practice.pay.application.apikey.IssueMerchantApiKeyUseCase
+import paytech.practice.pay.application.apikey.RevokeMerchantApiKeyUseCase
 import paytech.practice.pay.application.identity.AcceptAccountInvitationUseCase
 import paytech.practice.pay.application.identity.AuthenticateMerchantUserUseCase
 import paytech.practice.pay.application.identity.InviteMerchantSubAccountUseCase
 import paytech.practice.pay.application.port.outbound.AccountInvitationRepository
+import paytech.practice.pay.application.port.outbound.ApiKeySecretHasher
 import paytech.practice.pay.application.port.outbound.IdGenerator
 import paytech.practice.pay.application.port.outbound.InternalUserRepository
 import paytech.practice.pay.application.port.outbound.InvitationTokenHasher
+import paytech.practice.pay.application.port.outbound.MerchantApiKeyRepository
 import paytech.practice.pay.application.port.outbound.MerchantRepository
 import paytech.practice.pay.application.port.outbound.MerchantUserRepository
 import paytech.practice.pay.application.port.outbound.PasswordEncoder
@@ -74,6 +78,34 @@ class UseCaseConfiguration {
 			invitationTokenHasher = invitationTokenHasher,
 			idGenerator = idGenerator,
 			transactionManager = transactionManager,
+			clock = clock,
+		)
+
+	@Bean
+	fun issueMerchantApiKeyUseCase(
+		merchantUserRepository: MerchantUserRepository,
+		merchantApiKeyRepository: MerchantApiKeyRepository,
+		apiKeySecretHasher: ApiKeySecretHasher,
+		idGenerator: IdGenerator,
+		clock: Clock,
+	): IssueMerchantApiKeyUseCase =
+		IssueMerchantApiKeyUseCase(
+			merchantUserRepository = merchantUserRepository,
+			merchantApiKeyRepository = merchantApiKeyRepository,
+			apiKeySecretHasher = apiKeySecretHasher,
+			idGenerator = idGenerator,
+			clock = clock,
+		)
+
+	@Bean
+	fun revokeMerchantApiKeyUseCase(
+		merchantUserRepository: MerchantUserRepository,
+		merchantApiKeyRepository: MerchantApiKeyRepository,
+		clock: Clock,
+	): RevokeMerchantApiKeyUseCase =
+		RevokeMerchantApiKeyUseCase(
+			merchantUserRepository = merchantUserRepository,
+			merchantApiKeyRepository = merchantApiKeyRepository,
 			clock = clock,
 		)
 }
