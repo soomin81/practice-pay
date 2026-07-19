@@ -6,10 +6,12 @@ import paytech.practice.pay.application.identity.AcceptAccountInvitationUseCase
 import paytech.practice.pay.application.identity.AuthenticateInternalUserUseCase
 import paytech.practice.pay.application.identity.IssueInternalUserUseCase
 import paytech.practice.pay.application.identity.RegisterMerchantUseCase
+import paytech.practice.pay.application.merchant.ListMerchantsUseCase
 import paytech.practice.pay.application.port.outbound.AccountInvitationRepository
 import paytech.practice.pay.application.port.outbound.IdGenerator
 import paytech.practice.pay.application.port.outbound.InternalUserRepository
 import paytech.practice.pay.application.port.outbound.InvitationTokenHasher
+import paytech.practice.pay.application.port.outbound.MerchantListProjection
 import paytech.practice.pay.application.port.outbound.MerchantRepository
 import paytech.practice.pay.application.port.outbound.MerchantUserRepository
 import paytech.practice.pay.application.port.outbound.PasswordEncoder
@@ -95,4 +97,8 @@ class UseCaseConfiguration {
 			transactionManager = transactionManager,
 			clock = clock,
 		)
+
+	@Bean
+	fun listMerchantsUseCase(merchantListProjection: MerchantListProjection): ListMerchantsUseCase =
+		ListMerchantsUseCase(merchantListProjection)
 }

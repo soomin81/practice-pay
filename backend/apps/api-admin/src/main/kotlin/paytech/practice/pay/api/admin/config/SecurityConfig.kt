@@ -2,6 +2,7 @@ package paytech.practice.pay.api.admin.config
 
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.http.HttpMethod
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity
 import org.springframework.security.config.annotation.web.invoke
@@ -21,6 +22,17 @@ import org.springframework.security.web.context.SecurityContextRepository
  * "PG 내부 관리자 **화면**"이라고 부르는 대상이라(가맹점 서버 간 API Key 인증인
  * `MerchantApiKey`와 달리 브라우저 로그인), Bearer 토큰이 아니라 Spring Security의
  * 기본 세션 쿠키 방식을 그대로 쓴다.
+ *
+ * **`/admin/merchants` 규칙은 `HttpMethod.POST`로 메서드를 좁힌다 — `MerchantController`가
+ * `GET /admin/merchants`(목록 조회)를 추가하면서 생긴 필수 구분이다.** 메서드를
+ * 좁히지 않고 그냥 `authorize("/admin/merchants", hasAnyRole(...))`로 두면 이
+ * 규칙이 그 경로의 모든 HTTP 메서드에 적용돼 `GET`까지 `SUPER_ADMIN`/`OPERATOR`로
+ * 막아버린다 — `VIEWER`가 "조회 전용"(`InternalUserRole`의 KDoc)이라는 정의와
+ * 정면으로 어긋난다. `GET`은 이 규칙에 안 걸리므로 아래 `anyRequest().authenticated()`로
+ * 떨어지고, 그 결과 인증된 내부 사용자(`SUPER_ADMIN`/`OPERATOR`/`VIEWER` 전부)가
+ * 목록을 볼 수 있다 — `apps:api-payment`의 `authorize(HttpMethod.POST, "/api/v1/payments",
+ * ...)`와 같은 메서드 스코핑 방식이다. 실제 `bootRun` + `curl`로 `VIEWER`가
+ * `GET`은 200, `POST`는 403을 받는 것을 확인했다.
  *
  * 허용된 역할이 아닌 인증된 세션이 이 경로들을 호출하면 Spring Security의 기본
  * `AccessDeniedHandler`가 403을 돌려준다 — `apps:api-payment`의 Scope 인가와 같은
@@ -44,7 +56,7 @@ class SecurityConfig {
 				authorize("/admin/login", permitAll)
 				authorize("/admin/account-invitations/accept", permitAll)
 				authorize("/admin/internal-users", hasRole("SUPER_ADMIN"))
-				authorize("/admin/merchants", hasAnyRole("SUPER_ADMIN", "OPERATOR"))
+				authorize(HttpMethod.POST, "/admin/merchants", hasAnyRole("SUPER_ADMIN", "OPERATOR"))
 				authorize(anyRequest, authenticated)
 			}
 		}

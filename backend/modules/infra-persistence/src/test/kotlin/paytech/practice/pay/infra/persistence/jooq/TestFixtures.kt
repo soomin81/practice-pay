@@ -20,6 +20,7 @@ fun uniqueSuffix(): String = UUID.randomUUID().toString().take(8)
 fun insertTestMerchant(
 	merchantId: String = "mrc_${uniqueSuffix()}",
 	merchantCode: String = "code-${uniqueSuffix()}",
+	createdAt: LocalDateTime = LocalDateTime.now(),
 ): String {
 	PersistenceTestSupport.dsl
 		.newRecord(MERCHANT)
@@ -29,8 +30,8 @@ fun insertTestMerchant(
 			merchantName = "테스트 가맹점"
 			merchantStatus = "ACTIVE"
 			webhookUrl = null
-			createdAt = LocalDateTime.now()
-			updatedAt = LocalDateTime.now()
+			this.createdAt = createdAt
+			updatedAt = createdAt
 			version = 0
 		}.insert()
 	return merchantId
