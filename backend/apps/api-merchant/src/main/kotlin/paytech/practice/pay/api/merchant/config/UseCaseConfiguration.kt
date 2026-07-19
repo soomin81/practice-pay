@@ -3,6 +3,7 @@ package paytech.practice.pay.api.merchant.config
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import paytech.practice.pay.application.apikey.IssueMerchantApiKeyUseCase
+import paytech.practice.pay.application.apikey.ListMerchantApiKeysUseCase
 import paytech.practice.pay.application.apikey.RevokeMerchantApiKeyUseCase
 import paytech.practice.pay.application.identity.AcceptAccountInvitationUseCase
 import paytech.practice.pay.application.identity.AuthenticateMerchantUserUseCase
@@ -12,6 +13,7 @@ import paytech.practice.pay.application.port.outbound.ApiKeySecretHasher
 import paytech.practice.pay.application.port.outbound.IdGenerator
 import paytech.practice.pay.application.port.outbound.InternalUserRepository
 import paytech.practice.pay.application.port.outbound.InvitationTokenHasher
+import paytech.practice.pay.application.port.outbound.MerchantApiKeyListProjection
 import paytech.practice.pay.application.port.outbound.MerchantApiKeyRepository
 import paytech.practice.pay.application.port.outbound.MerchantRepository
 import paytech.practice.pay.application.port.outbound.MerchantUserRepository
@@ -107,5 +109,15 @@ class UseCaseConfiguration {
 			merchantUserRepository = merchantUserRepository,
 			merchantApiKeyRepository = merchantApiKeyRepository,
 			clock = clock,
+		)
+
+	@Bean
+	fun listMerchantApiKeysUseCase(
+		merchantUserRepository: MerchantUserRepository,
+		merchantApiKeyListProjection: MerchantApiKeyListProjection,
+	): ListMerchantApiKeysUseCase =
+		ListMerchantApiKeysUseCase(
+			merchantUserRepository = merchantUserRepository,
+			merchantApiKeyListProjection = merchantApiKeyListProjection,
 		)
 }

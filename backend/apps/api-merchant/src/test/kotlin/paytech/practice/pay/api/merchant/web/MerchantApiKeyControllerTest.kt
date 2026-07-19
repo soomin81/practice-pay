@@ -14,6 +14,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
@@ -21,14 +22,18 @@ import paytech.practice.pay.api.merchant.config.SecurityConfig
 import paytech.practice.pay.api.merchant.security.MerchantUserPrincipal
 import paytech.practice.pay.application.apikey.IssueMerchantApiKeyResult
 import paytech.practice.pay.application.apikey.IssueMerchantApiKeyUseCase
+import paytech.practice.pay.application.apikey.ListMerchantApiKeysResult
+import paytech.practice.pay.application.apikey.ListMerchantApiKeysUseCase
 import paytech.practice.pay.application.apikey.MerchantApiKeyNotActiveException
 import paytech.practice.pay.application.apikey.MerchantApiKeyNotFoundException
 import paytech.practice.pay.application.apikey.MerchantUserCannotManageApiKeysException
 import paytech.practice.pay.application.apikey.RevokeMerchantApiKeyResult
 import paytech.practice.pay.application.apikey.RevokeMerchantApiKeyUseCase
+import paytech.practice.pay.application.port.outbound.MerchantApiKeySummary
 import paytech.practice.pay.domain.apikey.ApiEnvironment
 import paytech.practice.pay.domain.apikey.ApiKeyPrefix
 import paytech.practice.pay.domain.apikey.ApiKeyScope
+import paytech.practice.pay.domain.apikey.ApiKeyStatus
 import paytech.practice.pay.domain.apikey.MerchantApiKeyId
 import paytech.practice.pay.domain.identity.LoginId
 import paytech.practice.pay.domain.identity.MerchantUserId
@@ -70,6 +75,9 @@ class MerchantApiKeyControllerTest : FunSpec() {
 
 	@MockkBean
 	lateinit var revokeMerchantApiKeyUseCase: RevokeMerchantApiKeyUseCase
+
+	@MockkBean
+	lateinit var listMerchantApiKeysUseCase: ListMerchantApiKeysUseCase
 
 	init {
 		extensions(SpringExtension)
@@ -224,6 +232,65 @@ class MerchantApiKeyControllerTest : FunSpec() {
 			mockMvc
 				.perform(delete("/merchant/api-keys/mak_001").with(authenticatedAs(OWNER)))
 				.andExpect(status().isConflict)
+		}
+
+		test("OWNER listing keys returns 200 with summaries, no secret material") {
+			every { listMerchantApiKeysUseCase.execute(any()) } returns
+				ListMerchantApiKeysResult(
+					apiKeys =
+						listOf(
+							MerchantApiKeySummary(
+								merchantApiKeyId = MerchantApiKeyId("mak_001"),
+								keyName = "운영 서버용 Key",
+								environment = ApiEnvironment.TEST,
+								keyPrefix = ApiKeyPrefix("sk_test_ab12cd34"),
+								scopes = setOf(ApiKeyScope.PAYMENT_CREATE, ApiKeyScope.PAYMENT_READ),
+								status = ApiKeyStatus.ACTIVE,
+								createdAt = Instant.parse("2026-07-19T00:00:00Z"),
+								lastUsedAt = null,
+								revokedAt = null,
+							),
+						),
+				)
+
+			mockMvc
+				.perform(get("/merchant/api-keys").with(authenticatedAs(OWNER)))
+				.andExpect(status().isOk)
+				.andExpect(jsonPath("$.apiKeys[0].merchantApiKeyId").value("mak_001"))
+				.andExpect(jsonPath("$.apiKeys[0].keyPrefix").value("sk_test_ab12cd34"))
+				.andExpect(jsonPath("$.apiKeys[0].status").value("ACTIVE"))
+				.andExpect(jsonPath("$.apiKeys[0].rawApiKey").doesNotExist())
+				.andExpect(jsonPath("$.apiKeys[0].secretHash").doesNotExist())
+		}
+
+		test("ADMIN listing keys also returns 200") {
+			every { listMerchantApiKeysUseCase.execute(any()) } returns ListMerchantApiKeysResult(apiKeys = emptyList())
+
+			mockMvc
+				.perform(get("/merchant/api-keys").with(authenticatedAs(ADMIN)))
+				.andExpect(status().isOk)
+				.andExpect(jsonPath("$.apiKeys").isEmpty)
+		}
+
+		test("VIEWER listing keys returns 403 (blocked by SecurityConfig before the use case runs)") {
+			mockMvc
+				.perform(get("/merchant/api-keys").with(authenticatedAs(VIEWER)))
+				.andExpect(status().isForbidden)
+		}
+
+		test("no authentication for listing returns 401 or 403") {
+			val result = mockMvc.perform(get("/merchant/api-keys")).andReturn()
+
+			result.response.status shouldBeIn listOf(401, 403)
+		}
+
+		test("MerchantUserCannotManageApiKeysException from the use case on list returns 403") {
+			every { listMerchantApiKeysUseCase.execute(any()) } throws
+				MerchantUserCannotManageApiKeysException("권한이 없습니다.")
+
+			mockMvc
+				.perform(get("/merchant/api-keys").with(authenticatedAs(OWNER)))
+				.andExpect(status().isForbidden)
 		}
 	}
 }
