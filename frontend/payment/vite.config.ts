@@ -16,6 +16,8 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: false,
+    // jest-dom 매처를 등록한다. 이게 없으면 패키지가 설치돼 있어도 매처를 쓸 수 없다.
+    setupFiles: ['./src/test-setup.ts'],
   },
   server: {
     // 5173은 api-payment의 CORS 허용 목록(app.checkout.allowed-origins)에 들어 있는

@@ -118,3 +118,5 @@ Vitest + Testing Library. `npm test`(1회 실행) / `npm run test:watch`.
 - **안 된 것**: 지갑 연결(wagmi + viem)과 ERC-20 `transfer`. `WalletConnectSlot`에 자리만 잡아 뒀다.
 - **아직 눈으로 안 본 것**: Tailwind 전환 후의 화면. 빌드·테스트·클래스 생성까지는 확인했지만 브라우저에서 렌더된 모습은 확인하지 못했다(작업 당시 브라우저 자동화 확장이 연결돼 있지 않았다). 다음에 `npm run dev`로 각 상태 화면을 한 번 훑는 것이 좋다.
 - 명령어는 위 "실행" 절 참고. 프로젝트가 더 생기면 이 문서에 앱별 절을 나눈다.
+**jest-dom 매처는 `src/test-setup.ts`가 등록한다**(`vite.config.ts`의 `test.setupFiles`). 패키지만 설치하고 이 연결을 빠뜨리면 매처를 쓸 수 없어 `toBeTruthy()` 같은 약한 단언으로 우회하게 된다 — 실제로 한동안 그 상태였다. `@testing-library/jest-dom/vitest` 진입점을 써야 한다(기본 진입점은 Jest의 전역 `expect`를 가정한다).
+
