@@ -106,7 +106,6 @@
 }
 ```
 
-- **위 예시의 `paymentStatus: "READY"`는 계약상 옳지만 오늘 코드는 `CREATED`를 준다** — 8절의 미해결 결함 때문이다. 구현 전에 그것부터 해결한다.
 - **`amount`는 Minor Unit 정수를 문자열로 준다.** `72992701` = `72.992701 USDC`.
   문자열인 이유는 JavaScript `Number`가 안전하게 다루는 정수 범위를 토큰 금액이
   넘을 수 있어서다 — 18-decimals 토큰에서 실제로 `Long` 범위를 넘겨 터진 사례가 이미
@@ -251,34 +250,7 @@ successUrl로 이동
 - **`confirmationCount` 노출 경로**: 지금은 `BlockchainTransaction`이 들고 있고 Confirm
   Worker만 갱신한다. Projection이 이 값을 읽어야 한다.
 
-## 8. 미해결 결함 — 구현 전에 반드시 먼저 고친다
-
-**`Payment`가 `READY`에 도달하는 경로가 프로덕션 코드에 없다.** 이 계약을 쓰면서
-발견했고, 지금 구조에서는 **체크아웃 흐름이 첫 결제부터 반드시 실패한다.**
-
-| 단계 | 현재 코드 |
-|---|---|
-| `CreatePaymentUseCase` | `Payment.create()` → 상태 `CREATED` |
-| ??? | `Payment.ready()`(`CREATED → READY`)를 **아무도 호출하지 않는다** |
-| `SubmitPaymentTransactionUseCase` | `payment.submit()` → `checkTransition(status == READY)` |
-
-`submit()`은 `READY`를 요구하는데 결제는 `CREATED`에 머물러 있으므로, 고객이 Transaction
-Hash를 제출하는 순간 `IllegalStateException`이 난다.
-
-**왜 지금까지 안 드러났나**: `SubmitPaymentTransactionUseCase`가 어떤 앱에도 배선되지
-않아 실제로 호출된 적이 없다. 단위 테스트는 픽스처에서 `payment.ready(...)`를 직접
-불러 상태를 맞춰놓고 시작한다 — **프로덕션이 수행하지 않는 단계를 테스트가 대신 해주고
-있어서** 초록색이었다. `backend/CLAUDE.md`의 "테스트가 잡지 못하는 층"과 같은 계열이되,
-이번엔 실물 검증이 아니라 계약을 적어 내려가다 드러났다.
-
-**권장 해결**: `CreatePaymentUseCase`가 `PaymentQuote` 확정과 `CheckoutSession` 생성까지
-끝낸 뒤 같은 트랜잭션 안에서 `payment.ready(...)`를 호출한다. `docs/`의 전체 흐름
-(`Payment 생성 → PaymentQuote 확정 → CheckoutSession 생성`)이 끝난 지점이 곧 "결제받을
-준비가 됐다"는 뜻이므로 `READY`의 의미와 맞고, 상태 머신 `CREATED → READY → PROCESSING`도
-문서대로 지켜진다. 이 결함은 체크아웃 API와 독립적이므로 **별도 변경으로 먼저 고치는
-쪽을 권한다.**
-
-## 9. 아직 정하지 않은 것
+## 8. 아직 정하지 않은 것
 
 - **체크아웃 페이지 URL 자체**(`https://.../checkout/{id}` 같은 사용자 대면 경로)와 그
   페이지를 누가 서빙하는지 — `frontend/`가 스캐폴딩될 때 정한다.
