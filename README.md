@@ -23,8 +23,8 @@ MVP 완료 경계: `Payment = SUCCEEDED`, `ExchangeOrder = COMPLETED`, `Settleme
 ## 저장소 구조
 
 ```text
-backend/    Kotlin + Spring Boot 백엔드 (실제 코드가 있는 유일한 디렉터리)
-frontend/   프론트엔드 (아직 스캐폴딩 전)
+backend/    Kotlin + Spring Boot 백엔드
+frontend/   Vite + React 프론트엔드 (현재 고객용 Hosted Checkout인 payment/ 하나)
 docs/       도메인 용어, 아키텍처, DB 설계, ADR 등 설계 문서 (단일 기준 소스)
 ```
 
@@ -39,7 +39,7 @@ backend/
   build-logic/         Gradle Convention Plugin (Composite Build)
 ```
 
-최상위 디렉터리는 "Gradle 모듈이냐"가 아니라 **역할**로 나뉩니다 — 판별 기준은 [backend/CLAUDE.md](backend/CLAUDE.md)에 정리돼 있습니다. 프론트엔드는 아직 시작 전입니다.
+최상위 디렉터리는 "Gradle 모듈이냐"가 아니라 **역할**로 나뉩니다 — 판별 기준은 [backend/CLAUDE.md](backend/CLAUDE.md)에 정리돼 있습니다.
 
 ## 기술 스택
 
@@ -50,8 +50,8 @@ backend/
 
 ## 시작하기
 
-필요한 것: Docker, JDK 25(Gradle toolchain이 자동으로 받아오므로 미리 설치하지 않아도 됩니다).
-모든 명령은 `backend/` 디렉터리에서 실행합니다 (Windows: `gradlew.bat`, 그 외: `./gradlew`).
+필요한 것: Docker(백엔드 MySQL용), Node 24(프론트엔드용), JDK 25(Gradle toolchain이 자동으로 받아오므로 미리 설치하지 않아도 됩니다).
+아래 백엔드 명령은 모두 `backend/` 디렉터리에서 실행합니다 (Windows: `gradlew.bat`, 그 외: `./gradlew`).
 
 ### 처음 한 번 — 로컬 환경 세팅
 
@@ -91,6 +91,21 @@ gradlew.bat :apps:api-payment:bootRun      # 결제 API 실행 (8081)
 - 각 앱의 `requests.http`(IntelliJ HTTP Client)로 로그인·결제 생성 요청을 바로 실행해볼 수 있습니다.
 
 자세한 명령과 규칙은 [backend/CLAUDE.md](backend/CLAUDE.md)를 참고하세요.
+
+### 프론트엔드
+
+**프론트엔드는 Docker를 쓰지 않고 호스트 Node로 돌립니다.** 워크스페이스를 쓰지 않으므로 명령은 앱 디렉터리에서 실행합니다.
+
+```bash
+cd frontend/payment
+npm install
+npm run dev       # http://localhost:5173 — api-payment(8081)가 떠 있어야 합니다
+npm test
+```
+
+`npm run dev`는 5173 포트를 고정으로 잡습니다(`strictPort`). 그 포트가 백엔드 CORS 허용 목록에 등록돼 있어, 다른 포트로 뜨면 모든 요청이 CORS로 막히기 때문입니다.
+
+자세한 규칙은 [frontend/CLAUDE.md](frontend/CLAUDE.md)를 참고하세요.
 
 ## 문서
 

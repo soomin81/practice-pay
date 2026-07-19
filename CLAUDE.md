@@ -6,14 +6,14 @@
 
 - `backend/CLAUDE.md` — Kotlin/Spring Boot 백엔드(빌드/테스트 명령어, 헥사고날 아키텍처, jOOQ/MySQL 컨벤션). **앞으로 따를 규칙**만 담는다.
 - `backend/IMPLEMENTATION-NOTES.md` — 백엔드의 **기능별 구현 판단 기록**(Use Case·Adapter를 만들며 정한 상수, 남긴 gap, 실물 검증 결과). 새 작업을 하려고 통째로 읽을 필요는 없고, 비슷한 상황의 선례를 찾을 때 본다.
-- `frontend/CLAUDE.md` — 프론트엔드(아직 스캐폴딩되지 않음).
+- `frontend/CLAUDE.md` — 프론트엔드(실행 명령어, 앱 분리 기준, 체크아웃 화면 컨벤션). **백엔드와 달리 Docker를 쓰지 않고 호스트 Node로 돌린다.**
 
 ## 저장소 구조
 
 이 저장소는 최상위 디렉토리 3개로 구성된 모노레포다:
 
-- `backend/` — 지금까지 실제 코드가 있는 유일한 디렉토리다(Kotlin/Spring Boot Gradle 프로젝트). **Gradle 빌드 루트는 저장소 루트가 아니라 이 디렉토리다** — `settings.gradle.kts`/`gradle.properties`/`gradlew`가 전부 여기 있고, Gradle 명령은 `backend/`에서 실행한다.
-- `frontend/` — 현재 비어 있고, 아직 프로젝트가 스캐폴딩되지 않았다.
+- `backend/` — Kotlin/Spring Boot Gradle 프로젝트. **Gradle 빌드 루트는 저장소 루트가 아니라 이 디렉토리다** — `settings.gradle.kts`/`gradle.properties`/`gradlew`가 전부 여기 있고, Gradle 명령은 `backend/`에서 실행한다.
+- `frontend/` — Vite/React 앱들. 지금은 고객용 Hosted Checkout인 `frontend/payment/` 하나뿐이다. **워크스페이스를 쓰지 않아 각 앱이 독립 프로젝트이므로, npm 명령은 저장소 루트나 `frontend/`가 아니라 앱 디렉토리에서 실행한다.**
 - `docs/` — 이 프로젝트의 설계 기준 문서다("문서" 절 참고). 한글로 작성돼 있다.
 
 저장소 전체에 걸리는 설정 파일은 루트에 둔다:
