@@ -122,7 +122,7 @@ export function CheckoutPage({ sessionId }: { sessionId: string }) {
 		)
 	}
 
-	return <PayScreen session={data} onCancelled={() => session.refetch()} />
+	return <PayScreen session={data} onSessionChanged={() => session.refetch()} />
 }
 
 function ExpiredScreen() {

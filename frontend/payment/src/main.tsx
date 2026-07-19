@@ -1,6 +1,8 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { WagmiProvider } from 'wagmi'
+import { wagmiConfig } from './wallet/config'
 import './index.css'
 import App from './App.tsx'
 
@@ -16,10 +18,14 @@ const queryClient = new QueryClient({
 	},
 })
 
+// WagmiProvider가 QueryClientProvider 바깥에 있어야 한다 — wagmi가 내부적으로
+// react-query를 쓰기 때문에, 안쪽에 두면 wagmi 훅이 QueryClient를 찾지 못한다.
 createRoot(document.getElementById('root')!).render(
 	<StrictMode>
-		<QueryClientProvider client={queryClient}>
-			<App />
-		</QueryClientProvider>
+		<WagmiProvider config={wagmiConfig}>
+			<QueryClientProvider client={queryClient}>
+				<App />
+			</QueryClientProvider>
+		</WagmiProvider>
 	</StrictMode>,
 )

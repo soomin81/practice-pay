@@ -83,9 +83,27 @@ src/index.css                 Tailwind import + shadcn 테마 변수
 | `PaymentSummary` | 주문 금액(KRW)과 보낼 토큰 금액 |
 | `PaymentDetails` | 네트워크·수취 지갑·Contract·환율·남은 시간 |
 | `ConfirmationProgress` | Confirmation 진행률 |
-| `WalletConnectSlot` | 2단계(wagmi + viem) 자리. **이 블록만 교체하면 되도록** 나머지가 의존하지 않게 두었다 |
+| `WalletPanel` | 지갑 연결과 USDC 전송. 흐름은 `wallet/useWalletPayment.ts`가 갖고 여기서는 단계만 그린다 |
 
 주소·해시는 `shortenHex`로 줄여 보여주되 **전체 값을 `title`에 남긴다** — 고객이 지갑 화면과 대조할 수 있어야 한다.
+
+## 지갑 — wagmi + viem
+
+`src/wallet/`에 있다. 흐름은 계약 문서 7절 그대로다: 지갑 연결 → `POST /wallet` → ERC-20 `transfer` 서명·브로드캐스트 → `POST /transaction` → 이후는 상태 폴링이 이어받는다.
+
+| 파일 | 역할 |
+|---|---|
+| `config.ts` | wagmi 설정. 체인 목록(`baseSepolia`)과 `injected` 커넥터 |
+| `erc20.ts` | `transfer`만 담은 ABI |
+| `useWalletPayment.ts` | 연결·전환·서명·제출 흐름과 단계(`PaymentStep`) |
+
+- **`WagmiProvider`는 `QueryClientProvider` 바깥에 있어야 한다**(`main.tsx`). wagmi가 내부적으로 react-query를 쓰기 때문에, 안쪽에 두면 wagmi 훅이 QueryClient를 찾지 못한다.
+- **`config.ts`의 `baseSepolia`는 "이 결제가 Base Sepolia다"라는 선언이 아니다.** wagmi가 설정 시점에 체인을 알아야 transport를 만들 수 있어서 두는 **앱이 말을 걸 수 있는 체인 목록**이다. 결제가 실제로 어느 체인·어느 Contract를 쓰는지는 여전히 서버 응답(`session.payment.chainId` / `tokenContractAddress`)이 정한다.
+- **모르는 체인이면 보내지 않는다.** 서버가 준 `chainId`를 `asSupportedChainId()`가 설정된 체인 목록과 대조해서 좁힌다. 타입만 맞추려면 캐스팅으로 끝낼 수 있는 자리지만, 그러면 백엔드가 네트워크를 추가하고 프론트가 안 따라온 상황에서 **지갑에게 엉뚱한 체인으로 보내라고 시키게 된다.** 주소도 같은 이유로 `asAddress()`가 형식을 확인한다. 둘 다 `wallet/guards.test.ts`가 지킨다.
+- **금액은 `BigInt(session.payment.amount)`로만 옮긴다.** Minor Unit 문자열을 `Number`에 넣으면 안전 정수 범위를 넘을 때 조용히 값이 달라진다.
+- **`POST /wallet`의 409는 오류가 아니다.** 재연결은 계약상 지원하지 않으므로(4.3), 이미 `WALLET_CONNECTED`인 세션에 다시 연결하면 409가 온다 — 새로고침 후 같은 지갑으로 붙는 정상 경로라 무시하고 진행한다.
+- **`POST /transaction` 성공은 "결제됐다"가 아니라 "제출을 접수했다"이다**(4.4). 여기서 성공 화면으로 넘기지 않고, 세션을 다시 읽어 폴링 화면으로 넘긴다.
+- WalletConnect는 넣지 않았다 — Project ID가 필요하다. 브라우저 확장 지갑(`injected`)만 지원한다.
 
 ## 지킬 것 셋
 
@@ -108,15 +126,17 @@ Vitest + Testing Library. `npm test`(1회 실행) / `npm run test:watch`.
 
 **지갑 연결과 전송은 자동 테스트가 사실상 불가능하다** — MetaMask 확장이 필요하다. 그래서 단위 테스트는 상태 기계·포맷·API 클라이언트까지만 의미가 있고, 실제 전송은 백엔드와 같은 규율로 **실물 수동 검증**이 최종 확인이 된다(Base Sepolia 테스트넷 USDC 필요).
 
+**jest-dom 매처는 `src/test-setup.ts`가 등록한다**(`vite.config.ts`의 `test.setupFiles`). 패키지만 설치하고 이 연결을 빠뜨리면 매처를 쓸 수 없어 `toBeTruthy()` 같은 약한 단언으로 우회하게 된다 — 실제로 한동안 그 상태였다. `@testing-library/jest-dom/vitest` 진입점을 써야 한다(기본 진입점은 Jest의 전역 `expect`를 가정한다).
+
 화면 컴포넌트는 `checkout/components/screens.test.tsx`에 스모크 테스트가 있다. 잡으려는 것은 둘이다: 컴포넌트가 마운트 중에 터지지 않는 것, 그리고 **금액·주소·Confirmation이 서버 값 그대로 나오는 것**(안전 정수 범위를 넘는 금액을 픽스처에 일부러 넣어 뒀다 — `Number`를 거치면 여기서 깨진다).
 
 **단, 테스트는 "보기에 멀쩡한지"를 확인해주지 않는다.** Tailwind 클래스는 오타가 나도 조용히 무시되고 컴파일도 통과한다. 레이아웃을 바꿨으면 `npm run dev`로 **눈으로 확인한다.**
 
 ## 현재 상태와 다음
 
-- **된 것**: 스캐폴딩, 타입 생성, API 클라이언트, 상태별 화면, 3초 폴링, DEV 결제 생성 버튼. 백엔드를 띄운 상태로 CORS·Preflight·조회·지갑 연결까지 실물 확인했다. UI는 Tailwind v4 + shadcn/ui로 옮겼고 화면 컴포넌트를 `checkout/components/`로 분리했다.
-- **안 된 것**: 지갑 연결(wagmi + viem)과 ERC-20 `transfer`. `WalletConnectSlot`에 자리만 잡아 뒀다.
-- **아직 눈으로 안 본 것**: Tailwind 전환 후의 화면. 빌드·테스트·클래스 생성까지는 확인했지만 브라우저에서 렌더된 모습은 확인하지 못했다(작업 당시 브라우저 자동화 확장이 연결돼 있지 않았다). 다음에 `npm run dev`로 각 상태 화면을 한 번 훑는 것이 좋다.
+- **된 것**: 스캐폴딩, 타입 생성, API 클라이언트, 상태별 화면, 3초 폴링, DEV 결제 생성 버튼. UI는 Tailwind v4 + shadcn/ui이고 화면 컴포넌트는 `checkout/components/`에 있다. 지갑 연결과 ERC-20 `transfer`는 wagmi + viem으로 **코드가 들어갔다**.
+- **상태 관리 라이브러리(Zustand 등)는 넣지 않았다.** 서버 상태는 react-query가, 지갑 상태는 wagmi 훅이 갖고, 나머지는 한 컴포넌트 안의 `useState`로 끝난다 — 지금 컴포넌트 사이에서 공유해야 할 클라이언트 상태가 없다. 생기면 그때 넣는다.
+- **아직 실물로 확인 못 한 것 둘**:
+  - **지갑 흐름 전체.** MetaMask 확장과 Base Sepolia 테스트넷 USDC가 있어야 한다. 타입 검사·가드 테스트·번들까지는 확인했지만 **연결·서명·전송을 실제로 돌려본 적이 없다.** 백엔드와 같은 규율로 실물 수동 검증이 최종 확인이다.
+  - **Tailwind 전환 후의 화면.** 빌드·테스트·클래스 생성까지는 확인했지만 브라우저에서 렌더된 모습은 보지 못했다(작업 당시 브라우저 자동화 확장 미연결). `npm run dev`로 각 상태 화면을 한 번 훑는 것이 좋다.
 - 명령어는 위 "실행" 절 참고. 프로젝트가 더 생기면 이 문서에 앱별 절을 나눈다.
-**jest-dom 매처는 `src/test-setup.ts`가 등록한다**(`vite.config.ts`의 `test.setupFiles`). 패키지만 설치하고 이 연결을 빠뜨리면 매처를 쓸 수 없어 `toBeTruthy()` 같은 약한 단언으로 우회하게 된다 — 실제로 한동안 그 상태였다. `@testing-library/jest-dom/vitest` 진입점을 써야 한다(기본 진입점은 Jest의 전역 `expect`를 가정한다).
-

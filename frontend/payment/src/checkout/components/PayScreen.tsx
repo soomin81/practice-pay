@@ -6,7 +6,7 @@ import { Card, CardContent, CardFooter } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { PaymentDetails } from './PaymentDetails'
 import { PaymentSummary } from './PaymentSummary'
-import { WalletConnectSlot } from './WalletConnectSlot'
+import { WalletPanel } from './WalletPanel'
 
 /**
  * 결제를 진행하는 본 화면. 고객이 지갑으로 USDC를 보내기 전까지 머무는 곳이다.
@@ -17,10 +17,11 @@ import { WalletConnectSlot } from './WalletConnectSlot'
  */
 export function PayScreen({
 	session,
-	onCancelled,
+	onSessionChanged,
 }: {
 	session: CheckoutSession
-	onCancelled: () => void
+	/** 세션 상태를 바꾼 뒤(취소·전송 제출) 호출한다. 호출부가 세션을 다시 읽어 화면을 넘긴다. */
+	onSessionChanged: () => void
 }) {
 	const [cancelError, setCancelError] = useState<string | null>(null)
 	const [cancelling, setCancelling] = useState(false)
@@ -35,7 +36,7 @@ export function PayScreen({
 				window.location.href = result.redirectUrl
 				return
 			}
-			onCancelled()
+			onSessionChanged()
 		} catch (error) {
 			setCancelError(error instanceof Error ? error.message : String(error))
 		} finally {
@@ -49,7 +50,7 @@ export function PayScreen({
 				<PaymentSummary session={session} />
 				<Separator />
 				<PaymentDetails session={session} />
-				<WalletConnectSlot sessionStatus={session.checkoutSessionStatus} />
+				<WalletPanel session={session} onSubmitted={onSessionChanged} />
 			</CardContent>
 
 			<CardFooter className="flex-col items-stretch gap-2">
