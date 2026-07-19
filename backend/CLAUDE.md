@@ -265,7 +265,9 @@ inbound adapter → application → domain ← outbound port ← outbound adapte
 
 고객 브라우저가 호출할 체크아웃 API의 계약이 `docs/architecture/checkout-api.md`에 **구현보다 먼저** 정의돼 있다. 이 저장소에서 계약 우선(contract-first)으로 간 첫 사례다 — 프론트엔드가 백엔드 소스를 읽지 않고도 작업할 수 있게 하려는 것이 목적이다.
 
-- **새 앱 `apps:api-checkout`(포트 8084)이 이걸 구현한다** — 기존 세 앱에 얹지 않는다. "앱 하나 = 상대하는 대상 하나" 기준의 네 번째 대상(고객)이고, 인증 모델이 셋 다와 다르다(자격증명 없음 — `checkoutSessionId`가 곧 자격).
+- **`apps:api-payment`가 이걸 함께 제공한다 — 새 앱을 만들지 않는다.** 처음에는 다섯 번째 앱(`api-checkout`)으로 분리하려 했으나 뒤집었다: 체크아웃과 결제 생성은 같은 애그리게이트(`Payment`/`CheckoutSession`)를 다루는 같은 컨텍스트고, 앱 분리 근거인 "독립 스케일"은 트래픽 없는 MVP에서 선반영이며(이 문서의 "지금 실제로 하는 일에만 맞춘다"에 어긋난다), 인증 모델도 충돌하지 않는다 — `ApiKeyAuthenticationFilter`는 헤더가 없으면 `SecurityContext`만 비우고 통과시켜서 `/error`와 같은 방식으로 `permitAll`을 얹으면 된다. 분리 기준은 `docs/architecture/checkout-api.md`의 2.1에 적어뒀다.
+- **병합의 함정 둘**: CORS를 앱 전체가 아니라 `/checkout/**`에만 걸 것(전역으로 열면 API Key로 보호되는 결제 생성 API가 브라우저에 노출된다), 그리고 체크아웃 `permitAll`을 추가한 뒤 **`POST /api/v1/payments`가 여전히 `SCOPE_PAYMENT_CREATE`를 요구하는지** 같은 테스트에서 함께 검증할 것.
+- **패키지는 `api.payment.checkout.*`로 분리해서 만든다** — 기존 `api.payment.web`과 섞지 않으면 나중의 분리가 디렉토리 이동으로 끝난다.
 - **`ConnectCheckoutWalletUseCase`/`SubmitPaymentTransactionUseCase`는 이미 있다** — 컨트롤러와 Bean만 없다. 새로 만들어야 하는 건 조회용 Projection Use Case와 취소 Use Case다.
 - 계약을 바꿀 때는 `docs/`를 먼저 고친다 — 구현이 아직 없으므로 지금은 그 문서가 유일한 기준이다.
 

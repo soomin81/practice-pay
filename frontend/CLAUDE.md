@@ -12,7 +12,7 @@
 
 **백엔드 소스를 읽어서 API 형태를 추론하지 않는다.** 고객 브라우저가 호출하는 5개 엔드포인트의 경로·요청·응답·오류 코드는 전부 `docs/architecture/checkout-api.md`에 정의돼 있다.
 
-- **아직 그 API는 구현되지 않았다** — 계약을 먼저 정하고 프론트와 백엔드가 각자 맞춰가는 순서다. 백엔드에서 `apps:api-checkout`(포트 8084)이 이걸 구현한다.
+- **아직 그 API는 구현되지 않았다** — 계약을 먼저 정하고 프론트와 백엔드가 각자 맞춰가는 순서다. 백엔드에서는 `apps:api-payment`(포트 **8081**)가 이걸 함께 제공한다 — 별도 체크아웃 앱을 만들지 않기로 했고(그 문서 2.1), 경로·요청·응답은 그 결정과 무관하게 계약 그대로다.
 - **인증이 없다.** 고객은 계정이 없고 `checkoutSessionId`가 곧 자격이다 — 로그인 화면을 만들지 않는다.
 - **`chainId`/`tokenContractAddress`/`receivingWallet`을 코드에 상수로 박지 않는다.** 전부 `GET /checkout/sessions/{id}` 응답에서 받아 쓴다(토큰을 Symbol로 판단하지 않는다는 도메인 규칙이 프론트에도 적용된다).
 - **USDC 금액은 문자열로 온다** — Minor Unit 정수가 JavaScript `Number`의 안전 범위를 넘을 수 있어서다. `BigInt`나 문자열로 다루고 `Number`로 변환하지 않는다.

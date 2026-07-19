@@ -24,19 +24,45 @@
 `checkoutSessionId`를 받고, 그 ID가 담긴 체크아웃 URL로 고객을 보낸다. 그 이후 고객은
 **로그인 없이** 이 API를 호출한다.
 
-### 2.1 배포 단위 — 새 앱 `apps:api-checkout`
+### 2.1 배포 단위 — `apps:api-payment`에 넣는다(별도 앱을 만들지 않는다)
 
-기존 세 앱에 얹지 않고 새 앱을 만든다(포트 `8084`).
+새 앱을 만들지 않고 기존 `apps:api-payment`(포트 `8081`)가 이 API도 함께 제공한다.
 
-- **`backend/CLAUDE.md`가 세운 기준("앱 하나 = 상대하는 대상 하나")을 그대로 따른 결과다.**
-  가맹점 서버·내부 운영자·가맹점 운영자에 이어 **고객**이 네 번째 대상이다.
-- **인증 모델이 근본적으로 다르다.** `api-payment`는 `STATELESS` + Bearer, `api-admin`/
-  `api-merchant`는 세션 쿠키인데, 이 API는 자격증명이 없다. 한 앱의 `SecurityConfig`에
-  서로 다른 인증 모델을 섞으면 규칙 순서에 따라 조용히 어긋난다 — 실제로 이 저장소는
-  `/error` 경로에서 그 종류의 사고를 한 번 겪었다(`backend/CLAUDE.md`의 "테스트가 잡지
-  못하는 층").
-- 고객 대면이라 **트래픽 성격과 공개 노출 범위가 다르다.** 독립적으로 스케일·장애
-  격리되어야 할 가능성이 가장 높은 표면이다.
+- **`backend/CLAUDE.md`의 "지금 실제로 하는 일에만 맞춘다 — 나중에 할 일까지 미리 넣지
+  않는다"를 따른 결과다.** 앱을 나누는 기존 근거는 "나중에 독립적으로 스케일·배포·장애가
+  나야 할 수 있어서"인데, 트래픽이 없는 MVP 단계에서 그건 선반영이다.
+- **같은 바운디드 컨텍스트다.** 체크아웃과 결제 생성은 둘 다 `Payment` + `CheckoutSession`
+  애그리게이트를 다룬다. `api-admin`/`api-merchant`가 갈라진 것은 Identity라는 **다른
+  컨텍스트**여서지 사용자가 다르다는 이유만은 아니다.
+- **인증 모델은 충돌하지 않는다.** `ApiKeyAuthenticationFilter`는 `Authorization` 헤더가
+  없으면 예외를 던지지 않고 `SecurityContext`만 비운 뒤 통과시킨다 — `/error`가 이미
+  쓰는 것과 같은 방식으로 `authorize("/checkout/**", permitAll)`를 `anyRequest` 앞에
+  두면 된다. `STATELESS`와 CSRF 비활성도 체크아웃에 그대로 맞다.
+- **되돌리기 쉽다.** Use Case와 Projection은 `modules:application`/
+  `modules:infra-persistence`에 있으므로, 나중에 떼어낼 때 옮기는 것은 컨트롤러와 설정뿐이고
+  도메인 로직은 움직이지 않는다.
+
+**프론트엔드가 보는 계약은 이 결정과 무관하다** — 경로·요청·응답·오류 코드가 전부
+같고 베이스 URL만 `:8081`이다.
+
+#### 병합하면서 지키는 것
+
+- **패키지를 처음부터 분리한다** — `api.payment.checkout.web`/`.config`에 두고 기존
+  `api.payment.web`과 섞지 않는다. 나중의 분리가 디렉토리 이동으로 끝나게 하려는 것이다.
+- **CORS는 `/checkout/**`에만 건다.** 앱 전체에 걸면 API Key로 보호되는 결제 생성 API까지
+  브라우저에 노출된다 — 이 병합에서 가장 실수하기 쉬운 지점이다.
+- **인가 규칙을 테스트로 못박는다.** `/checkout/**`이 인증 없이 통과하는 것과, **같은 앱의
+  `POST /api/v1/payments`가 여전히 `SCOPE_PAYMENT_CREATE`를 요구하는 것**을 함께 검증한다.
+  위험한 회귀는 `permitAll`이 의도보다 넓어지는 쪽이다.
+
+#### 나중에 분리하는 기준
+
+다음 중 하나가 오면 `apps:api-checkout`으로 떼어낸다 — 표류가 아니라 의도된 결정이 되도록
+미리 적어둔다.
+
+- 체크아웃 트래픽이 결제 생성 API의 가용성에 영향을 줄 만큼 커질 때.
+- **실제 자금이 오갈 때.** 공개·무인증 표면과 API Key Pepper가 같은 프로세스 메모리에
+  있다는 점은 테스트넷에서는 감수할 만하지만 실거래에서는 아니다.
 
 ## 3. 인증과 접근 통제
 
@@ -239,7 +265,8 @@ successUrl로 이동
 
 이 계약을 만족시키려면 백엔드에 다음이 필요하다.
 
-- **새 앱 `apps:api-checkout`**(포트 8084) — `practicepay.spring-web-app` 적용.
+- **`apps:api-payment`에 새 패키지** `api.payment.checkout.web`/`.config` — 새 앱을 만들지
+  않는다(2.1 참고). `SecurityConfig`에 `/checkout/**` `permitAll`과 그 경로 전용 CORS를 더한다.
 - **새 조회 Use Case**: 4.1/4.2를 위한 읽기 전용 Use Case. Command Repository가 아니라
   전용 Projection을 쓴다(`MerchantListProjection`이 세운 선례) — `CheckoutSession` +
   `Payment` + `PaymentQuote` + 최신 `BlockchainTransaction`을 한 번에 조인해야 해서

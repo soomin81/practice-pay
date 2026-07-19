@@ -32,7 +32,7 @@
 - `docs/architecture/mvp-scope.md` — MVP 포함/제외 범위와 전체 Happy Path 흐름.
 - `docs/architecture/persistence-jooq.md` — 모듈 계층, jOOQ 컨벤션, 자격증명 저장 규칙(백엔드 전용 — `backend/CLAUDE.md` 참고).
 - `docs/architecture/identity-access-api-key.md` — `InternalUser`/`MerchantUser`/`AccountInvitation`/`MerchantApiKey` 설계: 역할, 계정 생명주기, API Key 해시·저장, Scope.
-- `docs/architecture/checkout-api.md` — 고객 브라우저가 호출하는 Hosted Checkout API 계약. **구현보다 먼저 쓴 문서다**(아직 이 API는 없다) — `frontend/` 작업의 기준이고, 새 앱 `apps:api-checkout`이 이걸 구현한다.
+- `docs/architecture/checkout-api.md` — 고객 브라우저가 호출하는 Hosted Checkout API 계약. **구현보다 먼저 쓴 문서다**(아직 이 API는 없다) — `frontend/` 작업의 기준이고, `apps:api-payment`가 이걸 함께 구현한다(별도 앱을 만들지 않는 이유는 그 문서 2.1).
 - `docs/database/database-design.md` — 전체 MySQL 스키마 설계. 실제로 적용된 스키마는 `backend/db-core/src/main/resources/db/migration/`의 Flyway 마이그레이션으로 존재한다(`backend/CLAUDE.md` 참고) — 스키마가 바뀌면 둘을 동기화한다.
 - `docs/decisions/ADR-00{1..6}-*.md` — MVP 범위, MySQL+jOOQ, Hosted Checkout, Fake Exchange, 정산 경계, Identity/API Key 분리에 대한 ADR.
 
