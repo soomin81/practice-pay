@@ -32,12 +32,21 @@
 
 ## 주요 Unique
 
+결제 흐름:
+
 - Payment: `merchant_seq + merchant_order_id`
 - BlockchainTransaction: `network_code + transaction_hash`
 - ExchangeOrder: `client_order_id`
 - SettlementReceivable: `payment_seq`
 - WebhookDelivery: `event_id + merchant_seq`
 - OutboxEvent: `event_id`
+
+계정·API Key:
+
+- InternalUser: `login_id` (`email`도 별도로 유일)
+- MerchantUser: `merchant_seq + login_id` (`merchant_seq + email`도 별도로 유일) — 가맹점 안에서만 유일하다
+- AccountInvitation: `token_hash`
+- MerchantApiKey: `key_prefix`
 
 ## 주요 인덱스
 
