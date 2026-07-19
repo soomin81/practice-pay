@@ -56,7 +56,10 @@ modules/
                      OutboxEvent 발행 슬라이스), SellToFakeExchangeUseCase(application.exchange, Fake Exchange
                      매도 슬라이스 — MVP 완료 경계의 마지막 조각), Identity/API Key Use Case
                      (Authenticate*/IssueInternalUser), BlockchainClient(온체인 조회 Port, 구현체는
-                     modules:infra-blockchain) + 그 outbound port들(Architecture 참고)
+                     modules:infra-blockchain) + 그 outbound port들(Architecture 참고).
+                     주의: ConnectCheckoutWalletUseCase와 SubmitPaymentTransactionUseCase는
+                     구현돼 있지만 어떤 앱에도 배선되지 않았다 — 이 둘을 노출할
+                     고객 대면 API가 아직 없어서다("Hosted Checkout API" 절 참고).
   common/            실제 Gradle 서브프로젝트, 의존성 없음, src 비어 있음 — 어떤 레이어에서도 쓸 수 있는 공용
                      유틸리티가 실제로 필요해질 때 채운다(순환 의존을 피하려고 지금은 어떤 modules:*도
                      참조하지 않는다)
@@ -257,6 +260,14 @@ inbound adapter → application → domain ← outbound port ← outbound adapte
 - **컴포넌트 스캔**: `@SpringBootApplication`의 기본 스캔 범위는 메인 클래스 자신의 패키지와 그 하위 패키지다. 네 앱의 메인 클래스(`paytech.practice.pay.api.payment`/`api.admin`/`api.merchant`/`batch`)는 전부 `modules:infra-persistence`의 Adapter(`paytech.practice.pay.infra.persistence.jooq`)와 *형제* 관계이지 상위가 아니다 — 그래서 넷 다 `@SpringBootApplication(scanBasePackages = [자기 패키지, "paytech.practice.pay.infra.persistence.jooq", ...])`로 필요한 패키지를 모두 명시한다. `batch`는 `modules:infra-blockchain`의 Adapter 패키지(`paytech.practice.pay.infra.blockchain`)도 추가로 스캔한다. 새 앱이 다른 모듈의 Bean을 쓰기 시작하면, Gradle 의존성을 추가하는 것만으로 Bean이 연결된다고 가정하지 말고 같은 방식으로 스캔 범위를 넓힌다.
 - 네 앱의 `application.yaml`은 `spring-boot-docker-compose` 자동 감지에 기대지 않고 `spring.datasource.*`를 `db-core`/`compose.yaml`이 이미 쓰는 것과 같은 로컬 개발 MySQL로 직접 가리킨다(`localhost:3306/stablecoin_payment`, `root`/`verysecret`) — 그 자동 감지 메커니즘은 실행 중인 앱 자신의 작업 디렉토리(예: `apps/api-payment/`)에서 `compose.yaml`을 찾지, `backend/`에서 찾지 않아서, 추가 경로 설정 없이는 공유 파일을 찾지 못한다.
 - 테스트는 전부 같은 모양을 따른다(`@SpringBootTest` + Kotest `SpringExtension`, 앱마다 `contextLoads` 테스트 하나 — 위 "테스트" 참고). 네 앱 다 만족시켜야 할 `DataSource`가 있어서 `TestcontainersConfiguration`도 추가로 import한다.
+
+## Hosted Checkout API — 계약은 있고 구현은 없다
+
+고객 브라우저가 호출할 체크아웃 API의 계약이 `docs/architecture/checkout-api.md`에 **구현보다 먼저** 정의돼 있다. 이 저장소에서 계약 우선(contract-first)으로 간 첫 사례다 — 프론트엔드가 백엔드 소스를 읽지 않고도 작업할 수 있게 하려는 것이 목적이다.
+
+- **새 앱 `apps:api-checkout`(포트 8084)이 이걸 구현한다** — 기존 세 앱에 얹지 않는다. "앱 하나 = 상대하는 대상 하나" 기준의 네 번째 대상(고객)이고, 인증 모델이 셋 다와 다르다(자격증명 없음 — `checkoutSessionId`가 곧 자격).
+- **`ConnectCheckoutWalletUseCase`/`SubmitPaymentTransactionUseCase`는 이미 있다** — 컨트롤러와 Bean만 없다. 새로 만들어야 하는 건 조회용 Projection Use Case와 취소 Use Case다.
+- 계약을 바꿀 때는 `docs/`를 먼저 고친다 — 구현이 아직 없으므로 지금은 그 문서가 유일한 기준이다.
 
 ## 기능별 구현 기록은 별도 문서에 있다
 
