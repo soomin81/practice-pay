@@ -1,9 +1,18 @@
 /// <reference types="vitest/config" />
+import path from 'node:path'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
+  resolve: {
+    // shadcn/ui가 생성하는 코드가 `@/lib/utils` 형태로 import한다.
+    // tsconfig의 paths는 타입 검사용이라 번들러에는 따로 알려줘야 한다.
+    alias: {
+      '@': path.resolve(import.meta.dirname, './src'),
+    },
+  },
   test: {
     environment: 'jsdom',
     globals: false,

@@ -57,6 +57,36 @@ cd ../frontend/payment && npm run gen:api             # → src/api/schema.d.ts
 - **오류 응답은 스펙에 없다**(MockMvc가 컨테이너 오류 디스패치를 재현하지 못해 백엔드가 의도적으로 뺐다). `CheckoutApiError.status`로 분기하고, 기준은 계약 문서 5절이다.
 - 스펙을 다시 생성했으면 **`schema.d.ts`를 눈으로 확인한다.** 백엔드에서 `.type()`이나 부모 객체 서술자가 빠지면 필드가 **조용히 사라지거나 optional로** 나온다(아래 참고).
 
+## UI — Tailwind v4 + shadcn/ui
+
+CSS 파일을 따로 쓰지 않는다. 스타일은 전부 Tailwind 유틸리티 클래스이고, 공통 UI는 shadcn/ui가 생성한 컴포넌트를 쓴다.
+
+```
+src/components/ui/            shadcn 생성물 — 손대지 않는다
+src/lib/utils.ts              shadcn의 cn() (clsx + tailwind-merge)
+src/checkout/components/      이 앱의 화면 컴포넌트
+src/index.css                 Tailwind import + shadcn 테마 변수
+```
+
+- **`src/components/ui/`는 생성물로 취급한다.** 고치고 싶으면 그 파일을 직접 바꾸지 말고 감싸는 컴포넌트를 `src/checkout/components/`에 만든다 — `npx shadcn@latest add`를 다시 돌리면 덮어써진다. oxlint도 이 디렉토리를 `ignorePatterns`로 제외한다(생성 코드가 `only-export-components` 경고를 낸다).
+- **컴포넌트 추가는 CLI로 한다**: `npx shadcn@latest add <name>`. `init`은 이미 끝났고 설정은 `components.json`에 있다(스타일 `radix-nova`, base color `neutral`, CSS 변수 방식).
+- **import 별칭 `@/`는 `src/`를 가리킨다.** shadcn 생성 코드가 그 형태로 import하기 때문에 필수다. `tsconfig.json`/`tsconfig.app.json`의 `paths`와 `vite.config.ts`의 `resolve.alias` **양쪽에** 있어야 한다 — 전자는 타입 검사용, 후자는 번들러용이라 하나만 있으면 다른 쪽에서 깨진다.
+- **`baseUrl`은 두지 않는다.** shadcn 문서는 `paths`와 함께 두라고 하지만 TypeScript 6에서 deprecated라 빌드가 TS5101로 막힌다. TS 6부터 `paths`는 tsconfig 위치 기준으로 해석되므로 `baseUrl` 없이 그대로 동작한다.
+
+**화면 컴포넌트는 상태 분기와 분리한다.** `CheckoutPage.tsx`는 서버가 준 상태를 보고 **어떤 화면을 그릴지만** 정하고, 모양은 `checkout/components/`가 갖는다:
+
+| 컴포넌트 | 역할 |
+|---|---|
+| `CheckoutShell` | 페이지 바깥 틀. 모든 상태 화면이 같은 폭·여백을 쓰게 해서 상태가 바뀔 때 카드가 튀지 않게 한다 |
+| `StatusScreen` | 완료·만료·취소·실패·로딩을 한 컴포넌트로. **tone은 호출부가 정한다** — 이 컴포넌트가 상태를 해석하지 않는다 |
+| `PayScreen` | 결제 진행 본 화면. 취소 버튼이 여기에만 있다(`PAYMENT_SUBMITTED` 이후 고객 취소 불가) |
+| `PaymentSummary` | 주문 금액(KRW)과 보낼 토큰 금액 |
+| `PaymentDetails` | 네트워크·수취 지갑·Contract·환율·남은 시간 |
+| `ConfirmationProgress` | Confirmation 진행률 |
+| `WalletConnectSlot` | 2단계(wagmi + viem) 자리. **이 블록만 교체하면 되도록** 나머지가 의존하지 않게 두었다 |
+
+주소·해시는 `shortenHex`로 줄여 보여주되 **전체 값을 `title`에 남긴다** — 고객이 지갑 화면과 대조할 수 있어야 한다.
+
 ## 지킬 것 셋
 
 **① 토큰 금액을 `Number`로 변환하지 않는다.** 스펙이 `payment.amount`를 `type: string`으로 주는 이유다 — Minor Unit이 JavaScript `Number`의 안전 정수 범위(2^53-1)를 넘을 수 있다. `src/checkout/format.ts`의 `formatTokenAmount`가 문자열 자리수만 잘라 쓰고, 그 근거를 테스트로 남겼다(안전 범위를 넘는 값과 18-decimals 토큰 케이스).
@@ -78,8 +108,13 @@ Vitest + Testing Library. `npm test`(1회 실행) / `npm run test:watch`.
 
 **지갑 연결과 전송은 자동 테스트가 사실상 불가능하다** — MetaMask 확장이 필요하다. 그래서 단위 테스트는 상태 기계·포맷·API 클라이언트까지만 의미가 있고, 실제 전송은 백엔드와 같은 규율로 **실물 수동 검증**이 최종 확인이 된다(Base Sepolia 테스트넷 USDC 필요).
 
+화면 컴포넌트는 `checkout/components/screens.test.tsx`에 스모크 테스트가 있다. 잡으려는 것은 둘이다: 컴포넌트가 마운트 중에 터지지 않는 것, 그리고 **금액·주소·Confirmation이 서버 값 그대로 나오는 것**(안전 정수 범위를 넘는 금액을 픽스처에 일부러 넣어 뒀다 — `Number`를 거치면 여기서 깨진다).
+
+**단, 테스트는 "보기에 멀쩡한지"를 확인해주지 않는다.** Tailwind 클래스는 오타가 나도 조용히 무시되고 컴파일도 통과한다. 레이아웃을 바꿨으면 `npm run dev`로 **눈으로 확인한다.**
+
 ## 현재 상태와 다음
 
-- **된 것**: 스캐폴딩, 타입 생성, API 클라이언트, 상태별 화면, 3초 폴링, DEV 결제 생성 버튼. 백엔드를 띄운 상태로 CORS·Preflight·조회·지갑 연결까지 실물 확인했다.
-- **안 된 것**: 지갑 연결(wagmi + viem)과 ERC-20 `transfer`. 화면에 자리만 잡아 뒀다.
+- **된 것**: 스캐폴딩, 타입 생성, API 클라이언트, 상태별 화면, 3초 폴링, DEV 결제 생성 버튼. 백엔드를 띄운 상태로 CORS·Preflight·조회·지갑 연결까지 실물 확인했다. UI는 Tailwind v4 + shadcn/ui로 옮겼고 화면 컴포넌트를 `checkout/components/`로 분리했다.
+- **안 된 것**: 지갑 연결(wagmi + viem)과 ERC-20 `transfer`. `WalletConnectSlot`에 자리만 잡아 뒀다.
+- **아직 눈으로 안 본 것**: Tailwind 전환 후의 화면. 빌드·테스트·클래스 생성까지는 확인했지만 브라우저에서 렌더된 모습은 확인하지 못했다(작업 당시 브라우저 자동화 확장이 연결돼 있지 않았다). 다음에 `npm run dev`로 각 상태 화면을 한 번 훑는 것이 좋다.
 - 명령어는 위 "실행" 절 참고. 프로젝트가 더 생기면 이 문서에 앱별 절을 나눈다.

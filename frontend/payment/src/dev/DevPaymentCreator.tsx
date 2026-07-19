@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { FlaskConical } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 
 /**
  * 개발 중에 체크아웃을 시작할 `checkoutSessionId`를 만들어주는 도구다.
@@ -26,10 +28,13 @@ export function DevPaymentCreator({ onCreated }: { onCreated: (sessionId: string
 
 	if (!apiKey) {
 		return (
-			<aside className="dev-bar">
-				<strong>DEV</strong> 테스트 결제를 만들려면 <code>frontend/payment/.env.local</code>에{' '}
-				<code>VITE_DEV_API_KEY</code>를 설정하세요(<code>.env.example</code> 참고).
-			</aside>
+			<DevBar>
+				<span className="text-muted-foreground">
+					테스트 결제를 만들려면 <code className="font-mono">frontend/payment/.env.local</code>에{' '}
+					<code className="font-mono">VITE_DEV_API_KEY</code>를 설정하세요(
+					<code className="font-mono">.env.example</code> 참고).
+				</span>
+			</DevBar>
 		)
 	}
 
@@ -66,13 +71,30 @@ export function DevPaymentCreator({ onCreated }: { onCreated: (sessionId: string
 	}
 
 	return (
-		<aside className="dev-bar">
-			<strong>DEV</strong>
-			<button onClick={createPayment} disabled={busy}>
-				{busy ? '만드는 중…' : '테스트 결제 생성'}
-			</button>
-			<span className="muted">가맹점 서버 역할을 대신합니다(API Key 사용)</span>
-			{error && <span className="error-text">{error}</span>}
+		<DevBar>
+			<div className="flex flex-wrap items-center gap-2">
+				<Button size="sm" variant="outline" onClick={createPayment} disabled={busy}>
+					{busy ? '만드는 중…' : '테스트 결제 생성'}
+				</Button>
+				<span className="text-muted-foreground">가맹점 서버 역할을 대신합니다(API Key 사용)</span>
+			</div>
+			{error && <p className="mt-2 text-destructive">{error}</p>}
+		</DevBar>
+	)
+}
+
+/**
+ * DEV 도구임이 한눈에 보이도록 점선 테두리로 감싼다 — 결제 화면의 카드와 섞이면
+ * 실제 결제 UI의 일부로 오해할 수 있다.
+ */
+function DevBar({ children }: { children: React.ReactNode }) {
+	return (
+		<aside className="rounded-lg border border-dashed bg-background/60 p-3 text-xs">
+			<p className="mb-2 flex items-center gap-1.5 font-semibold tracking-wide uppercase">
+				<FlaskConical className="size-3.5" aria-hidden />
+				Dev
+			</p>
+			{children}
 		</aside>
 	)
 }

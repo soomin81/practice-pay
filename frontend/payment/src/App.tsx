@@ -1,7 +1,8 @@
 import { useState } from 'react'
+import { CheckoutShell } from './checkout/components/CheckoutShell'
+import { StatusScreen } from './checkout/components/StatusScreen'
 import { CheckoutPage } from './checkout/CheckoutPage'
 import { DevPaymentCreator } from './dev/DevPaymentCreator'
-import './App.css'
 
 /**
  * 세션 식별자는 쿼리 파라미터로 받는다: `/?session=cs_xxx`
@@ -27,23 +28,23 @@ export default function App() {
 	}
 
 	return (
-		<main>
-			<header>
-				<h1>결제</h1>
-			</header>
-
+		<CheckoutShell>
 			{import.meta.env.DEV && <DevPaymentCreator onCreated={useSession} />}
 
 			{sessionId ? (
 				<CheckoutPage sessionId={sessionId} />
 			) : (
-				<section className="panel">
-					<h2>결제 정보가 없습니다</h2>
-					<p>
-						가맹점에서 받은 결제 링크로 접속해 주세요. 주소에 <code>?session=</code> 값이 필요합니다.
-					</p>
-				</section>
+				<StatusScreen
+					tone="notFound"
+					title="결제 정보가 없습니다"
+					description={
+						<>
+							가맹점에서 받은 결제 링크로 접속해 주세요. 주소에{' '}
+							<code className="font-mono">?session=</code> 값이 필요합니다.
+						</>
+					}
+				/>
 			)}
-		</main>
+		</CheckoutShell>
 	)
 }
