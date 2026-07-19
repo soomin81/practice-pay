@@ -1,0 +1,24 @@
+/*
+ * 최소 리셋만 둔다. 실제 스타일과 CSS 변수는 App.css 한 곳에서 정의한다 —
+ * Vite 스캐폴드의 기본 index.css가 --text/--bg 같은 이름을 함께 쓰고 있어서,
+ * 두 파일이 :root를 각자 정의하면 로드 순서에 따라 색이 뒤집힌다.
+ */
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html {
+	-webkit-text-size-adjust: 100%;
+}
+
+body {
+	margin: 0;
+	min-height: 100vh;
+}
+
+button,
+input {
+	font: inherit;
+}

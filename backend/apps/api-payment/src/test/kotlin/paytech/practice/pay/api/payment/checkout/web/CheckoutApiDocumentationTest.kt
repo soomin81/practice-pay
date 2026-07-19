@@ -16,6 +16,7 @@ import org.springframework.context.annotation.Import
 import org.springframework.http.MediaType
 import org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.document
 import org.springframework.restdocs.payload.FieldDescriptor
+import org.springframework.restdocs.payload.JsonFieldType
 import org.springframework.restdocs.payload.PayloadDocumentation.fieldWithPath
 import org.springframework.test.context.TestPropertySource
 import org.springframework.test.web.servlet.MockMvc
@@ -182,11 +183,26 @@ class CheckoutApiDocumentationTest : FunSpec() {
 								.description("CREATED | OPEN | WALLET_CONNECTED | PAYMENT_SUBMITTED | COMPLETED | EXPIRED | CANCELLED"),
 							fieldWithPath("expiresAt").description("세션 만료 시각(UTC). 지나면 변경 요청이 410으로 거부된다."),
 							fieldWithPath("successUrl").description("결제 성공 후 고객을 보낼 가맹점 URL"),
-							fieldWithPath("cancelUrl").description("취소 시 돌아갈 가맹점 URL. 가맹점이 지정하지 않았으면 null.").optional(),
-							fieldWithPath("connectedWallet").description("연결된 고객 지갑 주소. 연결 전에는 null.").optional(),
+							fieldWithPath("cancelUrl")
+								.type(JsonFieldType.STRING)
+								.description("취소 시 돌아갈 가맹점 URL. 가맹점이 지정하지 않았으면 null.")
+								.optional(),
+							// **예시 값이 null인 필드는 반드시 .type()을 명시한다.** 값이 null이면
+							// restdocs-api-spec이 타입을 추론하지 못해 그 필드를 스펙에서 통째로
+							// 빠뜨린다 — 실제로 connectedWallet/redirectUrl/failureReason 셋이
+							// 생성된 타입에 없어서 프론트 타입 체크에서 발견됐다.
+							fieldWithPath("connectedWallet")
+								.type(JsonFieldType.STRING)
+								.description("연결된 고객 지갑 주소. 연결 전에는 null.")
+								.optional(),
+							// 중첩 객체 자신도 문서화해야 required로 잡힌다. 잎 필드(order.orderName)만
+							// 적으면 부모(order)가 optional로 생성돼, 프론트가 매번 undefined 검사를
+							// 해야 한다 — 실제로는 항상 존재하는 값이다.
+							fieldWithPath("order").description("가맹점 주문 정보"),
 							fieldWithPath("order.orderName").description("가맹점이 정한 주문 이름"),
 							fieldWithPath("order.orderAmount").description("주문 금액(KRW, 원 단위 정수)"),
 							fieldWithPath("order.orderCurrency").description("주문 통화. MVP는 항상 KRW."),
+							fieldWithPath("payment").description("이 주문에 대응하는 결제·전송 정보"),
 							fieldWithPath("payment.paymentId").description("결제 식별자"),
 							fieldWithPath("payment.paymentStatus")
 								.description("CREATED | READY | PROCESSING | CONFIRMING | SUCCEEDED | EXPIRED | FAILED"),
@@ -203,6 +219,7 @@ class CheckoutApiDocumentationTest : FunSpec() {
 								.description("USDC Contract 주소. 토큰을 Symbol로 판단하지 않고 (네트워크, Contract) 조합으로 다룬다."),
 							fieldWithPath("payment.receivingWallet").description("이 금액을 보낼 수취 지갑 주소"),
 							fieldWithPath("payment.requiredConfirmationCount").description("결제 확정에 필요한 Confirmation 수"),
+							fieldWithPath("quote").description("적용된 환율 견적"),
 							fieldWithPath("quote.appliedRate")
 								.description("적용 환율(KRW/USDC). 문자열로 준다 — 부동소수점 변환으로 정밀도를 잃지 않기 위해서다."),
 							fieldWithPath("quote.quotedAt").description("환율 산정 시각(UTC)"),
@@ -242,11 +259,16 @@ class CheckoutApiDocumentationTest : FunSpec() {
 							fieldWithPath("paymentStatus").description("결제 상태. SUCCEEDED가 되면 결제가 확정된 것이다."),
 							fieldWithPath("confirmationCount").description("현재 Confirmation 수. 아직 제출 전이면 0."),
 							fieldWithPath("requiredConfirmationCount").description("확정에 필요한 Confirmation 수"),
-							fieldWithPath("transactionHash").description("제출된 Transaction Hash. 제출 전에는 null.").optional(),
+							fieldWithPath("transactionHash")
+								.type(JsonFieldType.STRING)
+								.description("제출된 Transaction Hash. 제출 전에는 null.")
+								.optional(),
 							fieldWithPath("failureReason")
+								.type(JsonFieldType.STRING)
 								.description("실패 사유 코드. FAILED일 때만 채워진다. 고객에게 그대로 노출하지 말고 안내 문구로 번역한다.")
 								.optional(),
 							fieldWithPath("redirectUrl")
+								.type(JsonFieldType.STRING)
 								.description(
 									"결제가 SUCCEEDED가 됐을 때만 채워지는 이동 대상(successUrl). 프론트는 리다이렉트 시점을 " +
 										"스스로 추론하지 말고 이 필드가 채워지는 것을 신호로 삼는다.",
@@ -358,6 +380,7 @@ class CheckoutApiDocumentationTest : FunSpec() {
 							fieldWithPath("checkoutSessionId").description("체크아웃 세션 식별자"),
 							fieldWithPath("checkoutSessionStatus").description("취소에 성공하면 CANCELLED"),
 							fieldWithPath("redirectUrl")
+								.type(JsonFieldType.STRING)
 								.description("돌아갈 가맹점 URL(cancelUrl). 가맹점이 지정하지 않았으면 null.")
 								.optional(),
 						),
