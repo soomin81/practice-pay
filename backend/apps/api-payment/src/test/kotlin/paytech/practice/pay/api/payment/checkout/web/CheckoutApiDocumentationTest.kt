@@ -108,7 +108,11 @@ private fun sessionView(): CheckoutSessionView =
 		paymentAmount = TokenAmount(35_893_755),
 		tokenDecimals = 6,
 		network = BlockchainNetwork.BASE_SEPOLIA,
-		receivingWallet = WalletAddress("0x036CbD53842c5426634e7929541eC2318f3dCF7e"),
+		// 수취 지갑은 토큰 Contract 주소와 **반드시 달라야 한다**. 이 값이 생성되는
+		// OpenAPI 예시에 그대로 실리는데, 둘이 같으면 "USDC를 USDC Contract로 보낸다"는
+		// 잘못된 예시를 문서가 퍼뜨리게 된다(docs/architecture/checkout-api.md의 예시도
+		// 이 둘을 구분해 두고 있다).
+		receivingWallet = WalletAddress("0xAbC1000000000000000000000000000000000001"),
 		appliedRate = ExchangeRate(BigDecimal("1393.000000000000")),
 		quotedAt = NOW,
 		quoteExpiresAt = NOW.plusSeconds(1_800),

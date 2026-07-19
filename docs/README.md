@@ -1,5 +1,11 @@
 # 스테이블코인 결제 프로젝트 문서
 
+## 가이드 (실행 절차)
+
+설계 기준이 아니라 **직접 돌려보기 위한 절차서**다.
+
+- [MetaMask로 테스트넷 USDC 준비하고 결제 흘려보기](guides/testnet-wallet-setup.md)
+
 ## 도메인
 
 - [도메인 용어 사전](domain/glossary.md)

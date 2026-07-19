@@ -112,6 +112,11 @@ Authorization: Bearer {{paymentApiKey}}
 ### ────────────────────────────────────────────────────────────────────────
 
 ### [체크아웃 0] 결제를 만들어 checkoutSessionId를 확보한다(가맹점 서버 역할, API Key 필요)
+###
+### receivingWallet은 이 파일의 다른 요청들과 같은 자리표시자다. **실제로 테스트넷
+### USDC를 보내볼 거라면 본인이 통제하는 지갑 주소로 바꿔야 한다**(절차는
+### docs/guides/testnet-wallet-setup.md). 토큰 Contract 주소를 넣지 않는다 — 그건
+### "USDC라는 토큰"의 주소이지 사람의 지갑이 아니고, 그리로 보낸 토큰은 되찾을 수 없다.
 POST {{apiPaymentBaseUrl}}/api/v1/payments
 Content-Type: application/json
 Authorization: Bearer {{paymentApiKey}}
@@ -121,7 +126,7 @@ Authorization: Bearer {{paymentApiKey}}
   "orderName": "Checkout Flow Test",
   "orderAmount": 50000,
   "network": "BASE_SEPOLIA",
-  "receivingWallet": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+  "receivingWallet": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "successUrl": "https://merchant.example.com/done",
   "cancelUrl": "https://merchant.example.com/cancel"
 }
