@@ -12,6 +12,7 @@ import org.springframework.http.MediaType
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
@@ -97,6 +98,7 @@ class MerchantApiKeyControllerTest : FunSpec() {
 			mockMvc
 				.perform(
 					post("/merchant/api-keys")
+						.with(csrf())
 						.with(authenticatedAs(OWNER))
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(objectMapper.writeValueAsString(validIssueRequest())),
@@ -120,6 +122,7 @@ class MerchantApiKeyControllerTest : FunSpec() {
 			mockMvc
 				.perform(
 					post("/merchant/api-keys")
+						.with(csrf())
 						.with(authenticatedAs(ADMIN))
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(objectMapper.writeValueAsString(validIssueRequest().copy(scopes = listOf("PAYMENT_CREATE")))),
@@ -130,6 +133,7 @@ class MerchantApiKeyControllerTest : FunSpec() {
 			mockMvc
 				.perform(
 					post("/merchant/api-keys")
+						.with(csrf())
 						.with(authenticatedAs(VIEWER))
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(objectMapper.writeValueAsString(validIssueRequest())),
@@ -141,6 +145,7 @@ class MerchantApiKeyControllerTest : FunSpec() {
 				mockMvc
 					.perform(
 						post("/merchant/api-keys")
+							.with(csrf())
 							.contentType(MediaType.APPLICATION_JSON)
 							.content(objectMapper.writeValueAsString(validIssueRequest())),
 					).andReturn()
@@ -148,10 +153,23 @@ class MerchantApiKeyControllerTest : FunSpec() {
 			result.response.status shouldBeIn listOf(401, 403)
 		}
 
+		test("issuing without a CSRF token returns 403 even when authenticated (CSRF is enforced)") {
+			// .with(csrf())를 일부러 뺐다 — 세션 쿠키 인증에서 CSRF가 실제로 강제되는지
+			// 지키는 회귀 테스트다(SecurityConfig가 CSRF를 다시 끄면 여기서 먼저 깨진다).
+			mockMvc
+				.perform(
+					post("/merchant/api-keys")
+						.with(authenticatedAs(OWNER))
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsString(validIssueRequest())),
+				).andExpect(status().isForbidden)
+		}
+
 		test("blank keyName returns 400") {
 			mockMvc
 				.perform(
 					post("/merchant/api-keys")
+						.with(csrf())
 						.with(authenticatedAs(OWNER))
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(objectMapper.writeValueAsString(validIssueRequest().copy(keyName = ""))),
@@ -162,6 +180,7 @@ class MerchantApiKeyControllerTest : FunSpec() {
 			mockMvc
 				.perform(
 					post("/merchant/api-keys")
+						.with(csrf())
 						.with(authenticatedAs(OWNER))
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(objectMapper.writeValueAsString(validIssueRequest().copy(scopes = emptyList()))),
@@ -172,6 +191,7 @@ class MerchantApiKeyControllerTest : FunSpec() {
 			mockMvc
 				.perform(
 					post("/merchant/api-keys")
+						.with(csrf())
 						.with(authenticatedAs(OWNER))
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(objectMapper.writeValueAsString(validIssueRequest().copy(scopes = listOf("NOT_A_SCOPE")))),
@@ -185,6 +205,7 @@ class MerchantApiKeyControllerTest : FunSpec() {
 			mockMvc
 				.perform(
 					post("/merchant/api-keys")
+						.with(csrf())
 						.with(authenticatedAs(OWNER))
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(objectMapper.writeValueAsString(validIssueRequest())),
@@ -199,19 +220,19 @@ class MerchantApiKeyControllerTest : FunSpec() {
 				)
 
 			mockMvc
-				.perform(delete("/merchant/api-keys/mak_001").with(authenticatedAs(OWNER)))
+				.perform(delete("/merchant/api-keys/mak_001").with(csrf()).with(authenticatedAs(OWNER)))
 				.andExpect(status().isOk)
 				.andExpect(jsonPath("$.merchantApiKeyId").value("mak_001"))
 		}
 
 		test("VIEWER revoking a key returns 403 (the wildcard rule covers the path-variable route too)") {
 			mockMvc
-				.perform(delete("/merchant/api-keys/mak_001").with(authenticatedAs(VIEWER)))
+				.perform(delete("/merchant/api-keys/mak_001").with(csrf()).with(authenticatedAs(VIEWER)))
 				.andExpect(status().isForbidden)
 		}
 
 		test("no authentication for revocation returns 401 or 403") {
-			val result = mockMvc.perform(delete("/merchant/api-keys/mak_001")).andReturn()
+			val result = mockMvc.perform(delete("/merchant/api-keys/mak_001").with(csrf())).andReturn()
 
 			result.response.status shouldBeIn listOf(401, 403)
 		}
@@ -221,7 +242,7 @@ class MerchantApiKeyControllerTest : FunSpec() {
 				MerchantApiKeyNotFoundException("찾을 수 없습니다.")
 
 			mockMvc
-				.perform(delete("/merchant/api-keys/mak_no_such_id").with(authenticatedAs(OWNER)))
+				.perform(delete("/merchant/api-keys/mak_no_such_id").with(csrf()).with(authenticatedAs(OWNER)))
 				.andExpect(status().isNotFound)
 		}
 
@@ -230,7 +251,7 @@ class MerchantApiKeyControllerTest : FunSpec() {
 				MerchantApiKeyNotActiveException("이미 REVOKED 상태입니다.")
 
 			mockMvc
-				.perform(delete("/merchant/api-keys/mak_001").with(authenticatedAs(OWNER)))
+				.perform(delete("/merchant/api-keys/mak_001").with(csrf()).with(authenticatedAs(OWNER)))
 				.andExpect(status().isConflict)
 		}
 

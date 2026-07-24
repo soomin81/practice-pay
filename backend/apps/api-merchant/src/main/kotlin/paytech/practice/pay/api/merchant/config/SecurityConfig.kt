@@ -1,35 +1,75 @@
 package paytech.practice.pay.api.merchant.config
 
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.http.HttpStatus
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity
 import org.springframework.security.config.annotation.web.invoke
 import org.springframework.security.web.SecurityFilterChain
+import org.springframework.security.web.authentication.HttpStatusEntryPoint
+import org.springframework.security.web.authentication.www.BasicAuthenticationFilter
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository
 import org.springframework.security.web.context.SecurityContextRepository
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler
+import org.springframework.web.cors.CorsConfiguration
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource
+import paytech.practice.pay.api.merchant.security.CsrfCookieFilter
 
 /**
- * `apps:api-admin`의 `SecurityConfig`와 같은 모양·같은 이유다 — `POST /merchant/login`만
- * 인증 없이 열고, 세션 쿠키 인증을 쓰며, CSRF 보호를 껐다(같은 알려진 gap — 실제
- * 프론트엔드가 붙기 전에 반드시 켜야 한다). `POST /merchant/merchant-users`(하위
- * 계정 발급)는 `OWNER`/`ADMIN` 역할을 요구한다(`docs/architecture/identity-access-api-key.md`의
- * "4.4 하위 계정 발급": "`OWNER`, `ADMIN`은 하위 계정을 발급할 수 있다") — 이건
- * 정적인 1차 관문일 뿐이고, `ACTIVE` 상태까지 포함한 최종 판단은
- * `InviteMerchantSubAccountUseCase`가 요청자의 `MerchantUser`를 다시 읽어서 한다
- * (그 Use Case의 KDoc 참고). `/merchant/api-keys` 아래의 와일드카드 규칙(발급·폐기)도
- * 같은 역할 요구를 갖는다 — 그 와일드카드가 `POST /merchant/api-keys`(경로 변수
- * 없음)와 `DELETE /merchant/api-keys/{merchantApiKeyId}`(경로 변수 있음)를 한
- * 규칙으로 함께 덮는다(Spring의 `PathPattern`에서 이 와일드카드는 0개 이상의
- * 하위 경로에 매칭된다 — 실제 `bootRun`으로 두 메서드 다 확인했다).
+ * `apps:api-admin`의 `SecurityConfig`와 같은 세션 쿠키 인증을 쓰되, **실제 브라우저
+ * 프론트엔드(가맹점 콘솔)가 붙는 첫 앱이라 CORS와 CSRF를 실제로 켠다** — 예전
+ * 주석에 "CSRF는 실제 프론트엔드가 붙기 전에 반드시 켜야 한다"고 남겨 둔 gap을
+ * 여기서 닫는다. 브라우저 대면 계약 전체는 `docs/architecture/merchant-console-api.md`에
+ * 있고, 구현 판단은 `backend/IMPLEMENTATION-NOTES.md`의 "가맹점 콘솔 CORS/CSRF" 절에 있다.
+ *
+ * **CSRF(세션 쿠키 SPA 표준 레시피).** [CookieCsrfTokenRepository.withHttpOnlyFalse]로
+ * `XSRF-TOKEN` 쿠키를 내리고, SPA가 그 값을 `X-XSRF-TOKEN` 헤더로 되돌려주면
+ * 검증한다. [CsrfTokenRequestAttributeHandler]를 쓰고 `setCsrfRequestAttributeName(null)`로
+ * 지연 로딩을 꺼서, [CsrfCookieFilter]가 안전한 GET(`GET /merchant/me`) 응답에도
+ * 쿠키를 실을 수 있게 한다(그 필터의 KDoc 참고). BREACH 보호용 `XorCsrfTokenRequestAttributeHandler`
+ * 대신 평범한 핸들러를 쓰는 건 "쿠키 값 = 헤더 값"이라야 JS가 단순해지기 때문으로,
+ * Spring 공식 SPA 레시피가 택한 트레이드오프 그대로다.
+ *
+ * **`/merchant/account-invitations/accept`만 CSRF에서 제외한다.** 이 엔드포인트는
+ * 비인증 공개 경로이고, 자격증명이 세션 쿠키가 아니라 **요청 본문의 초대 Token
+ * 자체**다(브라우저가 쿠키를 자동으로 실어 보내 악용될 표면이 없다 — CSRF가 막으려는
+ * 상황이 성립하지 않는다). 이메일 링크로 도달하는 활성화 페이지라 토큰을 미리 받아올
+ * GET을 앞에 둘 수도 없어서, 제외가 더 맞다. 로그인은 제외하지 않는다 — SPA가
+ * `GET /merchant/me`로 토큰을 먼저 확보한 뒤 로그인 POST에 실으므로 보호할 수 있다.
+ *
+ * **CORS.** 세션 쿠키를 교차 출처로 실어 보내야 하므로 `allowCredentials = true`이고,
+ * 그 제약상 `allowedOrigins`에 와일드카드를 쓸 수 없다 — 허용 Origin은
+ * `app.merchant-console.allowed-origins`(환경변수 `APP_MERCHANT_CONSOLE_ALLOWED_ORIGINS`)로
+ * 정확히 나열한다. `api-payment`의 체크아웃 CORS와 달리 `allowCredentials`가 켜져 있고
+ * `X-XSRF-TOKEN` 헤더를 허용 목록에 더한 것이 차이다.
  */
 @Configuration
 @EnableWebSecurity
 class SecurityConfig {
 	@Bean
 	fun filterChain(http: HttpSecurity): SecurityFilterChain {
+		val csrfRequestHandler =
+			CsrfTokenRequestAttributeHandler().apply {
+				// null로 두면 토큰이 지연 로딩되지 않고 CsrfToken 클래스 이름 속성에 담긴다 —
+				// CsrfCookieFilter가 그 이름으로 꺼내 읽어 쿠키를 강제로 렌더한다.
+				setCsrfRequestAttributeName(null)
+			}
+
 		http {
-			csrf { disable() }
+			cors { configurationSource = merchantConsoleCorsConfigurationSource() }
+			// 미인증 요청은 401로 돌려준다 — 기본 엔트리포인트는 403을 내는데, 그러면
+			// 프론트가 "로그아웃 상태(401)"를 "CSRF/권한 거부(403)"와 구분할 수 없다.
+			// `GET /merchant/me`의 401을 곧 "로그인 필요"로 신뢰하게 하는 API 계약이다.
+			exceptionHandling { authenticationEntryPoint = HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED) }
+			csrf {
+				csrfTokenRepository = CookieCsrfTokenRepository.withHttpOnlyFalse()
+				csrfTokenRequestHandler = csrfRequestHandler
+				// 비인증 공개 경로 + 본문 Token이 곧 자격증명 → 세션 쿠키 CSRF 대상이 아니다(위 KDoc).
+				ignoringRequestMatchers("/merchant/account-invitations/accept")
+			}
 			authorizeHttpRequests {
 				// 컨테이너의 ERROR 디스패치 경로 — 인증을 요구하면 실제 오류(400/404/405 등)가
 				// 전부 401/403으로 가려진다(`apps:api-payment`의 SecurityConfig 주석 참고).
@@ -41,10 +81,37 @@ class SecurityConfig {
 				authorize(anyRequest, authenticated)
 			}
 		}
+		// CsrfFilter가 요청 속성에 토큰을 심은 뒤 실행돼야 한다 — BasicAuthenticationFilter는
+		// 표준 필터 순서상 CsrfFilter 뒤라, httpBasic을 안 켰어도 위치 기준으로 유효하다
+		// (Spring 공식 SPA 레시피와 같은 위치).
+		http.addFilterAfter(CsrfCookieFilter(), BasicAuthenticationFilter::class.java)
 		return http.build()
 	}
+
+	private fun merchantConsoleCorsConfigurationSource(): UrlBasedCorsConfigurationSource {
+		val configuration =
+			CorsConfiguration().apply {
+				allowedOrigins = allowedConsoleOrigins
+				allowedMethods = listOf("GET", "POST", "DELETE", "OPTIONS")
+				// X-XSRF-TOKEN은 SPA가 CSRF 토큰을 되돌려주는 헤더라 반드시 허용해야 한다.
+				allowedHeaders = listOf("Content-Type", "X-XSRF-TOKEN")
+				allowCredentials = true
+				maxAge = CORS_MAX_AGE_SECONDS
+			}
+
+		return UrlBasedCorsConfigurationSource().apply {
+			registerCorsConfiguration("/merchant/**", configuration)
+		}
+	}
+
+	@Value("\${app.merchant-console.allowed-origins}")
+	private lateinit var allowedConsoleOrigins: List<String>
 
 	/** `MerchantLoginController`가 로그인 성공 후 인증 정보를 세션에 저장할 때 쓴다. */
 	@Bean
 	fun securityContextRepository(): SecurityContextRepository = HttpSessionSecurityContextRepository()
+
+	private companion object {
+		private const val CORS_MAX_AGE_SECONDS = 3600L
+	}
 }

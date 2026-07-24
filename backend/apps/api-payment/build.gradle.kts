@@ -12,8 +12,9 @@ plugins {
 // api-admin/api-merchant/batch stay thinner until their own Use Cases exist
 // (see backend/CLAUDE.md).
 //
-// This is also the only app that generates an OpenAPI spec — the Hosted Checkout
-// API here is the one frontend/ consumes (docs/architecture/checkout-api.md).
+// This generates an OpenAPI spec for the Hosted Checkout API that frontend/payment
+// consumes (docs/architecture/checkout-api.md). api-merchant does the same for its
+// console API now (frontend/merchant) — same plugin, same gotchas.
 dependencies {
 	implementation(project(":modules:domain"))
 	implementation(project(":modules:application"))

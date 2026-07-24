@@ -18,6 +18,7 @@
 - [MySQL·jOOQ 영속성 원칙](architecture/persistence-jooq.md)
 - [계정·권한·API Key 설계](architecture/identity-access-api-key.md)
 - [Hosted Checkout API 설계](architecture/checkout-api.md)
+- [가맹점 콘솔 API 설계](architecture/merchant-console-api.md)
 
 ## 데이터베이스
 

@@ -12,6 +12,7 @@ import org.springframework.http.MediaType
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
@@ -83,6 +84,7 @@ class MerchantSubAccountControllerTest : FunSpec() {
 			mockMvc
 				.perform(
 					post("/merchant/merchant-users")
+						.with(csrf())
 						.with(authenticatedAs(OWNER))
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(objectMapper.writeValueAsString(validRequest())),
@@ -107,6 +109,7 @@ class MerchantSubAccountControllerTest : FunSpec() {
 			mockMvc
 				.perform(
 					post("/merchant/merchant-users")
+						.with(csrf())
 						.with(authenticatedAs(ADMIN))
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(objectMapper.writeValueAsString(validRequest().copy(role = "VIEWER"))),
@@ -118,6 +121,7 @@ class MerchantSubAccountControllerTest : FunSpec() {
 				mockMvc
 					.perform(
 						post("/merchant/merchant-users")
+							.with(csrf())
 							.contentType(MediaType.APPLICATION_JSON)
 							.content(objectMapper.writeValueAsString(validRequest())),
 					).andReturn()
@@ -129,6 +133,7 @@ class MerchantSubAccountControllerTest : FunSpec() {
 			mockMvc
 				.perform(
 					post("/merchant/merchant-users")
+						.with(csrf())
 						.with(authenticatedAs(VIEWER))
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(objectMapper.writeValueAsString(validRequest())),
@@ -139,6 +144,7 @@ class MerchantSubAccountControllerTest : FunSpec() {
 			mockMvc
 				.perform(
 					post("/merchant/merchant-users")
+						.with(csrf())
 						.with(authenticatedAs(OWNER))
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(objectMapper.writeValueAsString(validRequest().copy(loginId = ""))),
@@ -149,6 +155,7 @@ class MerchantSubAccountControllerTest : FunSpec() {
 			mockMvc
 				.perform(
 					post("/merchant/merchant-users")
+						.with(csrf())
 						.with(authenticatedAs(OWNER))
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(objectMapper.writeValueAsString(validRequest().copy(role = "NOT_A_ROLE"))),
@@ -162,6 +169,7 @@ class MerchantSubAccountControllerTest : FunSpec() {
 			mockMvc
 				.perform(
 					post("/merchant/merchant-users")
+						.with(csrf())
 						.with(authenticatedAs(OWNER))
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(objectMapper.writeValueAsString(validRequest())),
@@ -175,6 +183,7 @@ class MerchantSubAccountControllerTest : FunSpec() {
 			mockMvc
 				.perform(
 					post("/merchant/merchant-users")
+						.with(csrf())
 						.with(authenticatedAs(OWNER))
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(objectMapper.writeValueAsString(validRequest())),
@@ -188,6 +197,7 @@ class MerchantSubAccountControllerTest : FunSpec() {
 			mockMvc
 				.perform(
 					post("/merchant/merchant-users")
+						.with(csrf())
 						.with(authenticatedAs(OWNER))
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(objectMapper.writeValueAsString(validRequest().copy(role = "OWNER"))),

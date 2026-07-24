@@ -9,7 +9,7 @@
 | 디렉토리 | 대상 | 호출하는 백엔드 | 상태 |
 |---|---|---|---|
 | `payment/` | **고객**(Hosted Checkout) | `api-payment` `:8081`의 `/checkout/**` | **구현 중** |
-| `merchant/` | 가맹점 운영자 | `api-merchant` `:8083` | 아직 없음 |
+| `merchant/` | 가맹점 운영자 | `api-merchant` `:8083`의 `/merchant/**` | **구현 중**(로그인 → API Key 관리 슬라이스) |
 | `admin/` | PG 내부 운영자 | `api-admin` `:8082` | 아직 없음 |
 
 **워크스페이스(pnpm/npm workspaces)를 쓰지 않는다 — 각 앱이 독립 프로젝트다.** 셋이 호출하는 API도 타입도 인증 방식도 전부 달라서 지금 공유할 것이 실질적으로 없다. 진짜 공유될 만한 UI 컴포넌트는 **두 번째 앱을 만들 때 무엇이 겹치는지 드러난 뒤** `frontend/packages/`로 뽑는다. 이 판단은 백엔드의 "지금 실제로 하는 일에만 맞춘다 — 나중에 할 일까지 미리 넣지 않는다"와 같은 원칙이다.
@@ -132,6 +132,49 @@ Vitest + Testing Library. `npm test`(1회 실행) / `npm run test:watch`.
 화면 컴포넌트는 `checkout/components/screens.test.tsx`에 스모크 테스트가 있다. 잡으려는 것은 둘이다: 컴포넌트가 마운트 중에 터지지 않는 것, 그리고 **금액·주소·Confirmation이 서버 값 그대로 나오는 것**(안전 정수 범위를 넘는 금액을 픽스처에 일부러 넣어 뒀다 — `Number`를 거치면 여기서 깨진다).
 
 **단, 테스트는 "보기에 멀쩡한지"를 확인해주지 않는다.** Tailwind 클래스는 오타가 나도 조용히 무시되고 컴파일도 통과한다. 레이아웃을 바꿨으면 `npm run dev`로 **눈으로 확인한다.**
+
+## 앱: merchant (가맹점 콘솔) — payment와 다른 점만
+
+`frontend/merchant`는 `payment`를 스캐폴딩 템플릿으로 미러링했다(Vite + React + TS6 +
+Tailwind v4 + shadcn/ui + react-query + oxlint + vitest). **wagmi/viem(지갑)은 없다.**
+공통 UI를 `frontend/packages/`로 뽑는 것은 여전히 두 앱의 실제 중복이 드러난 뒤로
+미룬다 — 지금은 shadcn 생성물(`button`/`card`/`alert`)을 복사하고 나머지(`input`/
+`label`/`badge`)만 이 앱에 두는 정도라 뽑아낼 만큼의 중복이 아니다.
+
+계약 기준 문서는 [`docs/architecture/merchant-console-api.md`](../docs/architecture/merchant-console-api.md)다.
+
+```
+cd frontend/merchant
+npm install
+npm run dev            # http://localhost:5174  (payment가 5173이라 겹치지 않게 5174)
+npm test / npm run build / npm run lint
+npm run gen:api        # api-merchant의 openapi3.yaml → src/api/schema.d.ts
+```
+
+- **`gen:api`는 `api-merchant`의 스펙을 먼저 생성해야 한다**(payment와 같은 순서):
+  `cd backend && gradlew.bat :apps:api-merchant:openapi3` → `build/api-spec/openapi3.yaml`
+  → `npm run gen:api`. 스펙이 없으면 "파일 없음"으로 실패한다.
+- **포트는 5174 고정(`strictPort`)이다.** api-merchant의 `app.merchant-console.allowed-origins`가
+  이 Origin을 허용하는데, strictPort가 없으면 Vite가 조용히 다른 포트로 옮겨 가 세션
+  쿠키 요청이 전부 CORS로 막힌다(payment의 5173과 같은 이유).
+
+### payment와 결정적으로 다른 지점: 세션 쿠키 인증
+
+- **모든 요청에 `credentials: 'include'`.** 세션 쿠키(`JSESSIONID`)로 인증한다
+  (payment는 쿠키를 안 쓴다). `src/api/client.ts`가 이걸 붙인다.
+- **상태 변경 요청(POST/DELETE)에는 CSRF 토큰을 실어야 한다.** `XSRF-TOKEN` 쿠키를 읽어
+  `X-XSRF-TOKEN` 헤더로 되돌려준다(`client.ts`의 `csrfHeader()`). 쿠키는 안전한 GET
+  응답에 실려 오는데, 앱 부팅 시 `useMe`(`GET /merchant/me`)가 먼저 받아 둔다 — 없으면
+  `csrfHeader()`가 한 번 GET을 쳐서 받아온다. 없이 보내면 서버가 403이다.
+- **오류는 status로 분기한다**(`MerchantApiError`, payment의 `CheckoutApiError` 대응):
+  401=미인증(로그아웃), 403=CSRF/권한, 409=중복 등. **`me()`는 401을 오류가 아니라
+  `null`(로그아웃)로 바꿔 돌려준다** — App이 그 `null`을 보고 로그인 화면을 그린다.
+- **라우터는 두지 않는다.** 로그인/콘솔 2뷰는 `useMe()` 결과로 조건부 렌더링한다
+  (payment가 단일 화면이라 라우터를 뺀 판단과 같은 결). 다음 슬라이스에서 페이지가
+  늘면 그때 react-router를 도입한다.
+- **rawApiKey는 발급 응답에서만 보인다** — `IssueApiKeyForm`이 발급 직후 그 값을 크게
+  경고와 함께 노출하고, "확인했습니다"를 누르면 다시 볼 수 없다(계약 6.4). 폐기 확인은
+  브라우저 `confirm()`이 아니라 인라인 확인으로 한다(모달 dialog는 안 넣었다).
 
 ## 현재 상태와 다음
 

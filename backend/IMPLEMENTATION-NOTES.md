@@ -246,3 +246,18 @@
 
 - **테스트**: `SellPendingPaymentsToFakeExchangeTaskletTest`(단위, 대상 전부 호출/하나 실패해도 나머지 계속/빈 목록은 no-op — `ConfirmPendingBlockchainTransactionsTaskletTest`/ `PublishPendingOutboxEventsTaskletTest`와 같은 케이스 구성).
 
+## 가맹점 콘솔 CORS/CSRF와 세션 복원(`apps:api-merchant`)
+
+브라우저 프론트엔드(`frontend/merchant`, 로그인 → API Key 관리 슬라이스)가 붙는 첫 앱이라, 그동안 `SecurityConfig` 주석에 "실제 프론트엔드가 붙기 전에 반드시 켜야 한다"고 미뤄 뒀던 CORS/CSRF를 실제로 켰다. 브라우저 대면 계약 전체는 `docs/architecture/merchant-console-api.md`에, 재사용 규칙 요약은 `CLAUDE.md`의 "가맹점 콘솔 CORS/CSRF" 절에 있다. 여기는 구현 판단·함정만 남긴다.
+
+- **CSRF는 Spring Security 6의 SPA 표준 레시피 그대로다**: `CookieCsrfTokenRepository.withHttpOnlyFalse()`(토큰을 `XSRF-TOKEN` 쿠키로 내림) + `CsrfTokenRequestAttributeHandler`(`setCsrfRequestAttributeName(null)`) + `CsrfCookieFilter`(`BasicAuthenticationFilter` 뒤). 프론트는 상태 변경 요청에 `XSRF-TOKEN` 쿠키 값을 `X-XSRF-TOKEN` 헤더로 되돌려준다.
+  - **함정 ① 지연 토큰 로딩** — SS6은 토큰을 지연 로딩해서, 실제로 토큰 값을 "읽는" 코드가 없으면 `CookieCsrfTokenRepository`가 응답에 `XSRF-TOKEN` 쿠키를 싣지 않는다. 그러면 프론트가 첫 POST에 실을 토큰을 얻을 방법이 없다. `CsrfCookieFilter`가 요청마다 토큰 값을 한 번 읽어(`.token`) 지연 로딩을 깨워서, 안전한 GET(`GET /merchant/me`) 응답에도 쿠키가 실리게 한다. `setCsrfRequestAttributeName(null)`은 토큰을 `CsrfToken` 클래스 이름 속성에 담고 지연 로딩을 끄는 짝이다.
+  - **함정 ② BREACH 핸들러** — `XorCsrfTokenRequestAttributeHandler`(BREACH 보호, 요청마다 마스킹)가 아니라 평범한 `CsrfTokenRequestAttributeHandler`를 쓴다. "쿠키 값 = 헤더 값"이라야 JS가 단순해지기 때문으로, Spring 공식 SPA 레시피가 택한 트레이드오프 그대로다.
+  - **`bootRun` 실물 검증에서 확인한 것**(테스트가 못 잡는 층 — 필터 체인·쿠키): `GET /merchant/me`(미인증) → 401 + `Set-Cookie: XSRF-TOKEN`, 로그인 → 세션 쿠키 발급 후 `/me` 200, 토큰 없는 `POST /merchant/api-keys` → 403 / 토큰 실으면 201, 전체 로그인→발급→폐기 왕복.
+- **미인증을 401로 고정했다**(`HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)`) — 기본 엔트리포인트는 403을 내는데, 그러면 프론트가 "로그아웃(401)"을 "CSRF/권한 거부(403)"와 구분할 수 없다. `GET /merchant/me`의 401을 곧 "로그인 필요"로 신뢰하게 하는 API 계약이다. `MerchantMeControllerTest`가 미인증 401을 회귀로 지킨다.
+- **CORS는 `allowCredentials = true`**(세션 쿠키를 교차 출처로 실어 보냄)라 허용 Origin에 와일드카드를 못 쓴다 — `app.merchant-console.allowed-origins`(기본 `http://localhost:5174`)로 정확히 나열하고, 허용 헤더에 `X-XSRF-TOKEN`을 더했다. `api-payment`의 체크아웃 CORS(`allowCredentials=false`)와 대비된다. `/merchant/**`에 등록한다(모든 엔드포인트가 브라우저 호출 대상).
+- **`/merchant/account-invitations/accept`만 CSRF 예외**(`ignoringRequestMatchers`)로 뒀다 — 비인증 공개 경로이고 자격증명이 세션 쿠키가 아니라 본문의 초대 Token 자체라 CSRF가 막을 대상이 아니다. 이메일 링크로 도달해 토큰을 미리 받아올 GET을 앞에 둘 수도 없다. 그래서 `AcceptAccountInvitationControllerTest`는 `.with(csrf())` 없이 그대로 통과한다.
+- **CSRF를 켜니 기존 `@WebMvcTest`의 POST/DELETE 테스트가 403으로 깨졌다** — Login/SubAccount/ApiKey 테스트의 상태 변경 요청에 `.with(csrf())`(SecurityMockMvcRequestPostProcessors)를 더했다. "미인증 → 401/403" 케이스에도 붙여서 CSRF 거부가 아니라 인증 거부를 테스트하게 했다. `MerchantApiKeyControllerTest`에 "인증됐지만 CSRF 토큰 없으면 403" 회귀 케이스를 새로 넣었다.
+- **`/merchant/me`(세션 복원)와 `/merchant/logout`을 새로 추가했다.** `me`는 `@AuthenticationPrincipal MerchantUserPrincipal`을 그대로 돌려주고(`merchantUserId`/`merchantId`/`loginId`/`role` — `userName`/`merchantCode`는 principal에 없어 이 슬라이스에서 뺐다, 컨트롤러 KDoc에 표시), CSRF 쿠키 발급도 겸한다. `logout`은 `HttpSession.invalidate()` + `SecurityContextHolder.clearContext()`로 204를 돌려준다 — Spring 기본 `/logout` 대신 명시적 REST 컨트롤러로 둬서 계약이 문서·스펙에 그대로 드러나게 했다(세 API 앱이 로그인/인증을 전부 명시적 컨트롤러로 노출하는 것과 결을 맞춤).
+- **OpenAPI 스펙**: `MerchantApiDocumentationTest`가 로그인·me·logout·api-keys(발급/목록/폐기)를 문서화한다 — `api-payment`의 `CheckoutApiDocumentationTest`와 같은 REST Docs 패턴·같은 함정(`resource(builder.build())`로 감싸기, null 예시 필드는 non-null로 채우기). `build.gradle.kts`도 api-payment와 동일하게 `openapi3` 태스크에 `dependsOn(test)` + `notCompatibleWithConfigurationCache`를 걸었다.
+

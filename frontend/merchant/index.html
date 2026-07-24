@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>가맹점 콘솔</title>
+    <script>
+      // 다크 모드는 OS 설정을 따른다(payment 앱의 index.html과 같은 이유·같은 방식).
+      //
+      // shadcn 테마가 `.dark` **클래스** 기준이라(index.css의 @custom-variant), 이
+      // 클래스를 붙이는 코드가 없으면 테마 변수도 `dark:` 유틸리티도 전부 죽는다.
+      // <head>에서 동기로 실행하는 이유는 깜빡임을 막기 위해서다.
+      ;(function () {
+        var query = window.matchMedia('(prefers-color-scheme: dark)')
+        function apply(isDark) {
+          document.documentElement.classList.toggle('dark', isDark)
+        }
+        apply(query.matches)
+        query.addEventListener('change', function (event) {
+          apply(event.matches)
+        })
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

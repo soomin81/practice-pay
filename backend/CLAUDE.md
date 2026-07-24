@@ -40,7 +40,11 @@ apps/
                      (POST /merchant/merchant-users, OWNER/ADMIN), IssueMerchantApiKeyUseCase/
                      RevokeMerchantApiKeyUseCase/ListMerchantApiKeysUseCase(POST·DELETE·GET
                      /merchant/api-keys, OWNER/ADMIN — GET도 VIEWER는 막는다)가
-                     있다(Apps 절 참고). 이 앱의 MVP 흐름이 전부 구현됐다.
+                     있다(Apps 절 참고). 이 앱의 MVP 흐름이 전부 구현됐다. **브라우저
+                     프론트엔드(frontend/merchant)가 붙는 첫 앱이라 CORS+CSRF를 실제로
+                     켰고**(세션 쿠키 SPA — 아래 "가맹점 콘솔 CORS/CSRF" 절), 세션 복원용
+                     GET /merchant/me와 POST /merchant/logout을 더했으며, api-payment처럼
+                     openapi3 스펙도 생성한다(계약 문서 docs/architecture/merchant-console-api.md).
   batch/             실제 Gradle 서브프로젝트, 독립 배포 가능한 Spring Boot 앱 — spring-boot-starter-batch +
                      jooq + modules:application/infra-persistence/infra-blockchain에 의존한다. Job 셋:
                      confirmBlockchainTransactionJob(BlockchainTransaction 감지·Confirm 폴링 Worker),
@@ -284,12 +288,39 @@ Use Case·Adapter를 하나씩 구현하며 내린 판단(왜 그 상수를 골�
 - **비슷한 상황의 선례를 찾을 때**: `IMPLEMENTATION-NOTES.md`를 본다. 다만 새 작업을 하려고 그 문서를 통째로 읽을 필요는 없다.
 - **재사용 가능한 규칙이 나오면 이 문서에 쓴다** — 기능별 기록 쪽에 묻어두지 않는다.
 
-## OpenAPI 스펙 생성(`apps:api-payment`의 `openapi3`)
+## 가맹점 콘솔 CORS/CSRF(`apps:api-merchant` — 세션 쿠키 SPA)
+
+`api-merchant`는 **브라우저 프론트엔드가 붙는 첫 앱**이라, 그동안 "실제 프론트엔드가
+붙기 전에 반드시 켜야 한다"고 미뤄 뒀던 CORS/CSRF를 실제로 켰다. 이건 세션 쿠키 인증을
+쓰는 앱(향후 `api-admin`도)의 재사용 규칙이다 — `api-payment`(쿠키 없는 Bearer/무인증)는
+해당하지 않는다(그쪽 CSRF-끔은 gap이 아니라 올바른 선택이다).
+
+- **CSRF는 `CookieCsrfTokenRepository.withHttpOnlyFalse()` + `CsrfTokenRequestAttributeHandler`
+  (`setCsrfRequestAttributeName(null)`) + `CsrfCookieFilter`**로 켠다 — Spring Security 6의
+  SPA 표준 레시피다. `XSRF-TOKEN` 쿠키를 내리고 `X-XSRF-TOKEN` 헤더로 되돌려받는다.
+  구현 판단·함정(지연 토큰 로딩, 401 엔트리포인트)은 `IMPLEMENTATION-NOTES.md`의
+  "가맹점 콘솔 CORS/CSRF" 절에 있다.
+- **CORS는 `allowCredentials = true`**라 허용 Origin에 와일드카드를 못 쓴다 —
+  `app.merchant-console.allowed-origins`로 정확히 나열한다(`api-payment` 체크아웃 CORS는
+  쿠키를 안 써서 `allowCredentials=false`인 것과 대비된다).
+- **미인증은 401로 돌려준다**(`HttpStatusEntryPoint(UNAUTHORIZED)`) — 기본 403이면 프론트가
+  "로그아웃"을 "CSRF/권한 거부"와 구분 못 한다.
+- **CSRF를 켜면 기존 `@WebMvcTest`의 POST/DELETE 테스트가 403으로 깨진다** — 상태 변경
+  요청에 `.with(csrf())`를 더한다(SecurityMockMvcRequestPostProcessors). 단
+  `/merchant/account-invitations/accept`는 CSRF 예외라(공개+본문 Token이 자격증명) 그
+  테스트는 그대로 둔다.
+- 브라우저 대면 계약 전체는 `docs/architecture/merchant-console-api.md`다.
+
+## OpenAPI 스펙 생성(`apps:api-payment`·`apps:api-merchant`의 `openapi3`)
 
 프론트엔드가 백엔드 소스를 읽지 않고 작업할 수 있게, **통과한 테스트에서 OpenAPI 스펙을 생성한다.**
+`api-payment`(체크아웃 API, frontend/payment)와 `api-merchant`(콘솔 API, frontend/merchant)
+**둘 다** REST Docs 기반으로 스펙을 만든다 — 아래는 api-payment 기준이고, api-merchant도
+같은 플러그인·같은 함정 처리(`MerchantApiDocumentationTest`, `apps/api-merchant/build.gradle.kts`)를 그대로 따른다.
 
 ```
 gradlew.bat :apps:api-payment:openapi3     # → apps/api-payment/build/api-spec/openapi3.yaml
+gradlew.bat :apps:api-merchant:openapi3    # → apps/api-merchant/build/api-spec/openapi3.yaml
 ```
 
 - **애노테이션(springdoc)이 아니라 REST Docs 기반을 골랐다 — 스펙이 거짓말을 할 수 없기 때문이다.** 애노테이션은 실제 응답과 어긋나도 빌드가 통과하지만, 이 방식은 실제로 요청을 보내고 응답을 받아야 스니펫이 나온다. 응답에 없는 필드를 문서화하면 그 자리에서 테스트가 깨진다.
