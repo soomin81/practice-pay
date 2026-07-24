@@ -14,6 +14,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
@@ -22,7 +23,11 @@ import paytech.practice.pay.api.merchant.security.MerchantUserPrincipal
 import paytech.practice.pay.application.identity.DuplicateMerchantUserException
 import paytech.practice.pay.application.identity.InviteMerchantSubAccountResult
 import paytech.practice.pay.application.identity.InviteMerchantSubAccountUseCase
+import paytech.practice.pay.application.identity.ListMerchantUsersResult
+import paytech.practice.pay.application.identity.ListMerchantUsersUseCase
 import paytech.practice.pay.application.identity.MerchantUserCannotInviteSubAccountsException
+import paytech.practice.pay.application.port.outbound.MerchantUserSummary
+import paytech.practice.pay.domain.identity.AccountStatus
 import paytech.practice.pay.domain.identity.Email
 import paytech.practice.pay.domain.identity.LoginId
 import paytech.practice.pay.domain.identity.MerchantUserId
@@ -65,6 +70,9 @@ class MerchantSubAccountControllerTest : FunSpec() {
 
 	@MockkBean
 	lateinit var inviteMerchantSubAccountUseCase: InviteMerchantSubAccountUseCase
+
+	@MockkBean
+	lateinit var listMerchantUsersUseCase: ListMerchantUsersUseCase
 
 	init {
 		extensions(SpringExtension)
@@ -188,6 +196,53 @@ class MerchantSubAccountControllerTest : FunSpec() {
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(objectMapper.writeValueAsString(validRequest())),
 				).andExpect(status().isConflict)
+		}
+
+		test("OWNER listing merchant users returns 200 with the roster, no password material") {
+			every { listMerchantUsersUseCase.execute(any()) } returns
+				ListMerchantUsersResult(
+					merchantUsers =
+						listOf(
+							MerchantUserSummary(
+								merchantUserId = MerchantUserId("mu_001"),
+								loginId = LoginId("member01"),
+								email = Email("member01@example.com"),
+								userName = "팀원",
+								role = MerchantUserRole.ADMIN,
+								status = AccountStatus.INVITED,
+								lastLoginAt = null,
+								createdAt = Instant.parse("2026-07-19T00:00:00Z"),
+							),
+						),
+				)
+
+			mockMvc
+				.perform(get("/merchant/merchant-users").with(authenticatedAs(OWNER)))
+				.andExpect(status().isOk)
+				.andExpect(jsonPath("$.merchantUsers[0].loginId").value("member01"))
+				.andExpect(jsonPath("$.merchantUsers[0].status").value("INVITED"))
+				.andExpect(jsonPath("$.merchantUsers[0].passwordHash").doesNotExist())
+		}
+
+		test("VIEWER listing merchant users returns 403 (blocked by SecurityConfig before the use case runs)") {
+			mockMvc
+				.perform(get("/merchant/merchant-users").with(authenticatedAs(VIEWER)))
+				.andExpect(status().isForbidden)
+		}
+
+		test("no authentication for listing returns 401 or 403") {
+			val result = mockMvc.perform(get("/merchant/merchant-users")).andReturn()
+
+			result.response.status shouldBeIn listOf(401, 403)
+		}
+
+		test("MerchantUserCannotInviteSubAccountsException from the list use case returns 403") {
+			every { listMerchantUsersUseCase.execute(any()) } throws
+				MerchantUserCannotInviteSubAccountsException("권한이 없습니다.")
+
+			mockMvc
+				.perform(get("/merchant/merchant-users").with(authenticatedAs(OWNER)))
+				.andExpect(status().isForbidden)
 		}
 
 		test("attempting to invite an OWNER returns 400 (domain require failure surfaces as IllegalArgumentException)") {

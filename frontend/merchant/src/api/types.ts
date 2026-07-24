@@ -29,10 +29,28 @@ export type ApiKeySummary = ListApiKeysResponse['apiKeys'][number]
 
 export type RevokeApiKeyResponse = JsonResponse<'merchant-revoke-api-key', 200>
 
+export type InviteSubAccountRequest = JsonRequest<'merchant-invite-sub-account'>
+export type InviteSubAccountResponse = JsonResponse<'merchant-invite-sub-account', 201>
+
+export type ListMerchantUsersResponse = JsonResponse<'merchant-list-merchant-users', 200>
+export type MerchantUserSummary = ListMerchantUsersResponse['merchantUsers'][number]
+
+export type AcceptInvitationRequest = JsonRequest<'merchant-accept-invitation'>
+export type AcceptInvitationResponse = JsonResponse<'merchant-accept-invitation', 200>
+
 /** 계약(`docs/architecture/identity-access-api-key.md`)의 값들. 화면 분기·표시는 이 값들이 이끈다. */
 export type MerchantUserRole = 'OWNER' | 'ADMIN' | 'VIEWER'
 export type ApiKeyStatus = 'ACTIVE' | 'REVOKED' | 'EXPIRED'
 export type ApiKeyScope = 'PAYMENT_CREATE' | 'PAYMENT_READ'
 
+export type AccountStatus = 'INVITED' | 'ACTIVE' | 'LOCKED' | 'SUSPENDED' | 'TERMINATED'
+
 /** MVP가 발급 가능한 Scope 목록. 발급 폼의 체크박스가 이 목록을 그린다. */
 export const ISSUABLE_SCOPES: readonly ApiKeyScope[] = ['PAYMENT_CREATE', 'PAYMENT_READ']
+
+/**
+ * 하위 계정으로 발급 가능한 역할. **`OWNER`는 없다** — 하위 계정 발급 경로로는 OWNER를
+ * 만들 수 없다(`MerchantUser.inviteSubAccount`의 도메인 규칙). 최초 OWNER는 내부
+ * 운영자가 가맹점 등록 트랜잭션에서 만든다.
+ */
+export const INVITABLE_ROLES: readonly MerchantUserRole[] = ['ADMIN', 'VIEWER']

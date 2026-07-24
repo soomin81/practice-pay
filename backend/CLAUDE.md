@@ -37,7 +37,8 @@ apps/
                      modules:application + modules:infra-persistence에 의존한다. AuthenticateMerchantUserUseCase
                      (POST /merchant/login), AcceptAccountInvitationUseCase(POST /merchant/account-invitations/accept,
                      비인증, api-admin과 같은 공용 Use Case를 재사용), InviteMerchantSubAccountUseCase
-                     (POST /merchant/merchant-users, OWNER/ADMIN), IssueMerchantApiKeyUseCase/
+                     (POST /merchant/merchant-users, OWNER/ADMIN), ListMerchantUsersUseCase
+                     (GET /merchant/merchant-users, OWNER/ADMIN — 팀 명부), IssueMerchantApiKeyUseCase/
                      RevokeMerchantApiKeyUseCase/ListMerchantApiKeysUseCase(POST·DELETE·GET
                      /merchant/api-keys, OWNER/ADMIN — GET도 VIEWER는 막는다)가
                      있다(Apps 절 참고). 이 앱의 MVP 흐름이 전부 구현됐다. **브라우저

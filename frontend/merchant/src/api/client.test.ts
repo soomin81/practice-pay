@@ -63,6 +63,39 @@ describe('merchantApi client', () => {
 		expect((error as MerchantApiError).isForbidden).toBe(true)
 	})
 
+	it('listMerchantUsers는 GET으로 명부를 가져온다', async () => {
+		const fetchMock = vi.fn().mockResolvedValueOnce(fakeResponse(200, { merchantUsers: [] }))
+		vi.stubGlobal('fetch', fetchMock)
+
+		await merchantApi.listMerchantUsers()
+
+		const [url, init] = fetchMock.mock.calls[0]
+		expect(String(url)).toContain('/merchant/merchant-users')
+		expect(init.method ?? 'GET').toBe('GET')
+	})
+
+	it('inviteSubAccount는 CSRF 헤더를 실어 POST한다', async () => {
+		const fetchMock = vi.fn().mockResolvedValueOnce(fakeResponse(201, {}))
+		vi.stubGlobal('fetch', fetchMock)
+
+		await merchantApi.inviteSubAccount({ loginId: 'a', email: 'a@e.com', userName: 'A', role: 'ADMIN' })
+
+		const [, init] = fetchMock.mock.calls[0]
+		expect(init.method).toBe('POST')
+		expect(init.headers['X-XSRF-TOKEN']).toBe('tok-123')
+	})
+
+	it('acceptInvitation은 비인증 경로지만 같은 방식으로 POST한다', async () => {
+		const fetchMock = vi.fn().mockResolvedValueOnce(fakeResponse(200, { loginId: 'x', activatedAt: 'now' }))
+		vi.stubGlobal('fetch', fetchMock)
+
+		await merchantApi.acceptInvitation({ invitationToken: 'tok', newPassword: 'pw' })
+
+		const [url, init] = fetchMock.mock.calls[0]
+		expect(String(url)).toContain('/merchant/account-invitations/accept')
+		expect(init.method).toBe('POST')
+	})
+
 	it('204(로그아웃)는 본문 없이 통과한다', async () => {
 		vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(fakeResponse(204)))
 		await expect(merchantApi.logout()).resolves.toBeUndefined()

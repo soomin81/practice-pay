@@ -36,14 +36,23 @@ import paytech.practice.pay.application.apikey.ListMerchantApiKeysResult
 import paytech.practice.pay.application.apikey.ListMerchantApiKeysUseCase
 import paytech.practice.pay.application.apikey.RevokeMerchantApiKeyResult
 import paytech.practice.pay.application.apikey.RevokeMerchantApiKeyUseCase
+import paytech.practice.pay.application.identity.AcceptAccountInvitationResult
+import paytech.practice.pay.application.identity.AcceptAccountInvitationUseCase
 import paytech.practice.pay.application.identity.AuthenticateMerchantUserResult
 import paytech.practice.pay.application.identity.AuthenticateMerchantUserUseCase
+import paytech.practice.pay.application.identity.InviteMerchantSubAccountResult
+import paytech.practice.pay.application.identity.InviteMerchantSubAccountUseCase
+import paytech.practice.pay.application.identity.ListMerchantUsersResult
+import paytech.practice.pay.application.identity.ListMerchantUsersUseCase
 import paytech.practice.pay.application.port.outbound.MerchantApiKeySummary
+import paytech.practice.pay.application.port.outbound.MerchantUserSummary
 import paytech.practice.pay.domain.apikey.ApiEnvironment
 import paytech.practice.pay.domain.apikey.ApiKeyPrefix
 import paytech.practice.pay.domain.apikey.ApiKeyScope
 import paytech.practice.pay.domain.apikey.ApiKeyStatus
 import paytech.practice.pay.domain.apikey.MerchantApiKeyId
+import paytech.practice.pay.domain.identity.AccountStatus
+import paytech.practice.pay.domain.identity.Email
 import paytech.practice.pay.domain.identity.LoginId
 import paytech.practice.pay.domain.identity.MerchantUserId
 import paytech.practice.pay.domain.identity.MerchantUserRole
@@ -114,6 +123,8 @@ private fun merchantResource(
 		MerchantMeController::class,
 		MerchantLogoutController::class,
 		MerchantApiKeyController::class,
+		MerchantSubAccountController::class,
+		AcceptAccountInvitationController::class,
 	],
 )
 @Import(SecurityConfig::class)
@@ -137,6 +148,15 @@ class MerchantApiDocumentationTest : FunSpec() {
 
 	@MockkBean
 	lateinit var revokeMerchantApiKeyUseCase: RevokeMerchantApiKeyUseCase
+
+	@MockkBean
+	lateinit var inviteMerchantSubAccountUseCase: InviteMerchantSubAccountUseCase
+
+	@MockkBean
+	lateinit var listMerchantUsersUseCase: ListMerchantUsersUseCase
+
+	@MockkBean
+	lateinit var acceptAccountInvitationUseCase: AcceptAccountInvitationUseCase
 
 	init {
 		extensions(SpringExtension)
@@ -323,6 +343,157 @@ class MerchantApiDocumentationTest : FunSpec() {
 				.perform(get("/merchant/api-keys").with(authenticatedAs(OWNER)))
 				.andExpect(status().isOk)
 				.andDo(document("merchant-list-api-keys", snippet))
+		}
+
+		test("document POST invite sub-account") {
+			every { inviteMerchantSubAccountUseCase.execute(any()) } returns
+				InviteMerchantSubAccountResult(
+					merchantUserId = MerchantUserId("mu_002"),
+					loginId = LoginId("new-admin"),
+					email = Email("new-admin@example.com"),
+					userName = "새 하위 계정",
+					role = MerchantUserRole.ADMIN,
+					invitationToken = "raw-invitation-token",
+					invitationExpiresAt = NOW.plusSeconds(604_800),
+				)
+
+			val snippet =
+				merchantResource(
+					summary = "하위 계정 발급(초대)",
+					description =
+						"OWNER/ADMIN이 같은 가맹점의 ADMIN/VIEWER 하위 계정을 INVITED 상태로 만든다. merchantId는 받지 " +
+							"않는다 — 항상 호출자 자신의 가맹점에 만들어진다(멀티테넌시 방어). OWNER는 이 경로로 만들 수 없다. " +
+							"invitationToken은 이 응답에서만 원문으로 보이므로 대상자에게 즉시 전달해야 한다.",
+					requestSchema = "InviteMerchantSubAccountRequest",
+					requestFields =
+						listOf(
+							fieldWithPath("loginId").description("가맹점 내에서 유일한 로그인 아이디"),
+							fieldWithPath("email").description("가맹점 내에서 유일한 이메일"),
+							fieldWithPath("userName").description("사용자 이름"),
+							fieldWithPath("role").description("ADMIN | VIEWER (OWNER 불가)"),
+						),
+					responseSchema = "InviteMerchantSubAccountResponse",
+					responseFields =
+						listOf(
+							fieldWithPath("merchantUserId").description("생성된 가맹점 사용자 식별자"),
+							fieldWithPath("loginId").description("로그인 아이디"),
+							fieldWithPath("email").description("이메일"),
+							fieldWithPath("userName").description("사용자 이름"),
+							fieldWithPath("role").description("부여된 역할"),
+							fieldWithPath("invitationToken").description("초대 Token 원문. 최초 1회만 노출된다."),
+							fieldWithPath("invitationExpiresAt").description("초대 만료 시각(UTC)"),
+						),
+				)
+
+			mockMvc
+				.perform(
+					post("/merchant/merchant-users")
+						.with(authenticatedAs(OWNER))
+						.with(csrf())
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(
+							objectMapper.writeValueAsString(
+								InviteMerchantSubAccountRequest(
+									loginId = "new-admin",
+									email = "new-admin@example.com",
+									userName = "새 하위 계정",
+									role = "ADMIN",
+								),
+							),
+						),
+				).andExpect(status().isCreated)
+				.andDo(document("merchant-invite-sub-account", snippet))
+		}
+
+		test("document GET list merchant users") {
+			every { listMerchantUsersUseCase.execute(any()) } returns
+				ListMerchantUsersResult(
+					merchantUsers =
+						listOf(
+							MerchantUserSummary(
+								merchantUserId = MerchantUserId("mu_002"),
+								loginId = LoginId("member01"),
+								email = Email("member01@example.com"),
+								userName = "팀원",
+								role = MerchantUserRole.ADMIN,
+								status = AccountStatus.ACTIVE,
+								// lastLoginAt에 non-null을 넣는다 — null이면 restdocs-api-spec이 타입을
+								// 추론 못 해 필드를 스펙에서 통째로 빠뜨린다(1번째 슬라이스에서 겪은 함정).
+								lastLoginAt = NOW.plusSeconds(3_600),
+								createdAt = NOW,
+							),
+						),
+				)
+
+			val snippet =
+				merchantResource(
+					summary = "가맹점 사용자 목록 조회",
+					description =
+						"OWNER/ADMIN만 조회할 수 있다. 자신의 가맹점 명부만 나온다 — 누가 소속돼 있고 누가 아직 " +
+							"INVITED로 남아 있는지 확인한다. 비밀번호 해시는 담기지 않는다.",
+					responseSchema = "ListMerchantUsersResponse",
+					responseFields =
+						listOf(
+							fieldWithPath("merchantUsers").description("가맹점 사용자 요약 배열(최신 생성순)"),
+							fieldWithPath("merchantUsers[].merchantUserId").description("가맹점 사용자 식별자"),
+							fieldWithPath("merchantUsers[].loginId").description("로그인 아이디"),
+							fieldWithPath("merchantUsers[].email").description("이메일"),
+							fieldWithPath("merchantUsers[].userName").description("사용자 이름"),
+							fieldWithPath("merchantUsers[].role").description("OWNER | ADMIN | VIEWER"),
+							fieldWithPath("merchantUsers[].status")
+								.description("INVITED | ACTIVE | LOCKED | SUSPENDED | TERMINATED"),
+							fieldWithPath("merchantUsers[].lastLoginAt")
+								.description("마지막 로그인 시각(UTC). 로그인한 적이 없으면 null.")
+								.optional(),
+							fieldWithPath("merchantUsers[].createdAt").description("생성(초대) 시각(UTC)"),
+						),
+				)
+
+			mockMvc
+				.perform(get("/merchant/merchant-users").with(authenticatedAs(OWNER)))
+				.andExpect(status().isOk)
+				.andDo(document("merchant-list-merchant-users", snippet))
+		}
+
+		test("document POST accept account invitation") {
+			every { acceptAccountInvitationUseCase.execute(any()) } returns
+				AcceptAccountInvitationResult(loginId = LoginId("new-admin"), activatedAt = NOW)
+
+			val snippet =
+				merchantResource(
+					summary = "초대 수락(계정 활성화)",
+					description =
+						"초대받은 사람이 Token과 새 비밀번호로 계정을 INVITED → ACTIVE로 활성화한다. 인증이 필요 없고, " +
+							"**CSRF 토큰도 요구하지 않는다** — 자격증명이 세션 쿠키가 아니라 본문의 초대 Token 자체라 " +
+							"CSRF가 막으려는 상황이 성립하지 않는다(merchant-console-api.md 2절).",
+					requestSchema = "AcceptAccountInvitationRequest",
+					requestFields =
+						listOf(
+							fieldWithPath("invitationToken").description("발급 응답에서 받은 초대 Token 원문"),
+							fieldWithPath("newPassword").description("설정할 새 비밀번호"),
+						),
+					responseSchema = "AcceptAccountInvitationResponse",
+					responseFields =
+						listOf(
+							fieldWithPath("loginId").description("활성화된 계정의 로그인 아이디"),
+							fieldWithPath("activatedAt").description("활성화 시각(UTC)"),
+						),
+				)
+
+			mockMvc
+				.perform(
+					post("/merchant/account-invitations/accept")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(
+							objectMapper.writeValueAsString(
+								AcceptAccountInvitationRequest(
+									invitationToken = "raw-invitation-token",
+									newPassword = "new-password-123",
+								),
+							),
+						),
+				).andExpect(status().isOk)
+				.andDo(document("merchant-accept-invitation", snippet))
 		}
 
 		test("document DELETE revoke api key") {

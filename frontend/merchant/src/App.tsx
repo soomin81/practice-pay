@@ -1,20 +1,33 @@
 import type { ReactNode } from 'react'
+import { Navigate, Route, Routes } from 'react-router-dom'
 import { useMe } from '@/auth/useAuth'
 import { MerchantApiError } from '@/api/client'
 import { LoginPage } from '@/console/LoginPage'
 import { ConsoleShell } from '@/console/ConsoleShell'
 import { ApiKeysPage } from '@/console/ApiKeysPage'
+import { TeamPage } from '@/console/TeamPage'
+import { AcceptInvitationPage } from '@/invitation/AcceptInvitationPage'
 import { Button } from '@/components/ui/button'
 
 /**
- * 인증 상태로 화면을 나눈다 — 라우터는 두지 않는다(payment가 단일 화면이라 라우터를
- * 뺀 판단과 같은 결). `useMe()`가 `null`이면 로그인, 사용자가 있으면 콘솔이다. 다음
- * 슬라이스에서 페이지가 늘면 그때 react-router를 도입한다.
+ * 라우트를 나눈다. **초대 수락(`/accept-invitation`)만 인증 게이트 밖에 있다** —
+ * 초대 링크로 도달하는 사람은 아직 계정이 활성화되지 않아 로그인할 수 없으므로,
+ * 이 경로가 로그인 화면으로 튕기면 흐름 자체가 성립하지 않는다. 이 슬라이스에서
+ * 가장 깨지기 쉬운 지점이라 `routing.test.tsx`가 회귀로 지킨다.
  *
- * **다음 상태를 스스로 추론하지 않는다** — 로그인/로그아웃 여부는 서버의
- * `GET /merchant/me` 응답(사용자 or 401)이 정하고, 화면은 그 결과만 따른다.
+ * 나머지 경로는 [ConsoleRoutes]가 `useMe()`로 게이트한다 — **다음 상태를 스스로
+ * 추론하지 않고** 서버의 `GET /merchant/me` 결과(사용자 or 401→null)만 따른다.
  */
 export default function App() {
+	return (
+		<Routes>
+			<Route path="/accept-invitation" element={<AcceptInvitationPage />} />
+			<Route path="*" element={<ConsoleRoutes />} />
+		</Routes>
+	)
+}
+
+function ConsoleRoutes() {
 	const { data: me, isPending, isError, error, refetch } = useMe()
 
 	if (isPending) {
@@ -23,8 +36,7 @@ export default function App() {
 
 	// 401은 client가 null로 바꿔 주므로 여기 도달하지 않는다 — 네트워크/서버 오류만 온다.
 	if (isError) {
-		const message =
-			error instanceof MerchantApiError ? error.message : '콘솔 서버에 연결하지 못했습니다.'
+		const message = error instanceof MerchantApiError ? error.message : '콘솔 서버에 연결하지 못했습니다.'
 		return (
 			<CenteredNotice>
 				<p className="text-destructive">{message}</p>
@@ -41,7 +53,11 @@ export default function App() {
 
 	return (
 		<ConsoleShell me={me}>
-			<ApiKeysPage />
+			<Routes>
+				<Route path="/" element={<ApiKeysPage />} />
+				<Route path="/team" element={<TeamPage />} />
+				<Route path="*" element={<Navigate to="/" replace />} />
+			</Routes>
 		</ConsoleShell>
 	)
 }

@@ -8,6 +8,7 @@ import paytech.practice.pay.application.apikey.RevokeMerchantApiKeyUseCase
 import paytech.practice.pay.application.identity.AcceptAccountInvitationUseCase
 import paytech.practice.pay.application.identity.AuthenticateMerchantUserUseCase
 import paytech.practice.pay.application.identity.InviteMerchantSubAccountUseCase
+import paytech.practice.pay.application.identity.ListMerchantUsersUseCase
 import paytech.practice.pay.application.port.outbound.AccountInvitationRepository
 import paytech.practice.pay.application.port.outbound.ApiKeySecretHasher
 import paytech.practice.pay.application.port.outbound.IdGenerator
@@ -16,6 +17,7 @@ import paytech.practice.pay.application.port.outbound.InvitationTokenHasher
 import paytech.practice.pay.application.port.outbound.MerchantApiKeyListProjection
 import paytech.practice.pay.application.port.outbound.MerchantApiKeyRepository
 import paytech.practice.pay.application.port.outbound.MerchantRepository
+import paytech.practice.pay.application.port.outbound.MerchantUserListProjection
 import paytech.practice.pay.application.port.outbound.MerchantUserRepository
 import paytech.practice.pay.application.port.outbound.PasswordEncoder
 import paytech.practice.pay.application.port.outbound.TransactionManager
@@ -119,5 +121,15 @@ class UseCaseConfiguration {
 		ListMerchantApiKeysUseCase(
 			merchantUserRepository = merchantUserRepository,
 			merchantApiKeyListProjection = merchantApiKeyListProjection,
+		)
+
+	@Bean
+	fun listMerchantUsersUseCase(
+		merchantUserRepository: MerchantUserRepository,
+		merchantUserListProjection: MerchantUserListProjection,
+	): ListMerchantUsersUseCase =
+		ListMerchantUsersUseCase(
+			merchantUserRepository = merchantUserRepository,
+			merchantUserListProjection = merchantUserListProjection,
 		)
 }

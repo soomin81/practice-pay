@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { NavLink } from 'react-router-dom'
 import { useLogout } from '@/auth/useAuth'
 import type { MeResponse } from '@/api/types'
 import { Button } from '@/components/ui/button'
@@ -32,8 +33,29 @@ export function ConsoleShell({ me, children }: { me: MeResponse; children: React
 						</Button>
 					</div>
 				</div>
+				<nav className="mx-auto flex max-w-4xl gap-1 px-6 pb-2">
+					<ConsoleNavLink to="/">API Key</ConsoleNavLink>
+					<ConsoleNavLink to="/team">팀 계정</ConsoleNavLink>
+				</nav>
 			</header>
 			<main className="mx-auto max-w-4xl px-6 py-6">{children}</main>
 		</div>
+	)
+}
+
+/** 현재 경로면 강조한다. `end`를 줘서 "/"가 하위 경로에서도 활성으로 남지 않게 한다. */
+function ConsoleNavLink({ to, children }: { to: string; children: ReactNode }) {
+	return (
+		<NavLink
+			to={to}
+			end
+			className={({ isActive }) =>
+				`rounded-md px-2.5 py-1.5 text-sm transition-colors ${
+					isActive ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground hover:text-foreground'
+				}`
+			}
+		>
+			{children}
+		</NavLink>
 	)
 }

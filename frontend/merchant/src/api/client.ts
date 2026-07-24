@@ -1,7 +1,12 @@
 import type {
+	AcceptInvitationRequest,
+	AcceptInvitationResponse,
+	InviteSubAccountRequest,
+	InviteSubAccountResponse,
 	IssueApiKeyRequest,
 	IssueApiKeyResponse,
 	ListApiKeysResponse,
+	ListMerchantUsersResponse,
 	LoginRequest,
 	LoginResponse,
 	MeResponse,
@@ -138,4 +143,21 @@ export const merchantApi = {
 
 	revokeApiKey: (merchantApiKeyId: string) =>
 		request<RevokeApiKeyResponse>(`/merchant/api-keys/${encodeURIComponent(merchantApiKeyId)}`, { method: 'DELETE' }),
+
+	listMerchantUsers: () => request<ListMerchantUsersResponse>('/merchant/merchant-users'),
+
+	inviteSubAccount: (body: InviteSubAccountRequest) =>
+		request<InviteSubAccountResponse>('/merchant/merchant-users', { method: 'POST', body: JSON.stringify(body) }),
+
+	/**
+	 * 초대 수락(계정 활성화). **비인증 경로이고 백엔드가 CSRF 예외로 두고 있다** —
+	 * 자격증명이 세션 쿠키가 아니라 본문의 초대 Token 자체이기 때문이다
+	 * (`docs/architecture/merchant-console-api.md` 2절). `request()`가 POST에 CSRF
+	 * 헤더를 실어 보내지만 서버가 무시하므로 특별히 분기하지 않는다.
+	 */
+	acceptInvitation: (body: AcceptInvitationRequest) =>
+		request<AcceptInvitationResponse>('/merchant/account-invitations/accept', {
+			method: 'POST',
+			body: JSON.stringify(body),
+		}),
 }

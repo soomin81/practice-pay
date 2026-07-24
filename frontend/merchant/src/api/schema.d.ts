@@ -88,6 +88,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/merchant/merchant-users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 가맹점 사용자 목록 조회
+         * @description OWNER/ADMIN만 조회할 수 있다. 자신의 가맹점 명부만 나온다 — 누가 소속돼 있고 누가 아직 INVITED로 남아 있는지 확인한다. 비밀번호 해시는 담기지 않는다.
+         */
+        get: operations["merchant-list-merchant-users"];
+        put?: never;
+        /**
+         * 하위 계정 발급(초대)
+         * @description OWNER/ADMIN이 같은 가맹점의 ADMIN/VIEWER 하위 계정을 INVITED 상태로 만든다. merchantId는 받지 않는다 — 항상 호출자 자신의 가맹점에 만들어진다(멀티테넌시 방어). OWNER는 이 경로로 만들 수 없다. invitationToken은 이 응답에서만 원문으로 보이므로 대상자에게 즉시 전달해야 한다.
+         */
+        post: operations["merchant-invite-sub-account"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merchant/account-invitations/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 초대 수락(계정 활성화)
+         * @description 초대받은 사람이 Token과 새 비밀번호로 계정을 INVITED → ACTIVE로 활성화한다. 인증이 필요 없고, **CSRF 토큰도 요구하지 않는다** — 자격증명이 세션 쿠키가 아니라 본문의 초대 Token 자체라 CSRF가 막으려는 상황이 성립하지 않는다(merchant-console-api.md 2절).
+         */
+        post: operations["merchant-accept-invitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/merchant/api-keys/{merchantApiKeyId}": {
         parameters: {
             query?: never;
@@ -129,29 +173,23 @@ export interface components {
             /** @description 식별·화면 표시용 Prefix */
             keyPrefix: string;
         };
-        /** ListMerchantApiKeysResponse */
-        ListMerchantApiKeysResponse: {
-            /** @description 발급된 API Key 요약 배열 */
-            apiKeys: {
-                /** @description 발급 시각(UTC) */
-                createdAt: string;
-                /** @description 발급 환경 */
-                environment: string;
-                /** @description 마지막 사용 시각(UTC). 사용 전에는 null. */
-                lastUsedAt?: string | null;
-                /** @description Key 이름 */
-                keyName: string;
-                /** @description 허용 Scope 배열 */
-                scopes: (Record<string, never> | boolean | string | number)[];
-                /** @description API Key 식별자 */
-                merchantApiKeyId: string;
-                /** @description 폐기 시각(UTC). ACTIVE면 null. */
-                revokedAt?: string | null;
-                /** @description 식별·화면 표시용 Prefix */
-                keyPrefix: string;
-                /** @description ACTIVE | REVOKED | EXPIRED */
-                status: string;
-            }[];
+        /** AcceptAccountInvitationRequest */
+        AcceptAccountInvitationRequest: {
+            /** @description 설정할 새 비밀번호 */
+            newPassword: string;
+            /** @description 발급 응답에서 받은 초대 Token 원문 */
+            invitationToken: string;
+        };
+        /** InviteMerchantSubAccountRequest */
+        InviteMerchantSubAccountRequest: {
+            /** @description ADMIN | VIEWER (OWNER 불가) */
+            role: string;
+            /** @description 가맹점 내에서 유일한 로그인 아이디 */
+            loginId: string;
+            /** @description 사용자 이름 */
+            userName: string;
+            /** @description 가맹점 내에서 유일한 이메일 */
+            email: string;
         };
         "merchant-api-keys-merchantApiKeyId-33084672": Record<string, never>;
         /** MerchantMeResponse */
@@ -177,6 +215,76 @@ export interface components {
             merchantUserId: string;
             /** @description 사용자 이름 */
             userName: string;
+        };
+        /** ListMerchantUsersResponse */
+        ListMerchantUsersResponse: {
+            /** @description 가맹점 사용자 요약 배열(최신 생성순) */
+            merchantUsers: {
+                /** @description 생성(초대) 시각(UTC) */
+                createdAt: string;
+                /** @description 마지막 로그인 시각(UTC). 로그인한 적이 없으면 null. */
+                lastLoginAt?: string | null;
+                /** @description OWNER | ADMIN | VIEWER */
+                role: string;
+                /** @description 로그인 아이디 */
+                loginId: string;
+                /** @description 가맹점 사용자 식별자 */
+                merchantUserId: string;
+                /** @description 사용자 이름 */
+                userName: string;
+                /** @description 이메일 */
+                email: string;
+                /** @description INVITED | ACTIVE | LOCKED | SUSPENDED | TERMINATED */
+                status: string;
+            }[];
+        };
+        /** AcceptAccountInvitationResponse */
+        AcceptAccountInvitationResponse: {
+            /** @description 활성화된 계정의 로그인 아이디 */
+            loginId: string;
+            /** @description 활성화 시각(UTC) */
+            activatedAt: string;
+        };
+        /** ListMerchantApiKeysResponse */
+        ListMerchantApiKeysResponse: {
+            /** @description 발급된 API Key 요약 배열 */
+            apiKeys: {
+                /** @description 발급 시각(UTC) */
+                createdAt: string;
+                /** @description 발급 환경 */
+                environment: string;
+                /** @description 마지막 사용 시각(UTC). 사용 전에는 null. */
+                lastUsedAt?: string | null;
+                /** @description Key 이름 */
+                keyName: string;
+                /** @description 허용 Scope 배열 */
+                scopes: (Record<string, never> | boolean | string | number)[];
+                /** @description API Key 식별자 */
+                merchantApiKeyId: string;
+                /** @description 폐기 시각(UTC). ACTIVE면 null. */
+                revokedAt?: string | null;
+                /** @description 식별·화면 표시용 Prefix */
+                keyPrefix: string;
+                /** @description ACTIVE | REVOKED | EXPIRED */
+                status: string;
+            }[];
+        };
+        /** InviteMerchantSubAccountResponse */
+        InviteMerchantSubAccountResponse: {
+            /** @description 부여된 역할 */
+            role: string;
+            /** @description 로그인 아이디 */
+            loginId: string;
+            /** @description 초대 만료 시각(UTC) */
+            invitationExpiresAt: string;
+            /** @description 생성된 가맹점 사용자 식별자 */
+            merchantUserId: string;
+            /** @description 초대 Token 원문. 최초 1회만 노출된다. */
+            invitationToken: string;
+            /** @description 사용자 이름 */
+            userName: string;
+            /** @description 이메일 */
+            email: string;
         };
         /** IssueMerchantApiKeyRequest */
         IssueMerchantApiKeyRequest: {
@@ -316,6 +424,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MerchantMeResponse"];
+                };
+            };
+        };
+    };
+    "merchant-list-merchant-users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 200 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListMerchantUsersResponse"];
+                };
+            };
+        };
+    };
+    "merchant-invite-sub-account": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json;charset=UTF-8": components["schemas"]["InviteMerchantSubAccountRequest"];
+            };
+        };
+        responses: {
+            /** @description 201 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteMerchantSubAccountResponse"];
+                };
+            };
+        };
+    };
+    "merchant-accept-invitation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json;charset=UTF-8": components["schemas"]["AcceptAccountInvitationRequest"];
+            };
+        };
+        responses: {
+            /** @description 200 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcceptAccountInvitationResponse"];
                 };
             };
         };

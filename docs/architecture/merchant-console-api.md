@@ -62,15 +62,33 @@
 | `GET /merchant/api-keys` | OWNER/ADMIN | — | 200 목록 | 401, 403(VIEWER) |
 | `POST /merchant/api-keys` | OWNER/ADMIN | 필요 | 201 발급(rawApiKey 1회) | 400 검증, 401, 403 |
 | `DELETE /merchant/api-keys/{id}` | OWNER/ADMIN | 필요 | 200 폐기 | 401, 403, 404 없음 |
+| `GET /merchant/merchant-users` | OWNER/ADMIN | — | 200 명부 | 401, 403(VIEWER) |
+| `POST /merchant/merchant-users` | OWNER/ADMIN | 필요 | 201 초대(invitationToken 1회) | 400 검증, 401, 403, 409 중복 |
+| `POST /merchant/account-invitations/accept` | **공개** | **불필요**(2절) | 200 활성화 | 400 유효하지 않거나 만료된 초대 |
 
 - **`rawApiKey`는 발급 응답에서만 원문으로 보인다**(6.4). 목록에는 Secret 관련 필드가
-  아예 담기지 않는다.
-- **`VIEWER`의 API Key 목록 조회는 막는다**(403). `docs/`의 "6.6"이 VIEWER를 "제한적
-  또는 불가"로 남겼는데, OWNER/ADMIN 전용 게이트를 그대로 적용했다.
+  아예 담기지 않는다. **`invitationToken`도 같은 규칙**이다 — 초대 발급 응답에서만
+  보이고 DB에는 Hash만 남는다.
+- **`VIEWER`는 API Key 목록도 가맹점 사용자 명부도 조회할 수 없다**(403). `docs/`의
+  "6.6"이 VIEWER를 "제한적 또는 불가"로 남겼는데, 둘 다 OWNER/ADMIN 전용 게이트를
+  그대로 적용했다(명부에는 다른 사용자의 이메일과 마지막 로그인 시각이 담긴다).
+- **가맹점 사용자 명부에 `passwordHash`는 담기지 않는다** — jOOQ Projection 단계에서부터
+  조회하지 않는다.
 
-## 5. 다음 슬라이스로 미룬 것
+## 5. 초대 링크
 
-이번 프론트 슬라이스(로그인 → API Key 관리)에는 없지만 백엔드에 이미 구현돼 있다:
+MVP에는 초대 메일 발송이 없다. 그래서 **발급한 OWNER/ADMIN이 초대 링크를 직접
+전달한다** — 콘솔의 발급 성공 화면이 다음 형식의 링크를 1회만 보여준다:
 
-- `POST /merchant/merchant-users` — 하위 계정 발급(OWNER/ADMIN). CSRF 필요.
-- `POST /merchant/account-invitations/accept` — 초대 수락(공개, CSRF 예외 — 2절).
+```
+{콘솔 Origin}/accept-invitation?token={invitationToken}
+```
+
+초대받은 사람이 그 링크에서 비밀번호를 설정하면 계정이 `INVITED → ACTIVE`가 된다.
+활성화 자체는 로그인이 아니므로(세션이 만들어지지 않는다) 화면은 로그인으로 안내한다.
+
+## 6. 다음 슬라이스로 미룬 것
+
+- 하위 계정의 **역할 변경·정지·종료**(백엔드에도 아직 Use Case가 없다 — 도메인
+  메서드 `suspend()`/`terminate()`만 있다).
+- 초대 **재발송·취소**(`AccountInvitation.revoke()`는 도메인에 있다).

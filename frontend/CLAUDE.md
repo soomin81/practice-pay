@@ -9,7 +9,7 @@
 | 디렉토리 | 대상 | 호출하는 백엔드 | 상태 |
 |---|---|---|---|
 | `payment/` | **고객**(Hosted Checkout) | `api-payment` `:8081`의 `/checkout/**` | **구현 중** |
-| `merchant/` | 가맹점 운영자 | `api-merchant` `:8083`의 `/merchant/**` | **구현 중**(로그인 → API Key 관리 슬라이스) |
+| `merchant/` | 가맹점 운영자 | `api-merchant` `:8083`의 `/merchant/**` | **구현 중**(API Key 관리 + 팀 계정·초대) |
 | `admin/` | PG 내부 운영자 | `api-admin` `:8082` | 아직 없음 |
 
 **워크스페이스(pnpm/npm workspaces)를 쓰지 않는다 — 각 앱이 독립 프로젝트다.** 셋이 호출하는 API도 타입도 인증 방식도 전부 달라서 지금 공유할 것이 실질적으로 없다. 진짜 공유될 만한 UI 컴포넌트는 **두 번째 앱을 만들 때 무엇이 겹치는지 드러난 뒤** `frontend/packages/`로 뽑는다. 이 판단은 백엔드의 "지금 실제로 하는 일에만 맞춘다 — 나중에 할 일까지 미리 넣지 않는다"와 같은 원칙이다.
@@ -169,12 +169,32 @@ npm run gen:api        # api-merchant의 openapi3.yaml → src/api/schema.d.ts
 - **오류는 status로 분기한다**(`MerchantApiError`, payment의 `CheckoutApiError` 대응):
   401=미인증(로그아웃), 403=CSRF/권한, 409=중복 등. **`me()`는 401을 오류가 아니라
   `null`(로그아웃)로 바꿔 돌려준다** — App이 그 `null`을 보고 로그인 화면을 그린다.
-- **라우터는 두지 않는다.** 로그인/콘솔 2뷰는 `useMe()` 결과로 조건부 렌더링한다
-  (payment가 단일 화면이라 라우터를 뺀 판단과 같은 결). 다음 슬라이스에서 페이지가
-  늘면 그때 react-router를 도입한다.
 - **rawApiKey는 발급 응답에서만 보인다** — `IssueApiKeyForm`이 발급 직후 그 값을 크게
   경고와 함께 노출하고, "확인했습니다"를 누르면 다시 볼 수 없다(계약 6.4). 폐기 확인은
   브라우저 `confirm()`이 아니라 인라인 확인으로 한다(모달 dialog는 안 넣었다).
+
+### 라우터 — 초대 수락이 인증 게이트 밖에 있다
+
+2번째 슬라이스(팀 계정)에서 **react-router를 도입했다.** 페이지가 둘 이상이 된 것도
+이유지만, 결정적인 것은 **초대 수락 페이지가 비인증 상태에서 별도 URL로 도달해야
+한다**는 것이다 — 조건부 렌더링으로는 표현할 수 없다.
+
+| 경로 | 인증 | 내용 |
+|---|---|---|
+| `/accept-invitation?token=…` | **비인증(공개)** | 초대 수락. 초대받은 사람은 아직 로그인할 수 없다 |
+| `/` | 필요 | API Key 관리 |
+| `/team` | 필요 | 팀 계정(명부 + 초대 발급) |
+
+- **`App.tsx`에서 `/accept-invitation`을 인증 게이트보다 먼저 매칭시킨다.** 이 순서가
+  깨지면 초대 링크가 로그인 화면으로 튕겨 활성화 흐름 자체가 성립하지 않는다 —
+  이 슬라이스에서 가장 깨지기 쉬운 지점이라 **`src/routing.test.tsx`가 회귀로 지킨다.**
+- 테스트는 `test-utils.tsx`의 `renderWithRouter(ui, { route })`로 시작 경로(쿼리스트링
+  포함)를 정한다. `MemoryRouter`라 실제 주소창과 무관하다.
+- **초대 토큰도 1회 노출 규칙이다**(rawApiKey와 같다). 다만 `InviteSubAccountForm`은
+  토큰 문자열이 아니라 **바로 쓸 수 있는 초대 링크**(`{origin}/accept-invitation?token=…`)를
+  보여준다 — MVP에 초대 메일 발송이 없어서 발급한 사람이 직접 전달해야 하기 때문이다.
+- **역할 선택지에 `OWNER`가 없다**(`INVITABLE_ROLES`) — 하위 계정 발급으로는 OWNER를
+  만들 수 없다는 도메인 규칙이 화면에도 그대로 반영된다.
 
 ## 현재 상태와 다음
 
