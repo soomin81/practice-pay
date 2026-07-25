@@ -115,6 +115,21 @@ class IssueInternalUserUseCaseTest :
 			}
 		}
 
+		test("issuing a SUPER_ADMIN is rejected by the domain") {
+			// docs "3.3": 최초 SUPER_ADMIN은 Bootstrap으로만 생성한다 — InternalUser.invite가
+			// require로 막고, inbound Adapter가 400으로 옮긴다.
+			// findByEmail에 any()를 쓰지 않는다 — MockK가 value class Email의 더미를 만들다
+			// `require(contains("@"))`에 걸린다(기존 테스트들이 구체값을 쓰는 이유).
+			val internalUserRepository = mockk<InternalUserRepository>()
+			every { internalUserRepository.findByLoginId(LOGIN_ID) } returns null
+			every { internalUserRepository.findByEmail(EMAIL) } returns null
+
+			shouldThrow<IllegalArgumentException> {
+				newUseCase(internalUserRepository, mockk())
+					.execute(newCommand().copy(role = InternalUserRole.SUPER_ADMIN))
+			}
+		}
+
 		test("duplicate email throws DuplicateInternalUserException") {
 			val internalUserRepository = mockk<InternalUserRepository>()
 			every { internalUserRepository.findByLoginId(any()) } returns null

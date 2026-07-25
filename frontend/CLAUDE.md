@@ -290,5 +290,6 @@ npm run gen:api        # api-admin의 openapi3.yaml → src/api/schema.d.ts
   호출부에서 어느 쪽인지 보이지 않아 바꿔 쓰기 쉬워진다. 테스트가 "둘이 서로 다른 origin을
   가리킨다"를 고정한다.
 - **발급 폼의 역할 선택지에 `SUPER_ADMIN`이 없다**(`ISSUABLE_INTERNAL_ROLES`) — 최초
-  SUPER_ADMIN은 Bootstrap으로만 만든다는 규정 때문이다. **백엔드는 이 제약을 강제하지
-  않으므로 화면에서만 막는다**(merchant의 OWNER 승격이 도메인에서 막히는 것과 다르다).
+  SUPER_ADMIN은 Bootstrap으로만 만든다는 규정 때문이다. **도메인(`InternalUser.invite`)도
+  같은 제약을 `require`로 갖는다**(merchant의 `OWNER` 승격과 같은 방식) — 화면의 선택지
+  제한은 UX일 뿐이고 실제 방어선은 서버다(직접 호출하면 400).

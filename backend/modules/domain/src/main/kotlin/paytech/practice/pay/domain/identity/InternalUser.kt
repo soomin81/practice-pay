@@ -195,7 +195,14 @@ class InternalUser private constructor(
 				updatedAt = createdAt,
 			)
 
-		/** SUPER_ADMIN이 새 내부 운영자를 `INVITED` 상태로 초대한다. */
+		/**
+		 * SUPER_ADMIN이 새 내부 운영자를 `INVITED` 상태로 초대한다.
+		 *
+		 * **`SUPER_ADMIN`은 이 경로로 만들 수 없다** — `docs/architecture/identity-access-api-key.md`의
+		 * "3.3 발급 정책"이 "최초 `SUPER_ADMIN`은 배포 초기화 명령, 안전한 운영 절차 또는
+		 * 별도 Bootstrap 과정으로 생성한다"고 규정하기 때문이다. 그 경로는 [bootstrap]이다.
+		 * [MerchantUser.inviteSubAccount]가 같은 이유로 `OWNER`를 막는 것과 같은 제약이다.
+		 */
 		fun invite(
 			id: InternalUserId,
 			loginId: LoginId,
@@ -204,8 +211,11 @@ class InternalUser private constructor(
 			role: InternalUserRole,
 			createdByInternalUserId: InternalUserId,
 			createdAt: Instant,
-		): InternalUser =
-			InternalUser(
+		): InternalUser {
+			require(role != InternalUserRole.SUPER_ADMIN) {
+				"초대로는 SUPER_ADMIN을 만들 수 없습니다: bootstrap을 사용하세요."
+			}
+			return InternalUser(
 				id = id,
 				loginId = loginId,
 				email = email,
@@ -224,6 +234,7 @@ class InternalUser private constructor(
 				terminatedAt = null,
 				updatedAt = createdAt,
 			)
+		}
 
 		/** 영속 계층에 저장되어 있던 값으로 Aggregate를 복원한다. */
 		fun reconstitute(

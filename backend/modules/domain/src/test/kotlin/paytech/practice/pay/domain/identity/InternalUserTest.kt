@@ -49,6 +49,22 @@ class InternalUserTest :
 			operator.createdByInternalUserId shouldBe InternalUserId("iu_test_001")
 		}
 
+		test("invite cannot create a SUPER_ADMIN") {
+			// docs "3.3 발급 정책": 최초 SUPER_ADMIN은 Bootstrap으로만 생성한다.
+			// MerchantUser.inviteSubAccount가 OWNER를 막는 것과 같은 제약이다.
+			shouldThrow<IllegalArgumentException> {
+				InternalUser.invite(
+					id = InternalUserId("iu_test_009"),
+					loginId = LoginId("another-super-admin"),
+					email = Email("another@example.com"),
+					userName = "또 다른 관리자",
+					role = InternalUserRole.SUPER_ADMIN,
+					createdByInternalUserId = InternalUserId("iu_test_001"),
+					createdAt = CREATED_AT,
+				)
+			}
+		}
+
 		test("activate moves INVITED to ACTIVE and sets the password hash") {
 			val operator = invitedOperator()
 			val activatedAt = CREATED_AT.plusSeconds(1)

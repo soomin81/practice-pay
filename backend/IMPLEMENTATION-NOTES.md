@@ -347,8 +347,11 @@
 - **OpenAPI 스펙이 5개 → 8개가 됐다**: 목록·발급에 더해 `POST /admin/account-invitations/accept`도 이번에 문서화했다(1차에서 빠뜨렸는데 프론트가 실제로 호출한다).
 - **실물 검증(`bootRun` + curl)**: 발급 → 명부에 `INVITED` → 수락 → 새 계정으로 로그인 → 명부에서 `ACTIVE` + `lastLoginAt` 채워짐까지 확인했고, **핵심 인가**로 같은 `OPERATOR` 세션이 `GET /admin/internal-users` **403**, `GET /admin/merchants` **200**, `POST /admin/internal-users` **403**을 받는 것을 확인했다(두 경로의 메서드 스코핑이 의도대로 갈리는지). 검증 계정은 정리했다.
 
-### 알려진 gap: `SUPER_ADMIN` 발급을 백엔드가 막지 않는다
+### `SUPER_ADMIN` 발급 금지를 도메인으로 내렸다
 
-`IssueInternalUserUseCase`는 `role`을 그대로 받아서 **`SUPER_ADMIN`도 발급할 수 있다.** `docs/`의 "3.3"은 "최초 SUPER_ADMIN은 배포 초기화 명령, 안전한 운영 절차 또는 별도 Bootstrap 과정으로 생성한다"고 규정하지만 그 제약이 코드에 없다 — 가맹점 쪽에서 `MerchantUser.inviteSubAccount`가 `require(role != OWNER)`로 도메인에서 막는 것과 대비된다.
+처음에는 **프론트에서만** 선택지를 제한했다(`ISSUABLE_INTERNAL_ROLES` = OPERATOR/VIEWER) — `IssueInternalUserUseCase`가 `role`을 그대로 넘겨서 API를 직접 호출하면 `SUPER_ADMIN`을 만들 수 있었다. `docs/`의 "3.3"이 "최초 SUPER_ADMIN은 배포 초기화 명령, 안전한 운영 절차 또는 별도 Bootstrap 과정으로 생성한다"고 규정하는데 그 제약이 코드 어디에도 없던 것이다.
 
-지금은 **프론트에서만 선택지를 제한했다**(`ISSUABLE_INTERNAL_ROLES` = OPERATOR/VIEWER). API를 직접 호출하면 여전히 SUPER_ADMIN을 만들 수 있으므로, 도메인(`InternalUser.invite`)에 같은 `require`를 넣는 것이 옳다 — 이번 슬라이스 범위를 넘어 별도로 다룬다.
+바로 이어서 **`InternalUser.invite`에 `require(role != SUPER_ADMIN)`을 넣어 닫았다** — `MerchantUser.inviteSubAccount`가 같은 이유로 `OWNER`를 막는 것과 정확히 같은 제약이고, 화면이 아니라 도메인이 규칙의 주인이어야 한다는 이 저장소의 원칙에 맞다. `IllegalArgumentException`은 `AdminApiExceptionHandler`의 기존 매핑이 400으로 옮긴다(새 예외 타입이 필요 없었다).
+
+- **막는 층을 셋 다 테스트로 고정했다**: 도메인(`InternalUserTest`), Use Case(`IssueInternalUserUseCaseTest`), 컨트롤러 400 매핑(`InternalUserControllerTest`). 프론트의 선택지 제한은 UX로 남기고, 실제 방어선은 도메인이다.
+- **MockK 함정 하나**: `every { repository.findByEmail(any()) }`처럼 value class 파라미터에 `any()`를 쓰면 MockK가 더미 인스턴스를 만들다 `Email`의 `require(contains("@"))`에 걸려 `InvocationTargetException`으로 죽는다. 이 파일의 다른 테스트들이 구체값(`EMAIL`)을 쓰고 있던 이유이기도 하다 — **`init { require(...) }`를 가진 value class에는 `any()`를 쓰지 않는다.**

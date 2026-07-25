@@ -284,7 +284,8 @@ class AdminApiDocumentationTest : FunSpec() {
 							fieldWithPath("loginId").description("전 시스템에서 유일한 로그인 아이디"),
 							fieldWithPath("email").description("전 시스템에서 유일한 이메일"),
 							fieldWithPath("userName").description("사용자 이름"),
-							fieldWithPath("role").description("OPERATOR | VIEWER (최초 SUPER_ADMIN은 Bootstrap으로만 생성)"),
+							fieldWithPath("role")
+								.description("OPERATOR | VIEWER. **SUPER_ADMIN을 보내면 400이다** — 최초 SUPER_ADMIN은 Bootstrap으로만 생성한다."),
 						),
 					responseSchema = "IssueInternalUserResponse",
 					responseFields =

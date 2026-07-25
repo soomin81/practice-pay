@@ -241,17 +241,6 @@ export interface components {
             /** @description 내부 운영자 로그인 아이디 */
             loginId: string;
         };
-        /** IssueInternalUserRequest */
-        IssueInternalUserRequest: {
-            /** @description OPERATOR | VIEWER (최초 SUPER_ADMIN은 Bootstrap으로만 생성) */
-            role: string;
-            /** @description 전 시스템에서 유일한 로그인 아이디 */
-            loginId: string;
-            /** @description 사용자 이름 */
-            userName: string;
-            /** @description 전 시스템에서 유일한 이메일 */
-            email: string;
-        };
         /** AcceptAccountInvitationResponse */
         AcceptAccountInvitationResponse: {
             /** @description 활성화된 계정의 로그인 아이디 */
@@ -277,6 +266,17 @@ export interface components {
             ownerEmail: string;
             /** @description 가맹점 이름 */
             merchantName: string;
+        };
+        /** IssueInternalUserRequest */
+        IssueInternalUserRequest: {
+            /** @description OPERATOR | VIEWER. **SUPER_ADMIN을 보내면 400이다** — 최초 SUPER_ADMIN은 Bootstrap으로만 생성한다. */
+            role: string;
+            /** @description 전 시스템에서 유일한 로그인 아이디 */
+            loginId: string;
+            /** @description 사용자 이름 */
+            userName: string;
+            /** @description 전 시스템에서 유일한 이메일 */
+            email: string;
         };
     };
     responses: never;

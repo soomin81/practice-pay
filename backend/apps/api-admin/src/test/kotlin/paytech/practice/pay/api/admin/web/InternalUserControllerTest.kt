@@ -188,6 +188,21 @@ class InternalUserControllerTest : FunSpec() {
 			result.response.status shouldBeIn listOf(401, 403)
 		}
 
+		test("attempting to issue a SUPER_ADMIN returns 400 (domain require failure)") {
+			// 프론트가 선택지에서 빼는 것과 별개로 API를 직접 호출해도 막혀야 한다.
+			every { issueInternalUserUseCase.execute(any()) } throws
+				IllegalArgumentException("초대로는 SUPER_ADMIN을 만들 수 없습니다: bootstrap을 사용하세요.")
+
+			mockMvc
+				.perform(
+					post("/admin/internal-users")
+						.with(csrf())
+						.with(authenticatedAs(ISSUER))
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsString(validRequest().copy(role = "SUPER_ADMIN"))),
+				).andExpect(status().isBadRequest)
+		}
+
 		test("DuplicateInternalUserException from the use case returns 409") {
 			every { issueInternalUserUseCase.execute(any()) } throws DuplicateInternalUserException("로그인 아이디가 이미 사용 중입니다.")
 

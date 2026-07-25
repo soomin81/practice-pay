@@ -47,7 +47,7 @@ PG 내부 운영자용 콘솔(브라우저 SPA, `frontend/admin`)이 호출하�
 | `GET /admin/merchants` | **내부 운영자 전원**(VIEWER 포함) | — | 200 목록 | 401 |
 | `POST /admin/merchants` | SUPER_ADMIN/OPERATOR | 필요 | 201 가맹점 + OWNER 초대 Token(1회) | 400 검증, 401, 403, 409 중복 |
 | `GET /admin/internal-users` | **SUPER_ADMIN만** | — | 200 명부 | 401, 403 |
-| `POST /admin/internal-users` | **SUPER_ADMIN만** | 필요 | 201 계정 + 초대 Token(1회) | 400, 401, 403, 409 중복 |
+| `POST /admin/internal-users` | **SUPER_ADMIN만** | 필요 | 201 계정 + 초대 Token(1회) | **400 `role=SUPER_ADMIN`**, 400 검증, 401, 403, 409 중복 |
 | `POST /admin/account-invitations/accept` | **공개** | **불필요**(2절) | 200 활성화 | 400 유효하지 않거나 만료된 초대 |
 
 - **두 경로의 메서드 스코핑이 정반대다 — 의도적이다.**
@@ -59,6 +59,9 @@ PG 내부 운영자용 콘솔(브라우저 SPA, `frontend/admin`)이 호출하�
   - `bootRun`으로 같은 `OPERATOR` 세션이 `GET /admin/merchants` 200,
     `GET /admin/internal-users` 403을 받는 것을 확인했다.
 - **초대 Token은 발급 응답에서만 원문으로 보인다**(DB에는 Hash만 남는다).
+- **`SUPER_ADMIN`은 초대로 만들 수 없다**(400) — "3.3"이 최초 SUPER_ADMIN을 Bootstrap
+  경로로만 만들도록 규정한다. 도메인 `InternalUser.invite`가 막으므로 API를 직접 호출해도
+  통하지 않는다(가맹점 쪽에서 `OWNER`를 막는 것과 같은 방식).
 
 ## 5. 초대 링크가 **두 종류**다 — 가리키는 콘솔이 다르다
 
