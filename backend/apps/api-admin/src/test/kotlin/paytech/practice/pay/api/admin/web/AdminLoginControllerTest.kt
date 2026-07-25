@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest
 import org.springframework.context.annotation.Import
 import org.springframework.http.MediaType
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
@@ -52,6 +53,7 @@ class AdminLoginControllerTest : FunSpec() {
 			mockMvc
 				.perform(
 					post("/admin/login")
+						.with(csrf())
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(objectMapper.writeValueAsString(validRequest())),
 				).andExpect(status().isOk)
@@ -63,6 +65,7 @@ class AdminLoginControllerTest : FunSpec() {
 			mockMvc
 				.perform(
 					post("/admin/login")
+						.with(csrf())
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(objectMapper.writeValueAsString(validRequest().copy(password = ""))),
 				).andExpect(status().isBadRequest)
@@ -74,6 +77,7 @@ class AdminLoginControllerTest : FunSpec() {
 			mockMvc
 				.perform(
 					post("/admin/login")
+						.with(csrf())
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(objectMapper.writeValueAsString(validRequest())),
 				).andExpect(status().isUnauthorized)
@@ -85,6 +89,7 @@ class AdminLoginControllerTest : FunSpec() {
 			mockMvc
 				.perform(
 					post("/admin/login")
+						.with(csrf())
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(objectMapper.writeValueAsString(validRequest())),
 				).andExpect(status().isUnauthorized)

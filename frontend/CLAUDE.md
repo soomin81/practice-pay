@@ -10,7 +10,7 @@
 |---|---|---|---|
 | `payment/` | **고객**(Hosted Checkout) | `api-payment` `:8081`의 `/checkout/**` | **구현 중** |
 | `merchant/` | 가맹점 운영자 | `api-merchant` `:8083`의 `/merchant/**` | **구현 중**(API Key 관리 + 팀 계정·초대) |
-| `admin/` | PG 내부 운영자 | `api-admin` `:8082` | 아직 없음 |
+| `admin/` | PG 내부 운영자 | `api-admin` `:8082`의 `/admin/**` | **구현 중**(로그인 → 가맹점 목록·등록) |
 
 **워크스페이스(pnpm/npm workspaces)를 쓰지 않는다 — 각 앱이 독립 프로젝트다.** 셋이 호출하는 API도 타입도 인증 방식도 전부 달라서 지금 공유할 것이 실질적으로 없다. 진짜 공유될 만한 UI 컴포넌트는 **두 번째 앱을 만들 때 무엇이 겹치는지 드러난 뒤** `frontend/packages/`로 뽑는다. 이 판단은 백엔드의 "지금 실제로 하는 일에만 맞춘다 — 나중에 할 일까지 미리 넣지 않는다"와 같은 원칙이다.
 
@@ -238,3 +238,34 @@ npm run gen:api        # api-merchant의 openapi3.yaml → src/api/schema.d.ts
   - **지갑 흐름 전체.** MetaMask 확장과 Base Sepolia 테스트넷 USDC가 있어야 한다. 타입 검사·가드 테스트·번들까지는 확인했지만 **연결·서명·전송을 실제로 돌려본 적이 없다.** 백엔드와 같은 규율로 실물 수동 검증이 최종 확인이다.
   - **Tailwind 전환 후의 화면.** 빌드·테스트·클래스 생성까지는 확인했지만 브라우저에서 렌더된 모습은 보지 못했다(작업 당시 브라우저 자동화 확장 미연결). `npm run dev`로 각 상태 화면을 한 번 훑는 것이 좋다.
 - 명령어는 위 "실행" 절 참고. 프로젝트가 더 생기면 이 문서에 앱별 절을 나눈다.
+
+## 앱: admin (내부 운영자 콘솔) — merchant와 다른 점만
+
+`frontend/admin`은 `frontend/merchant`를 그대로 미러링했다(같은 스택·같은 세션 쿠키
+클라이언트 구조·같은 라우터). 계약 기준 문서는
+[`docs/architecture/admin-console-api.md`](../docs/architecture/admin-console-api.md)다.
+
+```
+cd frontend/admin
+npm install
+npm run dev            # http://localhost:5175  (payment 5173, merchant 5174와 겹치지 않게)
+npm test / npm run build / npm run lint
+npm run gen:api        # api-admin의 openapi3.yaml → src/api/schema.d.ts
+```
+
+- **로그인에 `merchantCode`가 없다** — 내부 운영자는 특정 가맹점에 속하지 않는다.
+- **`VIEWER`에게는 가맹점 등록 폼을 아예 그리지 않는다**(`canRegisterMerchant`). 서버도
+  403으로 막지만(SecurityConfig의 메서드 스코핑) 누를 수 있게 두고 거부하는 것보다 낫다.
+  `GET`은 VIEWER도 허용되므로 목록은 보인다.
+
+### 초대 링크가 **다른 콘솔**을 가리킨다 — 이 앱에서 가장 틀리기 쉬운 지점
+
+가맹점을 등록하면 최초 OWNER의 초대 Token이 나오는데, 그 사람이 활성화할 곳은 이 콘솔이
+아니라 **가맹점 콘솔**(`frontend/merchant`)의 `/accept-invitation`이다. 그래서 merchant
+앱처럼 `window.location.origin`을 쓸 수 없다:
+
+- `console/format.ts`의 **`merchantInvitationUrlFor()`**가 `VITE_MERCHANT_CONSOLE_URL`
+  (기본 `http://localhost:5174`)로 링크를 만든다. 운영에서 콘솔 도메인이 갈리면 이 값만 바꾼다.
+- 자기 origin을 쓰면 **상대가 열 수 없는 링크**가 되는데 화면상으로는 멀쩡해 보인다 —
+  `console.test.tsx`가 "링크가 5174를 가리키고 현재 origin을 포함하지 않는다"를 회귀로 지킨다.
+- 등록 성공 문구에도 "가맹점 콘솔 링크"임을 적어 운영자가 착각하지 않게 한다.

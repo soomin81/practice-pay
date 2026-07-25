@@ -12,6 +12,7 @@ import org.springframework.http.MediaType
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
@@ -96,6 +97,7 @@ class MerchantControllerTest : FunSpec() {
 			mockMvc
 				.perform(
 					post("/admin/merchants")
+						.with(csrf())
 						.with(authenticatedAs(SUPER_ADMIN))
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(objectMapper.writeValueAsString(validRequest())),
@@ -121,6 +123,7 @@ class MerchantControllerTest : FunSpec() {
 			mockMvc
 				.perform(
 					post("/admin/merchants")
+						.with(csrf())
 						.with(authenticatedAs(OPERATOR))
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(objectMapper.writeValueAsString(validRequest())),
@@ -132,6 +135,7 @@ class MerchantControllerTest : FunSpec() {
 				mockMvc
 					.perform(
 						post("/admin/merchants")
+							.with(csrf())
 							.contentType(MediaType.APPLICATION_JSON)
 							.content(objectMapper.writeValueAsString(validRequest())),
 					).andReturn()
@@ -143,6 +147,7 @@ class MerchantControllerTest : FunSpec() {
 			mockMvc
 				.perform(
 					post("/admin/merchants")
+						.with(csrf())
 						.with(authenticatedAs(VIEWER))
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(objectMapper.writeValueAsString(validRequest())),
@@ -153,6 +158,7 @@ class MerchantControllerTest : FunSpec() {
 			mockMvc
 				.perform(
 					post("/admin/merchants")
+						.with(csrf())
 						.with(authenticatedAs(SUPER_ADMIN))
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(objectMapper.writeValueAsString(validRequest().copy(merchantCode = ""))),
@@ -163,6 +169,7 @@ class MerchantControllerTest : FunSpec() {
 			mockMvc
 				.perform(
 					post("/admin/merchants")
+						.with(csrf())
 						.with(authenticatedAs(SUPER_ADMIN))
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(objectMapper.writeValueAsString(validRequest().copy(webhookUrl = "not-a-url"))),
@@ -175,6 +182,7 @@ class MerchantControllerTest : FunSpec() {
 			mockMvc
 				.perform(
 					post("/admin/merchants")
+						.with(csrf())
 						.with(authenticatedAs(SUPER_ADMIN))
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(objectMapper.writeValueAsString(validRequest())),

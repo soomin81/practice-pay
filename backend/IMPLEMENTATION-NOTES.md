@@ -311,3 +311,27 @@
 - **만료 처리에는 배치가 없다.** `AcceptAccountInvitationUseCase`가 수락 시점에 `expiresAt`을 검사할 뿐 상태는 `PENDING`으로 남는다(`AccountInvitation.expire()`는 호출부가 없다). 그래서 화면이 `pendingInvitationExpiresAt`을 현재와 비교해 "만료됨"을 판단한다 — 알려진 gap이며, 정리 배치는 다음 범위로 미뤘다(`docs/architecture/merchant-console-api.md`의 7절).
 - **실물 검증(`bootRun` + curl)에서 확인한 것**: 초대 발급(토큰 A) → 재발송(토큰 B) → **토큰 A 수락 400 / 토큰 B 수락 200**(토큰 교체가 이 슬라이스의 핵심이라 반드시 실물로 봤다), 취소 후 그 토큰 수락 400, 취소 후에도 계정이 `INVITED`이고 `pendingInvitationExpiresAt`이 `null`인 것(취소≠종료 판단의 실증), 취소된 계정을 재발송으로 복구 후 수락 200, 이미 `ACTIVE`인 계정 재발송 409, 취소할 초대 없는데 취소 409, 활성 VIEWER의 두 액션 403.
   - **셸 함정 하나 더**: Git Bash에서 `UID`는 읽기 전용 예약 변수라 `UID=$(...)`가 조용히 실패하고 셸의 UID(숫자)가 그대로 URL에 들어간다 — 백엔드가 "MerchantUser(197609)를 찾을 수 없습니다"로 응답해서 서버 버그로 오인하기 쉽다. 검증 스크립트에서는 `MUID` 같은 다른 이름을 쓴다(한글 본문 UTF-8 함정과 같은 계열).
+
+## 내부 운영자 콘솔 준비물(`apps:api-admin`의 CORS/CSRF·세션 복원·OpenAPI)
+
+`frontend/admin`이 붙으면서 `api-merchant`에서 검증된 레시피를 그대로 옮겼다 — **새 판단을 만들지 않았다.** 레시피 자체의 근거(Spring Security 6의 지연 토큰 로딩, BREACH 핸들러 선택, 401 엔트리포인트가 필요한 이유)는 위 "가맹점 콘솔 CORS/CSRF" 절에 있고, 여기는 이 앱에서만 다른 점만 남긴다.
+
+- **`CsrfCookieFilter`를 복제했다, 공유하지 않았다.** 앱은 서로를 모르는 독립 배포 단위라(`backend/CLAUDE.md`의 Apps 절) 클래스를 공유할 자리가 없다 — 공유하려면 `modules:*`로 내려야 하는데, 그건 Spring Security 필터라 헥사고날 계층 어디에도 맞지 않는다(도메인도 애플리케이션도 아니고, inbound Adapter의 일부다). 30줄짜리 필터를 두 앱에 두는 편이 계층을 흐리는 것보다 낫다고 판단했고, 양쪽 KDoc에 "같은 이유·같은 코드"임을 명시해 한쪽만 고치는 일을 막았다.
+- **기존 인가 규칙을 건드리지 않았다.** 특히 `POST /admin/merchants`의 `HttpMethod` 스코핑(=`GET`은 `VIEWER`도 허용)은 `VIEWER`가 "조회 전용"이라는 정의를 지키는 장치라, CSRF/CORS를 얹으면서 실수로 넓히거나 좁히지 않도록 주의했다. `bootRun`으로 `VIEWER`가 `GET` 200 / `POST` 403 / `POST /admin/internal-users` 403을 받는 것을 다시 확인했다(`api-merchant`에서 와일드카드를 넓혀야 했던 것과 달리 여기서는 **바꿀 이유가 없었다** — 새 경로 `/admin/me`·`/admin/logout`은 `anyRequest, authenticated`가 덮는다).
+- **OpenAPI 스펙을 이 앱에도 신설했다**(5개 오퍼레이션: login·me·logout·merchants 목록/등록). 이로써 세 웹 API 앱이 전부 같은 방식으로 프론트에 타입을 공급한다.
+
+### 실물 검증 — 두 앱을 잇는 흐름을 처음으로 증명했다
+
+이 슬라이스의 핵심 검증은 **admin에서 만든 초대가 merchant에서 통하는지**였다:
+
+1. `GET /admin/me` 미인증 → 401 + `XSRF-TOKEN` 쿠키
+2. CORS: 5175 허용(credentials 포함), 5174(가맹점 콘솔)는 403 — Origin을 정확히 좁혔다는 증거
+3. CSRF 없는 `POST /admin/merchants` → 403 / 토큰 실으면 201
+4. **가맹점 등록(:8082) → 받은 토큰으로 `POST /merchant/account-invitations/accept`(:8083) → 새 OWNER로 merchant 로그인 → 자기 가맹점 명부 조회까지 성공**
+5. VIEWER 회귀: `GET /admin/merchants` 200, `POST` 403, `POST /admin/internal-users` 403
+
+4번이 특히 값지다 — 이 왕복이 성공한다는 것은 **두 앱의 `app.invitation-token.pepper`가 실제로 같다**는 뜻이기도 하다(어긋나면 초대를 영영 찾지 못하고, 그때 나오는 예외는 원인을 숨기도록 설계된 `InvalidInvitationException`이라 추적이 매우 어렵다 — `backend/CLAUDE.md`의 "설정과 비밀값"에 적어 둔 위험이 실제로 검증된 셈이다). 검증에 만든 가맹점·계정은 정리했다.
+
+### 프론트에서 조심할 것: 초대 링크가 다른 콘솔을 가리킨다
+
+`POST /admin/merchants`가 돌려주는 `invitationToken`은 **가맹점 OWNER의 것**이라 활성화 화면도 가맹점 콘솔에 있다. `frontend/admin`은 `VITE_MERCHANT_CONSOLE_URL`로 링크를 만들고(`console/format.ts`의 `merchantInvitationUrlFor`), 자기 origin을 쓰면 **상대가 열 수 없는 링크**가 되는데 화면상으로는 멀쩡해 보인다 — 그래서 "링크가 5174를 가리키고 현재 origin을 포함하지 않는다"를 프론트 테스트로 고정했다. 계약 문서(`docs/architecture/admin-console-api.md`의 5절)에도 절로 남겼다.

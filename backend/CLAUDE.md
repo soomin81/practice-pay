@@ -32,7 +32,10 @@ apps/
                      RegisterMerchantUseCase(POST /admin/merchants, SUPER_ADMIN/OPERATOR),
                      ListMerchantsUseCase(GET /admin/merchants, 인증된 내부 사용자 전원 —
                      VIEWER 포함), AcceptAccountInvitationUseCase(POST /admin/account-invitations/accept,
-                     비인증)가 있다(Apps 절 참고).
+                     비인증)가 있다(Apps 절 참고). **브라우저 콘솔(frontend/admin)이 붙으면서
+                     api-merchant와 같은 레시피로 CORS+CSRF를 켰고**(아래 "콘솔 CORS/CSRF" 절),
+                     세션 복원용 GET /admin/me와 POST /admin/logout, openapi3 스펙을 더했다
+                     (계약 문서 docs/architecture/admin-console-api.md).
   api-merchant/      실제 Gradle 서브프로젝트, 독립 배포 가능한 Spring Boot 앱 — webmvc + jooq + security,
                      modules:application + modules:infra-persistence에 의존한다. AuthenticateMerchantUserUseCase
                      (POST /merchant/login), AcceptAccountInvitationUseCase(POST /merchant/account-invitations/accept,
@@ -296,7 +299,7 @@ Use Case·Adapter를 하나씩 구현하며 내린 판단(왜 그 상수를 골�
 - **비슷한 상황의 선례를 찾을 때**: `IMPLEMENTATION-NOTES.md`를 본다. 다만 새 작업을 하려고 그 문서를 통째로 읽을 필요는 없다.
 - **재사용 가능한 규칙이 나오면 이 문서에 쓴다** — 기능별 기록 쪽에 묻어두지 않는다.
 
-## 가맹점 콘솔 CORS/CSRF(`apps:api-merchant` — 세션 쿠키 SPA)
+## 콘솔 CORS/CSRF(`apps:api-merchant`·`apps:api-admin` — 세션 쿠키 SPA)
 
 `api-merchant`는 **브라우저 프론트엔드가 붙는 첫 앱**이라, 그동안 "실제 프론트엔드가
 붙기 전에 반드시 켜야 한다"고 미뤄 뒀던 CORS/CSRF를 실제로 켰다. 이건 세션 쿠키 인증을
@@ -317,18 +320,27 @@ Use Case·Adapter를 하나씩 구현하며 내린 판단(왜 그 상수를 골�
   요청에 `.with(csrf())`를 더한다(SecurityMockMvcRequestPostProcessors). 단
   `/merchant/account-invitations/accept`는 CSRF 예외라(공개+본문 Token이 자격증명) 그
   테스트는 그대로 둔다.
-- 브라우저 대면 계약 전체는 `docs/architecture/merchant-console-api.md`다.
+- 브라우저 대면 계약 전체는 `docs/architecture/merchant-console-api.md`(가맹점)와
+  `docs/architecture/admin-console-api.md`(내부 운영자)다.
+- **`apps:api-admin`도 같은 레시피를 그대로 쓴다**(허용 Origin은 `app.admin-console.allowed-origins`,
+  기본 `http://localhost:5175`; CSRF 예외는 `/admin/account-invitations/accept`).
+  `CsrfCookieFilter`는 두 앱에 **같은 코드로 복제**돼 있다 — 앱은 서로를 모르는 독립 배포
+  단위라 클래스를 공유하지 않는다. **한쪽을 고치면 다른 쪽도 함께 본다.**
+  `api-admin`에서는 기존 인가 규칙(특히 `POST /admin/merchants`의 `HttpMethod` 스코핑 =
+  `GET`은 VIEWER도 허용)을 **건드리지 않았다** — 회귀는 `bootRun`으로 확인했다.
 
-## OpenAPI 스펙 생성(`apps:api-payment`·`apps:api-merchant`의 `openapi3`)
+## OpenAPI 스펙 생성(`apps:api-payment`·`apps:api-merchant`·`apps:api-admin`의 `openapi3`)
 
 프론트엔드가 백엔드 소스를 읽지 않고 작업할 수 있게, **통과한 테스트에서 OpenAPI 스펙을 생성한다.**
-`api-payment`(체크아웃 API, frontend/payment)와 `api-merchant`(콘솔 API, frontend/merchant)
-**둘 다** REST Docs 기반으로 스펙을 만든다 — 아래는 api-payment 기준이고, api-merchant도
-같은 플러그인·같은 함정 처리(`MerchantApiDocumentationTest`, `apps/api-merchant/build.gradle.kts`)를 그대로 따른다.
+**세 웹 API 앱 전부** REST Docs 기반으로 스펙을 만든다 — `api-payment`(체크아웃 API,
+frontend/payment), `api-merchant`(가맹점 콘솔, frontend/merchant), `api-admin`(내부 운영자
+콘솔, frontend/admin). 아래 설명은 api-payment 기준이고, 나머지 둘도 같은 플러그인·같은
+함정 처리(`*ApiDocumentationTest`, 각 앱의 `build.gradle.kts`)를 그대로 따른다.
 
 ```
 gradlew.bat :apps:api-payment:openapi3     # → apps/api-payment/build/api-spec/openapi3.yaml
 gradlew.bat :apps:api-merchant:openapi3    # → apps/api-merchant/build/api-spec/openapi3.yaml
+gradlew.bat :apps:api-admin:openapi3       # → apps/api-admin/build/api-spec/openapi3.yaml
 ```
 
 - **애노테이션(springdoc)이 아니라 REST Docs 기반을 골랐다 — 스펙이 거짓말을 할 수 없기 때문이다.** 애노테이션은 실제 응답과 어긋나도 빌드가 통과하지만, 이 방식은 실제로 요청을 보내고 응답을 받아야 스니펫이 나온다. 응답에 없는 필드를 문서화하면 그 자리에서 테스트가 깨진다.

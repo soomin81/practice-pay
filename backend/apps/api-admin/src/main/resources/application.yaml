@@ -17,6 +17,13 @@ server:
   port: 8082
 
 app:
+  admin-console:
+    # 내부 운영자 콘솔(브라우저 SPA)만을 위한 CORS 허용 Origin이다. 세션 쿠키를 교차
+    # 출처로 실어 보내므로 SecurityConfig가 allowCredentials=true로 열고, 그 제약상
+    # 여기에 와일드카드를 쓸 수 없다 — 정확한 Origin만 나열한다. 기본값은 로컬
+    # 프론트엔드 개발 서버(frontend/admin, 포트 5175)를 가리키고, 운영에서는
+    # APP_ADMIN_CONSOLE_ALLOWED_ORIGINS로 덮어쓴다(쉼표로 구분).
+    allowed-origins: ${APP_ADMIN_CONSOLE_ALLOWED_ORIGINS:http://localhost:5175}
   invitation-token:
     # 기본값은 로컬 개발용 평문 placeholder다 — 운영에서는 APP_INVITATION_TOKEN_PEPPER
     # 환경변수로 덮어쓴다(Secret Manager가 주입). 값을 여기 직접 적지 않는다.

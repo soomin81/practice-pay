@@ -12,6 +12,7 @@ import org.springframework.http.MediaType
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
@@ -79,6 +80,7 @@ class InternalUserIssuanceControllerTest : FunSpec() {
 			mockMvc
 				.perform(
 					post("/admin/internal-users")
+						.with(csrf())
 						.with(authenticatedAs(ISSUER))
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(objectMapper.writeValueAsString(validRequest())),
@@ -93,6 +95,7 @@ class InternalUserIssuanceControllerTest : FunSpec() {
 				mockMvc
 					.perform(
 						post("/admin/internal-users")
+							.with(csrf())
 							.contentType(MediaType.APPLICATION_JSON)
 							.content(objectMapper.writeValueAsString(validRequest())),
 					).andReturn()
@@ -106,6 +109,7 @@ class InternalUserIssuanceControllerTest : FunSpec() {
 			mockMvc
 				.perform(
 					post("/admin/internal-users")
+						.with(csrf())
 						.with(authenticatedAs(operator))
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(objectMapper.writeValueAsString(validRequest())),
@@ -116,6 +120,7 @@ class InternalUserIssuanceControllerTest : FunSpec() {
 			mockMvc
 				.perform(
 					post("/admin/internal-users")
+						.with(csrf())
 						.with(authenticatedAs(ISSUER))
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(objectMapper.writeValueAsString(validRequest().copy(loginId = ""))),
@@ -126,6 +131,7 @@ class InternalUserIssuanceControllerTest : FunSpec() {
 			mockMvc
 				.perform(
 					post("/admin/internal-users")
+						.with(csrf())
 						.with(authenticatedAs(ISSUER))
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(objectMapper.writeValueAsString(validRequest().copy(role = "NOT_A_ROLE"))),
@@ -138,6 +144,7 @@ class InternalUserIssuanceControllerTest : FunSpec() {
 			mockMvc
 				.perform(
 					post("/admin/internal-users")
+						.with(csrf())
 						.with(authenticatedAs(ISSUER))
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(objectMapper.writeValueAsString(validRequest())),
