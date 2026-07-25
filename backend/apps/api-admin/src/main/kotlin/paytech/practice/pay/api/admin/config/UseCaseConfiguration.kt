@@ -5,10 +5,12 @@ import org.springframework.context.annotation.Configuration
 import paytech.practice.pay.application.identity.AcceptAccountInvitationUseCase
 import paytech.practice.pay.application.identity.AuthenticateInternalUserUseCase
 import paytech.practice.pay.application.identity.IssueInternalUserUseCase
+import paytech.practice.pay.application.identity.ListInternalUsersUseCase
 import paytech.practice.pay.application.identity.RegisterMerchantUseCase
 import paytech.practice.pay.application.merchant.ListMerchantsUseCase
 import paytech.practice.pay.application.port.outbound.AccountInvitationRepository
 import paytech.practice.pay.application.port.outbound.IdGenerator
+import paytech.practice.pay.application.port.outbound.InternalUserListProjection
 import paytech.practice.pay.application.port.outbound.InternalUserRepository
 import paytech.practice.pay.application.port.outbound.InvitationTokenHasher
 import paytech.practice.pay.application.port.outbound.MerchantListProjection
@@ -101,4 +103,8 @@ class UseCaseConfiguration {
 	@Bean
 	fun listMerchantsUseCase(merchantListProjection: MerchantListProjection): ListMerchantsUseCase =
 		ListMerchantsUseCase(merchantListProjection)
+
+	@Bean
+	fun listInternalUsersUseCase(internalUserListProjection: InternalUserListProjection): ListInternalUsersUseCase =
+		ListInternalUsersUseCase(internalUserListProjection)
 }

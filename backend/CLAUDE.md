@@ -29,6 +29,8 @@ apps/
   api-admin/         실제 Gradle 서브프로젝트, 독립 배포 가능한 Spring Boot 앱 — webmvc + jooq + security,
                      modules:application + modules:infra-persistence에 의존한다. AuthenticateInternalUserUseCase
                      (POST /admin/login), IssueInternalUserUseCase(POST /admin/internal-users, SUPER_ADMIN 전용),
+                     ListInternalUsersUseCase(GET /admin/internal-users — 같은 규칙이 메서드로
+                     좁혀져 있지 않아 GET도 SUPER_ADMIN 전용이다),
                      RegisterMerchantUseCase(POST /admin/merchants, SUPER_ADMIN/OPERATOR),
                      ListMerchantsUseCase(GET /admin/merchants, 인증된 내부 사용자 전원 —
                      VIEWER 포함), AcceptAccountInvitationUseCase(POST /admin/account-invitations/accept,

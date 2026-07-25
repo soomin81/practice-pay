@@ -14,6 +14,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
@@ -22,6 +23,10 @@ import paytech.practice.pay.api.admin.security.InternalUserPrincipal
 import paytech.practice.pay.application.identity.DuplicateInternalUserException
 import paytech.practice.pay.application.identity.IssueInternalUserResult
 import paytech.practice.pay.application.identity.IssueInternalUserUseCase
+import paytech.practice.pay.application.identity.ListInternalUsersResult
+import paytech.practice.pay.application.identity.ListInternalUsersUseCase
+import paytech.practice.pay.application.port.outbound.InternalUserSummary
+import paytech.practice.pay.domain.identity.AccountStatus
 import paytech.practice.pay.domain.identity.Email
 import paytech.practice.pay.domain.identity.InternalUserId
 import paytech.practice.pay.domain.identity.InternalUserRole
@@ -50,9 +55,9 @@ private fun authenticatedAs(principal: InternalUserPrincipal) =
  * 실제 인가 규칙까지 검증할 수 있다(`apps:api-payment`의 `PaymentControllerTest`와
  * 같은 이유).
  */
-@WebMvcTest(InternalUserIssuanceController::class)
+@WebMvcTest(InternalUserController::class)
 @Import(SecurityConfig::class)
-class InternalUserIssuanceControllerTest : FunSpec() {
+class InternalUserControllerTest : FunSpec() {
 	@Autowired
 	lateinit var mockMvc: MockMvc
 
@@ -61,6 +66,9 @@ class InternalUserIssuanceControllerTest : FunSpec() {
 
 	@MockkBean
 	lateinit var issueInternalUserUseCase: IssueInternalUserUseCase
+
+	@MockkBean
+	lateinit var listInternalUsersUseCase: ListInternalUsersUseCase
 
 	init {
 		extensions(SpringExtension)
@@ -136,6 +144,48 @@ class InternalUserIssuanceControllerTest : FunSpec() {
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(objectMapper.writeValueAsString(validRequest().copy(role = "NOT_A_ROLE"))),
 				).andExpect(status().isBadRequest)
+		}
+
+		test("SUPER_ADMIN listing internal users returns 200 with the roster, no password material") {
+			every { listInternalUsersUseCase.execute() } returns
+				ListInternalUsersResult(
+					internalUsers =
+						listOf(
+							InternalUserSummary(
+								internalUserId = InternalUserId("iu_001"),
+								loginId = LoginId("operator01"),
+								email = Email("operator01@example.com"),
+								userName = "운영자",
+								role = InternalUserRole.OPERATOR,
+								status = AccountStatus.INVITED,
+								lastLoginAt = null,
+								createdAt = Instant.parse("2026-07-19T00:00:00Z"),
+							),
+						),
+				)
+
+			mockMvc
+				.perform(get("/admin/internal-users").with(authenticatedAs(ISSUER)))
+				.andExpect(status().isOk)
+				.andExpect(jsonPath("$.internalUsers[0].loginId").value("operator01"))
+				.andExpect(jsonPath("$.internalUsers[0].status").value("INVITED"))
+				.andExpect(jsonPath("$.internalUsers[0].passwordHash").doesNotExist())
+		}
+
+		test("OPERATOR listing internal users returns 403 (the SUPER_ADMIN rule covers GET too)") {
+			// SecurityConfig의 /admin/internal-users 규칙은 HttpMethod로 좁혀져 있지 않아
+			// GET도 SUPER_ADMIN 전용이다 — 메서드 스코핑을 넣으면 여기서 먼저 깨진다.
+			val operator = InternalUserPrincipal(InternalUserId("iu_operator"), LoginId("operator"), InternalUserRole.OPERATOR)
+
+			mockMvc
+				.perform(get("/admin/internal-users").with(authenticatedAs(operator)))
+				.andExpect(status().isForbidden)
+		}
+
+		test("no authentication for listing returns 401 or 403") {
+			val result = mockMvc.perform(get("/admin/internal-users")).andReturn()
+
+			result.response.status shouldBeIn listOf(401, 403)
 		}
 
 		test("DuplicateInternalUserException from the use case returns 409") {

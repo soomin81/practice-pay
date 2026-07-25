@@ -4,6 +4,30 @@
  */
 
 export interface paths {
+    "/admin/internal-users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 내부 운영자 목록 조회
+         * @description **SUPER_ADMIN만 조회할 수 있다** — 가맹점 목록(GET)이 VIEWER에게도 열려 있는 것과 다르다. 명부에는 직원 이메일·마지막 로그인·누가 SUPER_ADMIN인지가 담기고, 계정 관리 자체가 SUPER_ADMIN의 영역이기 때문이다. 비밀번호 해시는 담기지 않는다.
+         */
+        get: operations["admin-list-internal-users"];
+        put?: never;
+        /**
+         * 내부 운영자 계정 발급
+         * @description SUPER_ADMIN만 호출할 수 있다(일반 회원가입은 제공하지 않는다). invitationToken은 이 응답에서만 원문으로 보이며, **그 사람이 활성화할 곳은 이 콘솔 자신의 /accept-invitation**이다 — 가맹점 등록이 만드는 링크가 가맹점 콘솔을 가리키는 것과 대비된다.
+         */
+        post: operations["admin-issue-internal-user"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/login": {
         parameters: {
             query?: never;
@@ -88,10 +112,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/account-invitations/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 초대 수락(내부 운영자 계정 활성화)
+         * @description 초대받은 내부 직원이 Token과 새 비밀번호로 계정을 INVITED → ACTIVE로 활성화한다. 인증이 필요 없고 **CSRF 토큰도 요구하지 않는다**(자격증명이 세션 쿠키가 아니라 본문의 Token 자체다). 가맹점 사용자 초대는 이 엔드포인트가 아니라 api-merchant의 같은 경로로 간다.
+         */
+        post: operations["admin-accept-invitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** IssueInternalUserResponse */
+        IssueInternalUserResponse: {
+            /** @description 부여된 역할 */
+            role: string;
+            /** @description 로그인 아이디 */
+            loginId: string;
+            /** @description 초대 만료 시각(UTC) */
+            invitationExpiresAt: string;
+            /** @description 초대 Token 원문. 최초 1회만 노출된다. */
+            invitationToken: string;
+            /** @description 사용자 이름 */
+            userName: string;
+            /** @description 이메일 */
+            email: string;
+            /** @description 생성된 내부 운영자 식별자 */
+            internalUserId: string;
+        };
+        /** AcceptAccountInvitationRequest */
+        AcceptAccountInvitationRequest: {
+            /** @description 설정할 새 비밀번호 */
+            newPassword: string;
+            /** @description 발급 응답에서 받은 초대 Token 원문 */
+            invitationToken: string;
+        };
         /** AdminMeResponse */
         AdminMeResponse: {
             /** @description SUPER_ADMIN | OPERATOR | VIEWER */
@@ -128,6 +196,28 @@ export interface components {
                 merchantName: string;
             }[];
         };
+        /** ListInternalUsersResponse */
+        ListInternalUsersResponse: {
+            /** @description 내부 운영자 요약 배열(최신 생성순) */
+            internalUsers: {
+                /** @description 생성(초대) 시각(UTC) */
+                createdAt: string;
+                /** @description 마지막 로그인 시각(UTC). 로그인한 적이 없으면 null. */
+                lastLoginAt?: string | null;
+                /** @description SUPER_ADMIN | OPERATOR | VIEWER */
+                role: string;
+                /** @description 로그인 아이디 */
+                loginId: string;
+                /** @description 사용자 이름 */
+                userName: string;
+                /** @description 이메일 */
+                email: string;
+                /** @description 내부 운영자 식별자 */
+                internalUserId: string;
+                /** @description INVITED | ACTIVE | LOCKED | SUSPENDED | TERMINATED */
+                status: string;
+            }[];
+        };
         /** RegisterMerchantRequest */
         RegisterMerchantRequest: {
             /** @description 가맹점 코드(전 시스템에서 유일, 가맹점 사용자 로그인에 쓰인다) */
@@ -150,6 +240,24 @@ export interface components {
             password: string;
             /** @description 내부 운영자 로그인 아이디 */
             loginId: string;
+        };
+        /** IssueInternalUserRequest */
+        IssueInternalUserRequest: {
+            /** @description OPERATOR | VIEWER (최초 SUPER_ADMIN은 Bootstrap으로만 생성) */
+            role: string;
+            /** @description 전 시스템에서 유일한 로그인 아이디 */
+            loginId: string;
+            /** @description 사용자 이름 */
+            userName: string;
+            /** @description 전 시스템에서 유일한 이메일 */
+            email: string;
+        };
+        /** AcceptAccountInvitationResponse */
+        AcceptAccountInvitationResponse: {
+            /** @description 활성화된 계정의 로그인 아이디 */
+            loginId: string;
+            /** @description 활성화 시각(UTC) */
+            activatedAt: string;
         };
         /** RegisterMerchantResponse */
         RegisterMerchantResponse: {
@@ -179,6 +287,50 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    "admin-list-internal-users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 200 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListInternalUsersResponse"];
+                };
+            };
+        };
+    };
+    "admin-issue-internal-user": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json;charset=UTF-8": components["schemas"]["IssueInternalUserRequest"];
+            };
+        };
+        responses: {
+            /** @description 201 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueInternalUserResponse"];
+                };
+            };
+        };
+    };
     "admin-login": {
         parameters: {
             query?: never;
@@ -285,6 +437,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RegisterMerchantResponse"];
+                };
+            };
+        };
+    };
+    "admin-accept-invitation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json;charset=UTF-8": components["schemas"]["AcceptAccountInvitationRequest"];
+            };
+        };
+        responses: {
+            /** @description 200 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcceptAccountInvitationResponse"];
                 };
             };
         };

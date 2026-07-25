@@ -1,9 +1,9 @@
 import { useState, type FormEvent } from 'react'
 import { useRegisterMerchant } from '@/console/useMerchants'
 import { merchantInvitationUrlFor } from '@/console/format'
+import { InvitationReveal } from '@/console/InvitationReveal'
 import { AdminApiError } from '@/api/client'
 import type { RegisterMerchantResponse } from '@/api/types'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -123,40 +123,20 @@ function Field({
  * 착각하면 상대가 열 수 없다.
  */
 function RegisteredMerchant({ registered, onDone }: { registered: RegisterMerchantResponse; onDone: () => void }) {
-	const [copied, setCopied] = useState(false)
-	const invitationUrl = merchantInvitationUrlFor(registered.invitationToken)
-
-	async function copy() {
-		try {
-			await navigator.clipboard.writeText(invitationUrl)
-			setCopied(true)
-		} catch {
-			setCopied(false)
-		}
-	}
-
 	return (
-		<Alert variant="destructive" className="flex flex-col gap-3">
-			<AlertTitle>가맹점이 등록되었습니다 — 이 초대 링크는 다시 볼 수 없습니다</AlertTitle>
-			<AlertDescription>
-				<p className="mb-2">
+		<InvitationReveal
+			title="가맹점이 등록되었습니다 — 이 초대 링크는 다시 볼 수 없습니다"
+			description={
+				<>
 					<strong>{registered.merchantName}</strong>({registered.merchantCode})가 등록되고 OWNER 계정{' '}
 					<strong>{registered.ownerLoginId}</strong>이(가) 초대되었습니다. 아래 <strong>가맹점 콘솔</strong> 링크를
 					OWNER에게 전달하세요 — 이 화면을 벗어나면 확인할 수 없습니다.
-				</p>
-				<code className="block w-full break-all rounded-md bg-muted px-2 py-1.5 font-mono text-xs text-foreground">
-					{invitationUrl}
-				</code>
-			</AlertDescription>
-			<div className="flex items-center gap-2">
-				<Button size="sm" variant="outline" onClick={() => void copy()}>
-					{copied ? '복사됨' : '링크 복사'}
-				</Button>
-				<Button size="sm" onClick={onDone}>
-					확인했습니다
-				</Button>
-			</div>
-		</Alert>
+				</>
+			}
+			invitationToken={registered.invitationToken}
+			buildUrl={merchantInvitationUrlFor}
+			onDone={onDone}
+		/>
 	)
 }
 

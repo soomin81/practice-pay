@@ -335,3 +335,20 @@
 ### 프론트에서 조심할 것: 초대 링크가 다른 콘솔을 가리킨다
 
 `POST /admin/merchants`가 돌려주는 `invitationToken`은 **가맹점 OWNER의 것**이라 활성화 화면도 가맹점 콘솔에 있다. `frontend/admin`은 `VITE_MERCHANT_CONSOLE_URL`로 링크를 만들고(`console/format.ts`의 `merchantInvitationUrlFor`), 자기 origin을 쓰면 **상대가 열 수 없는 링크**가 되는데 화면상으로는 멀쩡해 보인다 — 그래서 "링크가 5174를 가리키고 현재 origin을 포함하지 않는다"를 프론트 테스트로 고정했다. 계약 문서(`docs/architecture/admin-console-api.md`의 5절)에도 절로 남겼다.
+
+## 내부 운영자 목록 조회(`ListInternalUsersUseCase`)와 `api-admin`의 명부 API
+
+내부 직원을 발급할 수는 있는데 **누가 있는지 볼 수 없고, 발급해도 UI로 활성화할 수 없던** 두 구멍을 메운다(가맹점 쪽 2번째 슬라이스와 같은 성격의 gap이 admin 쪽에도 있었다).
+
+- **요청자를 받지 않는다 — 가맹점 쪽 `ListMerchantUsersUseCase`와 의도적으로 다르다.** 같은 앱의 `ListMerchantsUseCase`가 무인자 `execute()`이고 `IssueInternalUserCommand`의 KDoc이 "발급 권한 확인은 inbound Adapter(세션의 역할)가 끝냈다고 전제한다"고 명시한 **지역 관행**을 따랐다. 더 본질적으로는, 가맹점 쪽에서 요청자를 다시 읽은 핵심 이유가 "조회 대상 가맹점을 신뢰할 수 있는 곳에서 얻기 위해서"였는데(멀티테넌시), **내부 운영자는 특정 가맹점에 속하지 않아 좁힐 범위 자체가 없다.** 그래서 인가는 전적으로 `SecurityConfig`가 진다.
+- **`SecurityConfig`를 고치지 않았다 — 이번에는 고칠 필요가 없어서다.** 기존 규칙 `authorize("/admin/internal-users", hasRole("SUPER_ADMIN"))`이 `HttpMethod`로 좁혀져 있지 않아 새 `GET`을 **이미** 덮는다. 같은 앱의 `/admin/merchants`가 `POST`로 좁혀 `GET`을 `VIEWER`에게 여는 것과 **정반대**인데, 둘 다 의도한 결과다: 가맹점 목록은 "조회 전용" VIEWER의 업무이고, 내부 직원 명부는 직원 이메일·마지막 로그인·누가 SUPER_ADMIN인지가 담기는 SUPER_ADMIN의 영역이다("3.3"). `api-merchant`에서 계정 관리 액션을 더할 때 와일드카드를 **넓혀야 했던** 것과 대비된다 — 규칙을 건드릴지 말지는 매번 경로 모양을 보고 판단한다.
+- **`InternalUserIssuanceController` → `InternalUserController`로 이름을 바꿨다** — 목록이 생기면서 "Issuance"가 실제 책임보다 좁아졌다(`MerchantController`가 등록·목록을 함께 갖는 것과 같은 모양).
+- **`InternalUserSummary`는 `passwordHash`를 담지 않는다**(Projection의 SELECT 목록에서부터 제외 — `MerchantUserSummary`와 같은 정신). 가맹점 Projection들과 달리 `merchant_seq` 범위 지정이 없다.
+- **OpenAPI 스펙이 5개 → 8개가 됐다**: 목록·발급에 더해 `POST /admin/account-invitations/accept`도 이번에 문서화했다(1차에서 빠뜨렸는데 프론트가 실제로 호출한다).
+- **실물 검증(`bootRun` + curl)**: 발급 → 명부에 `INVITED` → 수락 → 새 계정으로 로그인 → 명부에서 `ACTIVE` + `lastLoginAt` 채워짐까지 확인했고, **핵심 인가**로 같은 `OPERATOR` 세션이 `GET /admin/internal-users` **403**, `GET /admin/merchants` **200**, `POST /admin/internal-users` **403**을 받는 것을 확인했다(두 경로의 메서드 스코핑이 의도대로 갈리는지). 검증 계정은 정리했다.
+
+### 알려진 gap: `SUPER_ADMIN` 발급을 백엔드가 막지 않는다
+
+`IssueInternalUserUseCase`는 `role`을 그대로 받아서 **`SUPER_ADMIN`도 발급할 수 있다.** `docs/`의 "3.3"은 "최초 SUPER_ADMIN은 배포 초기화 명령, 안전한 운영 절차 또는 별도 Bootstrap 과정으로 생성한다"고 규정하지만 그 제약이 코드에 없다 — 가맹점 쪽에서 `MerchantUser.inviteSubAccount`가 `require(role != OWNER)`로 도메인에서 막는 것과 대비된다.
+
+지금은 **프론트에서만 선택지를 제한했다**(`ISSUABLE_INTERNAL_ROLES` = OPERATOR/VIEWER). API를 직접 호출하면 여전히 SUPER_ADMIN을 만들 수 있으므로, 도메인(`InternalUser.invite`)에 같은 `require`를 넣는 것이 옳다 — 이번 슬라이스 범위를 넘어 별도로 다룬다.

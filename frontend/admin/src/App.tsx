@@ -2,19 +2,30 @@ import type { ReactNode } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { useMe } from '@/auth/useAuth'
 import { AdminApiError } from '@/api/client'
+import { canManageInternalUsers } from '@/api/types'
 import { LoginPage } from '@/console/LoginPage'
 import { ConsoleShell } from '@/console/ConsoleShell'
 import { MerchantsPage } from '@/console/MerchantsPage'
+import { InternalUsersPage } from '@/console/InternalUsersPage'
+import { AcceptInvitationPage } from '@/invitation/AcceptInvitationPage'
 import { Button } from '@/components/ui/button'
 
 /**
- * 인증 상태로 화면을 나눈다 — 서버의 `GET /admin/me` 결과(사용자 or 401→null)만 따르고
- * 다음 상태를 스스로 추론하지 않는다(merchant 콘솔과 같은 구조).
- *
- * 지금은 페이지가 하나뿐이라 라우터가 꼭 필요하진 않지만, 다음 슬라이스(내부 직원 계정
- * 발급 등)에서 바로 늘어나고 merchant가 이미 같은 구조라 처음부터 넣었다.
+ * 라우트를 나눈다. **초대 수락(`/accept-invitation`)만 인증 게이트 밖에 있다** — 초대
+ * 링크로 도달하는 내부 직원은 아직 계정이 활성화되지 않아 로그인할 수 없으므로, 이 경로가
+ * 로그인 화면으로 튕기면 흐름 자체가 성립하지 않는다(merchant 콘솔과 같은 구조이고,
+ * `routing.test.tsx`가 회귀로 지킨다).
  */
 export default function App() {
+	return (
+		<Routes>
+			<Route path="/accept-invitation" element={<AcceptInvitationPage />} />
+			<Route path="*" element={<ConsoleRoutes />} />
+		</Routes>
+	)
+}
+
+function ConsoleRoutes() {
 	const { data: me, isPending, isError, error, refetch } = useMe()
 
 	if (isPending) {
@@ -42,6 +53,10 @@ export default function App() {
 		<ConsoleShell me={me}>
 			<Routes>
 				<Route path="/" element={<MerchantsPage me={me} />} />
+				{/* 내부 직원 관리는 SUPER_ADMIN 전용 — 서버도 403이므로 라우트 자체를 막는다. */}
+				{canManageInternalUsers(String(me.role)) && (
+					<Route path="/internal-users" element={<InternalUsersPage />} />
+				)}
 				<Route path="*" element={<Navigate to="/" replace />} />
 			</Routes>
 		</ConsoleShell>

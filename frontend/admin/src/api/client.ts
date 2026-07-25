@@ -1,4 +1,9 @@
 import type {
+	AcceptInvitationRequest,
+	AcceptInvitationResponse,
+	IssueInternalUserRequest,
+	IssueInternalUserResponse,
+	ListInternalUsersResponse,
 	ListMerchantsResponse,
 	LoginRequest,
 	LoginResponse,
@@ -126,4 +131,20 @@ export const adminApi = {
 
 	registerMerchant: (body: RegisterMerchantRequest) =>
 		request<RegisterMerchantResponse>('/admin/merchants', { method: 'POST', body: JSON.stringify(body) }),
+
+	listInternalUsers: () => request<ListInternalUsersResponse>('/admin/internal-users'),
+
+	issueInternalUser: (body: IssueInternalUserRequest) =>
+		request<IssueInternalUserResponse>('/admin/internal-users', { method: 'POST', body: JSON.stringify(body) }),
+
+	/**
+	 * 내부 운영자 초대 수락. **비인증 경로이고 백엔드가 CSRF 예외로 둔다**(자격증명이 세션
+	 * 쿠키가 아니라 본문의 Token 자체다). 가맹점 사용자 초대는 이 엔드포인트가 아니라
+	 * api-merchant의 같은 경로로 간다.
+	 */
+	acceptInvitation: (body: AcceptInvitationRequest) =>
+		request<AcceptInvitationResponse>('/admin/account-invitations/accept', {
+			method: 'POST',
+			body: JSON.stringify(body),
+		}),
 }

@@ -269,3 +269,26 @@ npm run gen:api        # api-admin의 openapi3.yaml → src/api/schema.d.ts
 - 자기 origin을 쓰면 **상대가 열 수 없는 링크**가 되는데 화면상으로는 멀쩡해 보인다 —
   `console.test.tsx`가 "링크가 5174를 가리키고 현재 origin을 포함하지 않는다"를 회귀로 지킨다.
 - 등록 성공 문구에도 "가맹점 콘솔 링크"임을 적어 운영자가 착각하지 않게 한다.
+
+### admin 2차 — 라우트가 늘고 초대 링크가 두 종류가 됐다
+
+| 경로 | 인증 | 내용 |
+|---|---|---|
+| `/accept-invitation?token=…` | **비인증(공개)** | 내부 직원 초대 수락 |
+| `/` | 필요 | 가맹점 목록·등록 |
+| `/internal-users` | 필요(**SUPER_ADMIN**) | 내부 직원 명부·발급 |
+
+- **`/accept-invitation`을 인증 게이트보다 먼저 매칭시킨다**(merchant와 같은 구조·같은
+  이유). `routing.test.tsx`가 "미인증에서 로그인으로 튕기지 않는다"를 회귀로 지킨다.
+- **`/internal-users`는 라우트와 내비 둘 다 SUPER_ADMIN에게만 노출한다**(`canManageInternalUsers`).
+  서버도 `GET`/`POST` 모두 403으로 막는다.
+- **초대 링크가 두 종류이고 가리키는 콘솔이 다르다** — 이 앱에서 가장 틀리기 쉬운 지점이다:
+  - 가맹점 등록 → **가맹점 콘솔**(`merchantInvitationUrlFor`, `VITE_MERCHANT_CONSOLE_URL`)
+  - 내부 직원 발급 → **이 콘솔 자신**(`internalInvitationUrlFor`, `window.location.origin`)
+
+  그래서 `InvitationReveal`은 **링크 생성 함수를 주입받는다** — 컴포넌트가 스스로 정하면
+  호출부에서 어느 쪽인지 보이지 않아 바꿔 쓰기 쉬워진다. 테스트가 "둘이 서로 다른 origin을
+  가리킨다"를 고정한다.
+- **발급 폼의 역할 선택지에 `SUPER_ADMIN`이 없다**(`ISSUABLE_INTERNAL_ROLES`) — 최초
+  SUPER_ADMIN은 Bootstrap으로만 만든다는 규정 때문이다. **백엔드는 이 제약을 강제하지
+  않으므로 화면에서만 막는다**(merchant의 OWNER 승격이 도메인에서 막히는 것과 다르다).

@@ -13,6 +13,18 @@ export function merchantInvitationUrlFor(token: string): string {
 	return `${base.replace(/\/$/, '')}/accept-invitation?token=${encodeURIComponent(token)}`
 }
 
+/**
+ * 내부 운영자의 초대 링크를 만든다.
+ *
+ * **이 링크는 admin 콘솔 자신을 가리킨다** — 초대받은 사람이 내부 직원이라 활성화도 여기서
+ * 하고, 요청도 `api-admin`의 `POST /admin/account-invitations/accept`로 간다.
+ * [merchantInvitationUrlFor]와 **가리키는 곳이 다르다** — 둘을 바꿔 쓰면 화면상으로는
+ * 멀쩡한데 상대가 열 수 없는 링크가 되므로, 두 함수를 나란히 두고 테스트로 지킨다.
+ */
+export function internalInvitationUrlFor(token: string): string {
+	return `${window.location.origin}/accept-invitation?token=${encodeURIComponent(token)}`
+}
+
 /** ISO-8601(UTC) 시각을 콘솔 표시용 로컬 문자열로. 없으면 대시. */
 export function formatDateTime(iso: string | null | undefined): string {
 	if (!iso) return '—'

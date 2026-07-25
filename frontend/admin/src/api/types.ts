@@ -23,8 +23,30 @@ export type MerchantSummary = ListMerchantsResponse['merchants'][number]
 export type RegisterMerchantRequest = JsonRequest<'admin-register-merchant'>
 export type RegisterMerchantResponse = JsonResponse<'admin-register-merchant', 201>
 
+export type ListInternalUsersResponse = JsonResponse<'admin-list-internal-users', 200>
+export type InternalUserSummary = ListInternalUsersResponse['internalUsers'][number]
+
+export type IssueInternalUserRequest = JsonRequest<'admin-issue-internal-user'>
+export type IssueInternalUserResponse = JsonResponse<'admin-issue-internal-user', 201>
+
+export type AcceptInvitationRequest = JsonRequest<'admin-accept-invitation'>
+export type AcceptInvitationResponse = JsonResponse<'admin-accept-invitation', 200>
+
 /** 계약(`docs/architecture/identity-access-api-key.md`의 "3.2")의 내부 운영자 역할. */
 export type InternalUserRole = 'SUPER_ADMIN' | 'OPERATOR' | 'VIEWER'
+
+/**
+ * 콘솔에서 발급할 수 있는 내부 운영자 역할. **`SUPER_ADMIN`은 없다** — `docs/`의 "3.3"이
+ * "최초 SUPER_ADMIN은 배포 초기화 명령, 안전한 운영 절차 또는 별도 Bootstrap 과정으로
+ * 생성한다"고 규정한다(가맹점 쪽에서 `OWNER` 승격을 막은 것과 같은 결). 백엔드는 이 제약을
+ * 강제하지 않으므로 화면에서만 제한한다 — 그 사실을 IMPLEMENTATION-NOTES에 남겼다.
+ */
+export const ISSUABLE_INTERNAL_ROLES: readonly InternalUserRole[] = ['OPERATOR', 'VIEWER']
+
+/** 내부 직원 관리(명부·발급)는 SUPER_ADMIN 전용이다 — 서버도 403으로 막는다. */
+export function canManageInternalUsers(role: string): boolean {
+	return role === 'SUPER_ADMIN'
+}
 
 /**
  * 가맹점을 등록할 수 있는 역할. `VIEWER`는 조회 전용이라 등록 폼을 보여주지 않는다 —

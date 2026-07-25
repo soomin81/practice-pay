@@ -46,28 +46,45 @@ PG 내부 운영자용 콘솔(브라우저 SPA, `frontend/admin`)이 호출하�
 | `POST /admin/logout` | 세션 | 필요 | 204 | 401 |
 | `GET /admin/merchants` | **내부 운영자 전원**(VIEWER 포함) | — | 200 목록 | 401 |
 | `POST /admin/merchants` | SUPER_ADMIN/OPERATOR | 필요 | 201 가맹점 + OWNER 초대 Token(1회) | 400 검증, 401, 403, 409 중복 |
+| `GET /admin/internal-users` | **SUPER_ADMIN만** | — | 200 명부 | 401, 403 |
 | `POST /admin/internal-users` | **SUPER_ADMIN만** | 필요 | 201 계정 + 초대 Token(1회) | 400, 401, 403, 409 중복 |
 | `POST /admin/account-invitations/accept` | **공개** | **불필요**(2절) | 200 활성화 | 400 유효하지 않거나 만료된 초대 |
 
-- **`GET`과 `POST`의 권한이 다르다** — `SecurityConfig`가 `/admin/merchants`에 대해
-  `HttpMethod.POST`로만 역할을 요구한다. `VIEWER`가 "조회 전용"이라는 정의를 지키기 위한
-  의도적인 메서드 스코핑이고, `bootRun`으로 `GET` 200 / `POST` 403을 확인했다.
+- **두 경로의 메서드 스코핑이 정반대다 — 의도적이다.**
+  - `/admin/merchants`는 `HttpMethod.POST`로만 역할을 요구해서 **`GET`이 `VIEWER`에게
+    열린다**(`VIEWER` = "조회 전용" 정의를 지킨다).
+  - `/admin/internal-users`는 메서드로 좁히지 않아 **`GET`도 `SUPER_ADMIN` 전용이다.**
+    내부 직원 명부에는 직원 이메일·마지막 로그인·누가 `SUPER_ADMIN`인지가 담기고, 계정
+    관리 자체가 `SUPER_ADMIN`의 영역이기 때문이다("3.3").
+  - `bootRun`으로 같은 `OPERATOR` 세션이 `GET /admin/merchants` 200,
+    `GET /admin/internal-users` 403을 받는 것을 확인했다.
 - **초대 Token은 발급 응답에서만 원문으로 보인다**(DB에는 Hash만 남는다).
 
-## 5. 가맹점 등록이 만드는 초대 링크는 **가맹점 콘솔**을 가리킨다
+## 5. 초대 링크가 **두 종류**다 — 가리키는 콘솔이 다르다
 
-이 콘솔에서 가장 헷갈리기 쉬운 지점이다. `POST /admin/merchants`가 돌려주는
-`invitationToken`은 **새 가맹점 OWNER의 것**이고, 그 사람이 계정을 활성화할 곳은
-내부 운영자 콘솔이 아니라 **가맹점 콘솔**이다:
+이 콘솔에서 가장 헷갈리기 쉬운 지점이다. admin 콘솔은 초대를 두 가지 만들고, **활성화
+화면과 수락 API가 서로 다른 앱에 있다**:
+
+| 발급 | 대상 | 활성화 화면 | 수락 API |
+|---|---|---|---|
+| `POST /admin/merchants` | 새 가맹점 **OWNER** | **가맹점 콘솔**(`VITE_MERCHANT_CONSOLE_URL`) | `api-merchant`의 `POST /merchant/account-invitations/accept` |
+| `POST /admin/internal-users` | **내부 직원** | **admin 콘솔 자신**(`window.location.origin`) | `api-admin`의 `POST /admin/account-invitations/accept` |
+
+둘 다 링크 형식은 같다:
 
 ```
-{가맹점 콘솔 Origin}/accept-invitation?token={invitationToken}
+{해당 콘솔 Origin}/accept-invitation?token={invitationToken}
 ```
 
-그래서 `frontend/admin`은 `VITE_MERCHANT_CONSOLE_URL`(기본 `http://localhost:5174`)로
-링크를 만든다 — 자기 `window.location.origin`을 쓰면 상대가 열 수 없는 링크가 된다.
-수락 요청 자체도 `api-admin`이 아니라 **`api-merchant`의**
-`POST /merchant/account-invitations/accept`로 간다.
+**바꿔 쓰면 화면상으로는 멀쩡한데 상대가 열 수 없는 링크가 된다.** 그래서
+`frontend/admin`은 `console/format.ts`에 `merchantInvitationUrlFor`/`internalInvitationUrlFor`
+두 함수를 나란히 두고, 노출 컴포넌트(`InvitationReveal`)가 **링크 생성 함수를 주입받아**
+호출부에서 어느 콘솔인지 드러나게 한다. 프론트 테스트가 "둘이 서로 다른 origin을 가리킨다"를
+회귀로 지킨다.
+
+> 가맹점 OWNER 흐름은 두 앱이 `app.invitation-token.pepper`를 같은 값으로 갖고 있어야
+> 동작한다(`backend/CLAUDE.md`의 "설정과 비밀값") — 실물 검증에서 이 왕복을 확인했다.
+> 내부 직원 흐름은 발급·수락이 같은 앱이라 그 제약이 없다.
 
 > 이 흐름은 두 앱이 `app.invitation-token.pepper`를 같은 값으로 갖고 있어야 동작한다
 > (`backend/CLAUDE.md`의 "설정과 비밀값"). 어긋나면 "유효하지 않은 초대"로만 보여
@@ -82,8 +99,11 @@ PG 내부 운영자용 콘솔(브라우저 SPA, `frontend/admin`)이 호출하�
 
 ## 6. 다음 슬라이스로 미룬 것
 
-- **내부 직원 계정 발급 화면**(`POST /admin/internal-users`, SUPER_ADMIN 전용) — 백엔드는
-  이미 구현돼 있다.
-- **내부 운영자의 가맹점 계정 관리** — 그때 merchant 콘솔에 구현해 둔 "최소 하나의 활성
-  OWNER를 유지한다" 불변식이 실제로 트리거되는 첫 경로가 된다
-  ([merchant-console-api.md](merchant-console-api.md)의 6절 5번).
+- **내부 운영자의 가맹점 계정 관리**(가맹점 사용자 정지·종료·역할 변경) — 그때 merchant
+  콘솔에 구현해 둔 "최소 하나의 활성 OWNER를 유지한다" 불변식이 실제로 트리거되는 첫
+  경로가 된다([merchant-console-api.md](merchant-console-api.md)의 6절 5번).
+  **다만 `docs/`가 이 권한을 규정하지 않는다** — 역할 정의가 "가맹점·결제·운영 업무"
+  (`OPERATOR`)/"전체 관리"(`SUPER_ADMIN`)로 모호할 뿐이라
+  [identity-access-api-key.md](identity-access-api-key.md)에 설계 판단을 먼저 추가해야 한다.
+- **내부 직원 계정 상태·역할 관리**(정지·종료·역할 변경) — merchant 쪽에는 있지만 내부
+  운영자에는 아직 없다. `InternalUser` 도메인에는 전이 메서드가 이미 있다.

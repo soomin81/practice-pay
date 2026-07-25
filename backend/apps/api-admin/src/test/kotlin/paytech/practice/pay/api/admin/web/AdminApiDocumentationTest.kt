@@ -26,13 +26,21 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import paytech.practice.pay.api.admin.config.SecurityConfig
 import paytech.practice.pay.api.admin.security.InternalUserPrincipal
+import paytech.practice.pay.application.identity.AcceptAccountInvitationResult
+import paytech.practice.pay.application.identity.AcceptAccountInvitationUseCase
 import paytech.practice.pay.application.identity.AuthenticateInternalUserResult
 import paytech.practice.pay.application.identity.AuthenticateInternalUserUseCase
+import paytech.practice.pay.application.identity.IssueInternalUserResult
+import paytech.practice.pay.application.identity.IssueInternalUserUseCase
+import paytech.practice.pay.application.identity.ListInternalUsersResult
+import paytech.practice.pay.application.identity.ListInternalUsersUseCase
 import paytech.practice.pay.application.identity.RegisterMerchantResult
 import paytech.practice.pay.application.identity.RegisterMerchantUseCase
 import paytech.practice.pay.application.merchant.ListMerchantsResult
 import paytech.practice.pay.application.merchant.ListMerchantsUseCase
+import paytech.practice.pay.application.port.outbound.InternalUserSummary
 import paytech.practice.pay.application.port.outbound.MerchantSummary
+import paytech.practice.pay.domain.identity.AccountStatus
 import paytech.practice.pay.domain.identity.Email
 import paytech.practice.pay.domain.identity.InternalUserId
 import paytech.practice.pay.domain.identity.InternalUserRole
@@ -45,6 +53,8 @@ import tools.jackson.databind.ObjectMapper
 import java.time.Instant
 
 private val NOW: Instant = Instant.parse("2026-07-19T00:00:00Z")
+private val SUPER_ADMIN =
+	InternalUserPrincipal(InternalUserId("iu_sa01"), LoginId("super-admin"), InternalUserRole.SUPER_ADMIN)
 private val OPERATOR =
 	InternalUserPrincipal(InternalUserId("iu_op01"), LoginId("operator01"), InternalUserRole.OPERATOR)
 
@@ -95,6 +105,8 @@ private fun adminResource(
 		AdminMeController::class,
 		AdminLogoutController::class,
 		MerchantController::class,
+		InternalUserController::class,
+		AcceptAccountInvitationController::class,
 	],
 )
 @Import(SecurityConfig::class)
@@ -114,6 +126,15 @@ class AdminApiDocumentationTest : FunSpec() {
 
 	@MockkBean
 	lateinit var listMerchantsUseCase: ListMerchantsUseCase
+
+	@MockkBean
+	lateinit var issueInternalUserUseCase: IssueInternalUserUseCase
+
+	@MockkBean
+	lateinit var listInternalUsersUseCase: ListInternalUsersUseCase
+
+	@MockkBean
+	lateinit var acceptAccountInvitationUseCase: AcceptAccountInvitationUseCase
 
 	init {
 		extensions(SpringExtension)
@@ -236,6 +257,158 @@ class AdminApiDocumentationTest : FunSpec() {
 				.perform(get("/admin/merchants").with(authenticatedAs(OPERATOR)))
 				.andExpect(status().isOk)
 				.andDo(document("admin-list-merchants", snippet))
+		}
+
+		test("document POST issue internal user") {
+			every { issueInternalUserUseCase.execute(any()) } returns
+				IssueInternalUserResult(
+					internalUserId = InternalUserId("iu_002"),
+					loginId = LoginId("new-operator"),
+					email = Email("new-operator@example.com"),
+					userName = "새 운영자",
+					role = InternalUserRole.OPERATOR,
+					invitationToken = "raw-invitation-token",
+					invitationExpiresAt = NOW.plusSeconds(604_800),
+				)
+
+			val snippet =
+				adminResource(
+					summary = "내부 운영자 계정 발급",
+					description =
+						"SUPER_ADMIN만 호출할 수 있다(일반 회원가입은 제공하지 않는다). invitationToken은 이 응답에서만 " +
+							"원문으로 보이며, **그 사람이 활성화할 곳은 이 콘솔 자신의 /accept-invitation**이다 " +
+							"— 가맹점 등록이 만드는 링크가 가맹점 콘솔을 가리키는 것과 대비된다.",
+					requestSchema = "IssueInternalUserRequest",
+					requestFields =
+						listOf(
+							fieldWithPath("loginId").description("전 시스템에서 유일한 로그인 아이디"),
+							fieldWithPath("email").description("전 시스템에서 유일한 이메일"),
+							fieldWithPath("userName").description("사용자 이름"),
+							fieldWithPath("role").description("OPERATOR | VIEWER (최초 SUPER_ADMIN은 Bootstrap으로만 생성)"),
+						),
+					responseSchema = "IssueInternalUserResponse",
+					responseFields =
+						listOf(
+							fieldWithPath("internalUserId").description("생성된 내부 운영자 식별자"),
+							fieldWithPath("loginId").description("로그인 아이디"),
+							fieldWithPath("email").description("이메일"),
+							fieldWithPath("userName").description("사용자 이름"),
+							fieldWithPath("role").description("부여된 역할"),
+							fieldWithPath("invitationToken").description("초대 Token 원문. 최초 1회만 노출된다."),
+							fieldWithPath("invitationExpiresAt").description("초대 만료 시각(UTC)"),
+						),
+				)
+
+			mockMvc
+				.perform(
+					post("/admin/internal-users")
+						.with(authenticatedAs(SUPER_ADMIN))
+						.with(csrf())
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(
+							objectMapper.writeValueAsString(
+								IssueInternalUserRequest(
+									loginId = "new-operator",
+									email = "new-operator@example.com",
+									userName = "새 운영자",
+									role = "OPERATOR",
+								),
+							),
+						),
+				).andExpect(status().isCreated)
+				.andDo(document("admin-issue-internal-user", snippet))
+		}
+
+		test("document GET internal users") {
+			every { listInternalUsersUseCase.execute() } returns
+				ListInternalUsersResult(
+					internalUsers =
+						listOf(
+							InternalUserSummary(
+								internalUserId = InternalUserId("iu_002"),
+								loginId = LoginId("operator01"),
+								email = Email("operator01@example.com"),
+								userName = "운영자",
+								role = InternalUserRole.OPERATOR,
+								status = AccountStatus.ACTIVE,
+								// non-null을 넣는다 — null이면 restdocs-api-spec이 타입을 추론 못 해
+								// 필드를 스펙에서 통째로 빠뜨린다(다른 앱에서 겪은 함정).
+								lastLoginAt = NOW.plusSeconds(3_600),
+								createdAt = NOW,
+							),
+						),
+				)
+
+			val snippet =
+				adminResource(
+					summary = "내부 운영자 목록 조회",
+					description =
+						"**SUPER_ADMIN만 조회할 수 있다** — 가맹점 목록(GET)이 VIEWER에게도 열려 있는 것과 다르다. " +
+							"명부에는 직원 이메일·마지막 로그인·누가 SUPER_ADMIN인지가 담기고, 계정 관리 자체가 " +
+							"SUPER_ADMIN의 영역이기 때문이다. 비밀번호 해시는 담기지 않는다.",
+					responseSchema = "ListInternalUsersResponse",
+					responseFields =
+						listOf(
+							fieldWithPath("internalUsers").description("내부 운영자 요약 배열(최신 생성순)"),
+							fieldWithPath("internalUsers[].internalUserId").description("내부 운영자 식별자"),
+							fieldWithPath("internalUsers[].loginId").description("로그인 아이디"),
+							fieldWithPath("internalUsers[].email").description("이메일"),
+							fieldWithPath("internalUsers[].userName").description("사용자 이름"),
+							fieldWithPath("internalUsers[].role").description("SUPER_ADMIN | OPERATOR | VIEWER"),
+							fieldWithPath("internalUsers[].status")
+								.description("INVITED | ACTIVE | LOCKED | SUSPENDED | TERMINATED"),
+							fieldWithPath("internalUsers[].lastLoginAt")
+								.description("마지막 로그인 시각(UTC). 로그인한 적이 없으면 null.")
+								.optional(),
+							fieldWithPath("internalUsers[].createdAt").description("생성(초대) 시각(UTC)"),
+						),
+				)
+
+			mockMvc
+				.perform(get("/admin/internal-users").with(authenticatedAs(SUPER_ADMIN)))
+				.andExpect(status().isOk)
+				.andDo(document("admin-list-internal-users", snippet))
+		}
+
+		test("document POST accept account invitation") {
+			every { acceptAccountInvitationUseCase.execute(any()) } returns
+				AcceptAccountInvitationResult(loginId = LoginId("new-operator"), activatedAt = NOW)
+
+			val snippet =
+				adminResource(
+					summary = "초대 수락(내부 운영자 계정 활성화)",
+					description =
+						"초대받은 내부 직원이 Token과 새 비밀번호로 계정을 INVITED → ACTIVE로 활성화한다. 인증이 필요 " +
+							"없고 **CSRF 토큰도 요구하지 않는다**(자격증명이 세션 쿠키가 아니라 본문의 Token 자체다). " +
+							"가맹점 사용자 초대는 이 엔드포인트가 아니라 api-merchant의 같은 경로로 간다.",
+					requestSchema = "AcceptAccountInvitationRequest",
+					requestFields =
+						listOf(
+							fieldWithPath("invitationToken").description("발급 응답에서 받은 초대 Token 원문"),
+							fieldWithPath("newPassword").description("설정할 새 비밀번호"),
+						),
+					responseSchema = "AcceptAccountInvitationResponse",
+					responseFields =
+						listOf(
+							fieldWithPath("loginId").description("활성화된 계정의 로그인 아이디"),
+							fieldWithPath("activatedAt").description("활성화 시각(UTC)"),
+						),
+				)
+
+			mockMvc
+				.perform(
+					post("/admin/account-invitations/accept")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(
+							objectMapper.writeValueAsString(
+								AcceptAccountInvitationRequest(
+									invitationToken = "raw-invitation-token",
+									newPassword = "new-password-123",
+								),
+							),
+						),
+				).andExpect(status().isOk)
+				.andDo(document("admin-accept-invitation", snippet))
 		}
 
 		test("document POST register merchant") {
