@@ -298,3 +298,16 @@
 ### 불변식이 오늘의 API로는 도달 불가능하다는 사실
 
 실물 검증 중 확인했다: 요청자가 활성 OWNER이고 대상이 다른 활성 OWNER면 활성 OWNER가 이미 둘이라 통과하고, ADMIN은 "ADMIN은 OWNER를 변경할 수 없다"에서, 자기 자신은 그 앞에서 먼저 막힌다 — 그래서 `LastActiveOwnerException`은 **현재 HTTP 경로로는 트리거되지 않는다**(단위 테스트로만 검증된다). 죽은 코드로 오해하지 않도록 여기 남긴다: 규칙 자체가 `docs/`에 있고, 향후 경로(내부 운영자 API의 가맹점 계정 관리, 다중 OWNER 승격)에서 곧바로 필요해지므로 방어선으로 유지한다.
+
+## 초대 관리 Use Case(`ResendMerchantUserInvitationUseCase`/`RevokeMerchantUserInvitationUseCase`)
+
+콘솔에서 초대를 발급한 뒤 손댈 수단이 전혀 없던 것을 메운다 — 링크를 잃어버리면 그 계정은 영영 활성화할 수 없었고, 만료돼도 명부에는 `INVITED`로만 보여 원인을 알 수 없었으며, 잘못 보낸 초대를 무효화할 방법도 없었다. 도메인(`AccountInvitation.revoke()`)은 이미 있었고 없던 것은 조회 수단·Use Case·API·화면이다.
+
+- **재발송은 "링크를 다시 보여주기"가 아니라 새 Token 발급이다.** Token은 Hash만 저장돼 원문을 복구할 수 없기 때문이다(`docs/`의 "6.4"와 같은 정신). 그래서 기존 `PENDING`을 `revoke()`하고 새 초대를 만든다 — **이전 링크는 그 즉시 죽는다.** 두 쓰기가 함께 반영돼야 하므로 `TransactionManager`로 묶었다(`InviteMerchantSubAccountUseCase`가 계정+초대를 함께 저장하는 것과 같은 이유). Token 생성 방식과 유효기간(7일)은 그 Use Case의 것을 그대로 따랐다 — 재발송이라고 다른 값을 쓸 이유가 없다.
+- **초대 취소와 계정 종료를 분리했다.** 취소는 Token만 무효화하고 계정은 `INVITED`로 남긴다. 묶지 않은 이유는 종료가 **되돌릴 수 없는데** "초대 취소"라는 가벼운 이름 뒤에 숨으면 위험하기 때문이다(재발송하려다 오조작하면 복구 불가). 대신 명부의 `pendingInvitationExpiresAt`이 `null`이 되어 "유효한 초대 없음"이 드러나므로 좀비로 방치되지 않고, 재발송으로 곧바로 되살릴 수 있다(실물 검증에서 이 복구 경로까지 확인했다).
+- **초대를 별도 목록으로 만들지 않고 명부(`MerchantUserSummary`)에 `pendingInvitationExpiresAt` 한 필드만 더했다.** 초대는 이미 명부에 `INVITED` 사용자로 나타나므로 별도 목록을 두면 같은 사람이 두 화면에 중복되고, 운영자가 실제로 궁금한 것("왜 아직 활성화가 안 됐지?")은 명부에서 바로 보이는 게 맞다.
+- **`MerchantUserManagementGuard`(3번째 슬라이스)를 그대로 재사용했다** — 요청자 권한·테넌시·자기 자신·ADMIN→OWNER 차단이 똑같이 필요하다. **다만 "최소 1 활성 OWNER" 불변식은 부르지 않는다** — 초대 조작은 활성 OWNER 수를 바꾸지 않는다. `SecurityConfig`도 손대지 않았다(3번째 슬라이스에서 넓힌 `/merchant/merchant-users/**` 와일드카드가 이 하위 경로도 덮는다 — 컨트롤러 테스트로 확인).
+- **`PENDING`이 사용자당 하나라는 것은 DB 제약이 아니라 우리 로직의 규약이다**(`account_invitation`에 그런 UNIQUE가 없다). 재발송이 항상 기존 것을 `REVOKED`로 만든 뒤 새로 만들기 때문에 성립한다 — 그래서 Port KDoc에 이 사실을 적고, 어댑터는 둘 이상이어도 터지지 않게 최신 하나를 돌려주며, 명부 Projection도 JOIN이 아니라 `MAX(expires_at)` 스칼라 서브쿼리를 써서 **행이 늘지 않게** 했다.
+- **만료 처리에는 배치가 없다.** `AcceptAccountInvitationUseCase`가 수락 시점에 `expiresAt`을 검사할 뿐 상태는 `PENDING`으로 남는다(`AccountInvitation.expire()`는 호출부가 없다). 그래서 화면이 `pendingInvitationExpiresAt`을 현재와 비교해 "만료됨"을 판단한다 — 알려진 gap이며, 정리 배치는 다음 범위로 미뤘다(`docs/architecture/merchant-console-api.md`의 7절).
+- **실물 검증(`bootRun` + curl)에서 확인한 것**: 초대 발급(토큰 A) → 재발송(토큰 B) → **토큰 A 수락 400 / 토큰 B 수락 200**(토큰 교체가 이 슬라이스의 핵심이라 반드시 실물로 봤다), 취소 후 그 토큰 수락 400, 취소 후에도 계정이 `INVITED`이고 `pendingInvitationExpiresAt`이 `null`인 것(취소≠종료 판단의 실증), 취소된 계정을 재발송으로 복구 후 수락 200, 이미 `ACTIVE`인 계정 재발송 409, 취소할 초대 없는데 취소 409, 활성 VIEWER의 두 액션 403.
+  - **셸 함정 하나 더**: Git Bash에서 `UID`는 읽기 전용 예약 변수라 `UID=$(...)`가 조용히 실패하고 셸의 UID(숫자)가 그대로 URL에 들어간다 — 백엔드가 "MerchantUser(197609)를 찾을 수 없습니다"로 응답해서 서버 버그로 오인하기 쉽다. 검증 스크립트에서는 `MUID` 같은 다른 이름을 쓴다(한글 본문 UTF-8 함정과 같은 계열).

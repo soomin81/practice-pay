@@ -13,6 +13,7 @@ import paytech.practice.pay.application.identity.DuplicateMerchantUserException
 import paytech.practice.pay.application.identity.InvalidCredentialsException
 import paytech.practice.pay.application.identity.InvalidInvitationException
 import paytech.practice.pay.application.identity.InvalidMerchantUserTransitionException
+import paytech.practice.pay.application.identity.InvitationNotManageableException
 import paytech.practice.pay.application.identity.LastActiveOwnerException
 import paytech.practice.pay.application.identity.MerchantUserCannotInviteSubAccountsException
 import paytech.practice.pay.application.identity.MerchantUserNotFoundException
@@ -79,6 +80,12 @@ class MerchantApiExceptionHandler {
 	@ExceptionHandler(LastActiveOwnerException::class)
 	@ResponseStatus(HttpStatus.CONFLICT)
 	fun handleLastActiveOwner(ex: LastActiveOwnerException): ErrorResponse = ErrorResponse(ex.message ?: "가맹점에는 최소 한 명의 활성 OWNER가 있어야 합니다.")
+
+	/** 초대를 재발송·취소할 수 없는 상태 — 권한이 아니라 상태 문제라 409다. */
+	@ExceptionHandler(InvitationNotManageableException::class)
+	@ResponseStatus(HttpStatus.CONFLICT)
+	fun handleInvitationNotManageable(ex: InvitationNotManageableException): ErrorResponse =
+		ErrorResponse(ex.message ?: "지금 상태에서는 초대를 변경할 수 없습니다.")
 
 	/**
 	 * 도메인 애그리게이트의 `checkTransition` 실패(예: 종료된 계정을 재개하려는 시도)를 409로 옮긴다.

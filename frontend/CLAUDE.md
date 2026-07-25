@@ -214,6 +214,22 @@ npm run gen:api        # api-merchant의 openapi3.yaml → src/api/schema.d.ts
 - 오류는 status로 분기한다: 409(마지막 OWNER 보호·허용되지 않는 전이)는 **서버 메시지를
   그대로 보여준다**(둘을 프론트가 구분할 수 없고, 서버 문구가 이미 구체적이다).
 
+### 초대 관리 (4번째 슬라이스)
+
+`INVITED` 행에는 **초대 상태**와 **재발송/취소**가 함께 붙는다.
+
+- **만료 판단은 화면이 한다.** 서버는 만료를 알려주지 않는다 — 만료 검사는 수락 시점에만
+  하고 상태는 `PENDING`으로 남는다(만료 배치가 없다). `console/format.ts`의
+  `describeInvitation()`이 `pendingInvitationExpiresAt`을 현재와 비교해
+  "유효/만료됨/없음"을 만든다.
+- **초대 링크 형식은 `format.ts`의 `invitationUrlFor()`가 유일한 출처다.** 최초 발급과
+  재발송이 같은 링크를 만들어야 하고, `/accept-invitation` 경로가 바뀔 때 두 곳이 갈리면
+  한쪽 링크가 조용히 죽는다. 1회 노출 UI는 `InvitationReveal` 컴포넌트를 공유한다.
+- **재발송은 이전 링크를 죽인다** — 성공 문구에 그 사실을 적는다(서버가 기존 초대를
+  `REVOKED`로 만들기 때문이다).
+- **초대 취소는 계정을 남긴다**(종료와 분리) — 확인 문구에 "계정은 남습니다"를 적어
+  종료와 헷갈리지 않게 한다.
+
 ## 현재 상태와 다음
 
 - **된 것**: 스캐폴딩, 타입 생성, API 클라이언트, 상태별 화면, 3초 폴링, DEV 결제 생성 버튼. UI는 Tailwind v4 + shadcn/ui이고 화면 컴포넌트는 `checkout/components/`에 있다. 지갑 연결과 ERC-20 `transfer`는 wagmi + viem으로 **코드가 들어갔다**.

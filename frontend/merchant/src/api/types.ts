@@ -48,6 +48,9 @@ export type ChangeUserRoleResponse = JsonResponse<'merchant-change-user-role', 2
  */
 export type MerchantUserStatusAction = 'suspend' | 'reactivate' | 'terminate'
 
+export type ResendInvitationResponse = JsonResponse<'merchant-resend-invitation', 200>
+export type RevokeInvitationResponse = JsonResponse<'merchant-revoke-invitation', 200>
+
 /** 계약(`docs/architecture/identity-access-api-key.md`)의 값들. 화면 분기·표시는 이 값들이 이끈다. */
 export type MerchantUserRole = 'OWNER' | 'ADMIN' | 'VIEWER'
 export type ApiKeyStatus = 'ACTIVE' | 'REVOKED' | 'EXPIRED'

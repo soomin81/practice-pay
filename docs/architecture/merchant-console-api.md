@@ -69,6 +69,8 @@
 | `POST /merchant/merchant-users/{id}/reactivate` | OWNER/ADMIN | 필요 | 200 `ACTIVE` | 403, 404, 409 |
 | `POST /merchant/merchant-users/{id}/terminate` | OWNER/ADMIN | 필요 | 200 `TERMINATED` | 403, 404, 409 |
 | `POST /merchant/merchant-users/{id}/role` | OWNER/ADMIN | 필요 | 200 변경된 역할 | 400 OWNER 승격, 403, 404, 409 |
+| `POST /merchant/merchant-users/{id}/invitation/resend` | OWNER/ADMIN | 필요 | 200 새 Token(1회) | 403, 404, 409(INVITED 아님) |
+| `POST /merchant/merchant-users/{id}/invitation/revoke` | OWNER/ADMIN | 필요 | 200 취소 시각 | 403, 404, 409(취소할 초대 없음) |
 
 - **`rawApiKey`는 발급 응답에서만 원문으로 보인다**(6.4). 목록에는 Secret 관련 필드가
   아예 담기지 않는다. **`invitationToken`도 같은 규칙**이다 — 초대 발급 응답에서만
@@ -90,6 +92,19 @@ MVP에는 초대 메일 발송이 없다. 그래서 **발급한 OWNER/ADMIN이 �
 
 초대받은 사람이 그 링크에서 비밀번호를 설정하면 계정이 `INVITED → ACTIVE`가 된다.
 활성화 자체는 로그인이 아니므로(세션이 만들어지지 않는다) 화면은 로그인으로 안내한다.
+
+**재발송은 새 Token을 발급하는 것이다.** Token은 Hash만 저장돼 원문을 다시 볼 수 없으므로,
+"링크를 다시 보여주기"가 성립하지 않는다 — 재발송하면 기존 `PENDING` 초대가 `REVOKED`가
+되고 **이전 링크는 그 즉시 동작하지 않는다**(수락 시 400). 이 두 쓰기는 한 트랜잭션이다.
+
+**만료는 서버가 알려주지 않는다.** 만료 검사는 수락 시점에만 하고 상태는 `PENDING`으로
+남는다(만료 배치가 없다). 그래서 명부 응답의 `pendingInvitationExpiresAt`을 화면이 현재
+시각과 비교해 "유효/만료됨"을 판단한다. `null`이면 초대가 없거나 취소된 상태다.
+
+**초대 취소는 계정 종료와 분리돼 있다.** 취소는 Token만 무효화하고 계정은 `INVITED`로
+남는다 — 종료는 되돌릴 수 없는 동작인데 "초대 취소"라는 가벼운 이름 뒤에 숨으면
+위험하기 때문이다. 계정을 없애려면 `/terminate`를 쓴다. 취소된 계정은 명부에서
+"유효한 초대 없음"으로 드러나고, 재발송으로 다시 살릴 수 있다.
 
 ## 6. 계정 관리 규칙 (정지·재개·종료·역할 변경)
 
@@ -113,7 +128,13 @@ MVP에는 초대 메일 발송이 없다. 그래서 **발급한 OWNER/ADMIN이 �
 6. **허용되지 않는 상태 전이**(예: 종료된 계정 재개) → 409.
 7. **`OWNER`로 승격할 수 없다** → 400. 최초 OWNER는 가맹점 등록에서만 생성된다(4.3).
 
+초대 조작(재발송·취소)은 **"최소 하나의 활성 OWNER" 불변식과 무관하다** — 활성 OWNER
+수를 바꾸지 않기 때문이다. 나머지 거부 규칙(요청자 권한·자기 자신·ADMIN→OWNER·테넌시)은
+6절과 동일하다.
+
 ## 7. 다음 슬라이스로 미룬 것
 
-- 초대 **목록·재발송·취소**(`AccountInvitation.revoke()`는 도메인에 있지만 Repository에
-  조회 수단이 `findByTokenHash`뿐이라 새 조회 Port가 필요하다).
+- 만료된 초대를 `EXPIRED`로 정리하는 **배치**(`AccountInvitation.expire()`는 도메인에
+  있지만 호출부가 없다). 지금은 화면이 만료 시각으로 판단하므로 동작에 문제는 없다.
+- 내부 운영자(`api-admin`)의 가맹점 계정 관리 — 그때 6절 5번(마지막 활성 OWNER) 규칙이
+  실제로 트리거되는 첫 경로가 된다.

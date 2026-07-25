@@ -37,4 +37,13 @@ data class MerchantUserSummary(
 	val status: AccountStatus,
 	val lastLoginAt: Instant?,
 	val createdAt: Instant,
+	/**
+	 * 이 사용자의 **유효한(`PENDING`) 초대의 만료 시각**. 없으면 `null`이다.
+	 *
+	 * `INVITED` 사용자가 왜 아직 활성화되지 않았는지를 명부에서 바로 알기 위한 값이다 —
+	 * `null`이면 "초대가 없거나 취소됨(재발송 필요)", 값이 과거면 "만료됨"이다. 만료는
+	 * 수락 시점에만 검사되고 상태는 `PENDING`으로 남으므로(만료 배치가 없다) 화면이
+	 * 이 시각을 현재와 비교해 판단한다.
+	 */
+	val pendingInvitationExpiresAt: Instant?,
 )

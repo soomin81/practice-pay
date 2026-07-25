@@ -1,5 +1,11 @@
 import { useState } from 'react'
-import { useChangeMerchantUserRole, useChangeMerchantUserStatus } from '@/console/useMerchantUsers'
+import {
+	useChangeMerchantUserRole,
+	useChangeMerchantUserStatus,
+	useResendInvitation,
+	useRevokeInvitation,
+} from '@/console/useMerchantUsers'
+import { InvitationReveal } from '@/console/InvitationReveal'
 import { INVITABLE_ROLES, type MerchantUserRole, type MerchantUserStatusAction, type MerchantUserSummary } from '@/api/types'
 import { MerchantApiError } from '@/api/client'
 import { Button } from '@/components/ui/button'
@@ -56,6 +62,7 @@ export function MerchantUserActions({ user }: { user: MerchantUserSummary }) {
 					confirmLabel="종료하면 되돌릴 수 없습니다. 계속할까요?"
 					disabled={pending}
 				/>
+				{status === 'INVITED' && <InvitationActions user={user} disabled={pending} />}
 				{status === 'ACTIVE' && <RoleAction user={user} disabled={pending} />}
 			</div>
 			{error && (
@@ -64,6 +71,71 @@ export function MerchantUserActions({ user }: { user: MerchantUserSummary }) {
 				</span>
 			)}
 		</div>
+	)
+}
+
+/**
+ * 초대 재발송·취소. `INVITED` 행에만 나온다.
+ *
+ * **재발송은 새 Token을 발급하는 것이라 이전 링크가 죽는다** — 성공하면 새 링크를
+ * 1회 노출한다([InvitationReveal], 최초 발급과 같은 컴포넌트). 취소는 되돌릴 수 없으니
+ * 인라인으로 한 번 더 묻는다(계정 자체는 남는다 — 없애려면 "종료"를 쓴다).
+ */
+function InvitationActions({ user, disabled }: { user: MerchantUserSummary; disabled: boolean }) {
+	const [confirmingRevoke, setConfirmingRevoke] = useState(false)
+	const resend = useResendInvitation()
+	const revoke = useRevokeInvitation()
+
+	if (resend.isSuccess) {
+		return (
+			<InvitationReveal
+				title="새 초대 링크가 발급되었습니다 — 이전 링크는 더 이상 동작하지 않습니다"
+				description={
+					<>
+						<strong>{user.loginId}</strong>에게 아래 링크를 다시 전달하세요. 이 화면을 벗어나면 확인할 수 없습니다.
+					</>
+				}
+				invitationToken={resend.data.invitationToken}
+				onDone={() => resend.reset()}
+			/>
+		)
+	}
+
+	if (confirmingRevoke) {
+		return (
+			<span className="inline-flex items-center gap-1">
+				<span className="text-xs text-muted-foreground">초대를 취소할까요? (계정은 남습니다)</span>
+				<Button
+					variant="destructive"
+					size="sm"
+					disabled={revoke.isPending}
+					onClick={() =>
+						revoke.mutate(user.merchantUserId, { onSuccess: () => setConfirmingRevoke(false) })
+					}
+				>
+					확인
+				</Button>
+				<Button variant="ghost" size="sm" disabled={revoke.isPending} onClick={() => setConfirmingRevoke(false)}>
+					취소
+				</Button>
+			</span>
+		)
+	}
+
+	return (
+		<>
+			<Button
+				variant="outline"
+				size="sm"
+				disabled={disabled || resend.isPending}
+				onClick={() => resend.mutate(user.merchantUserId)}
+			>
+				{resend.isPending ? '발송 중…' : '초대 재발송'}
+			</Button>
+			<Button variant="ghost" size="sm" disabled={disabled} onClick={() => setConfirmingRevoke(true)}>
+				초대 취소
+			</Button>
+		</>
 	)
 }
 

@@ -2,6 +2,8 @@ package paytech.practice.pay.infra.persistence.jooq.identity
 
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.shouldBe
+import paytech.practice.pay.domain.identity.AccountInvitation
+import paytech.practice.pay.domain.identity.AccountInvitationId
 import paytech.practice.pay.domain.identity.AccountStatus
 import paytech.practice.pay.domain.identity.Email
 import paytech.practice.pay.domain.identity.InternalUser
@@ -116,6 +118,36 @@ class MerchantUserListProjectionAdapterTest :
 			val summaries = projectionAdapter.findByMerchantId(merchantId)
 
 			summaries.map { it.merchantUserId } shouldBe listOf(mine.id)
+		}
+
+		test("pendingInvitationExpiresAt reflects only PENDING invitations") {
+			val merchantId = MerchantId(insertTestMerchant())
+			val internalUserId = insertTestInternalUser()
+			val owner = ownerIn(merchantId, internalUserId, NOW.minusSeconds(3_600))
+			repositoryAdapter.save(owner)
+			val invited = subAccountIn(merchantId, owner.id, MerchantUserRole.ADMIN, NOW.minusSeconds(60))
+			repositoryAdapter.save(invited)
+
+			val invitationAdapter = AccountInvitationRepositoryAdapter(PersistenceTestSupport.dsl)
+			val invitation =
+				AccountInvitation.forMerchantUser(
+					id = AccountInvitationId("ai_${uniqueSuffix()}"),
+					merchantUserId = invited.id,
+					tokenHash = "hash-${uniqueSuffix()}",
+					expiresAt = NOW.plusSeconds(604_800),
+					createdAt = NOW,
+				)
+			invitationAdapter.save(invitation)
+
+			val byId = { projectionAdapter.findByMerchantId(merchantId).associateBy { it.merchantUserId } }
+			byId().getValue(invited.id).pendingInvitationExpiresAt shouldBe NOW.plusSeconds(604_800)
+			// 초대가 없는 사용자는 null이다.
+			byId().getValue(owner.id).pendingInvitationExpiresAt shouldBe null
+
+			// 취소하면 PENDING이 아니게 되어 명부에서도 사라진다 — "유효한 초대 없음"이 드러나는 근거다.
+			invitation.revoke()
+			invitationAdapter.save(invitation)
+			byId().getValue(invited.id).pendingInvitationExpiresAt shouldBe null
 		}
 
 		test("an unknown merchant returns an empty list") {

@@ -72,6 +72,20 @@ class AccountInvitationRepositoryAdapter(
 			.fetchOne()
 			?.toDomain()
 
+	/**
+	 * `PENDING`이 사용자당 하나라는 것은 우리 로직의 규약이지 DB 제약이 아니므로
+	 * (Port의 KDoc 참고), 둘 이상이 있어도 터지지 않게 **가장 최근 것 하나**를 돌려준다.
+	 */
+	override fun findPendingByMerchantUserId(merchantUserId: MerchantUserId): AccountInvitation? =
+		dsl
+			.selectFrom(ACCOUNT_INVITATION)
+			.where(ACCOUNT_INVITATION.MERCHANT_USER_SEQ.eq(resolveMerchantUserSeq(merchantUserId)))
+			.and(ACCOUNT_INVITATION.INVITATION_STATUS.eq(AccountInvitationStatus.PENDING.name))
+			.orderBy(ACCOUNT_INVITATION.CREATED_AT.desc())
+			.limit(1)
+			.fetchOne()
+			?.toDomain()
+
 	private fun resolveInternalUserSeq(internalUserId: InternalUserId): Long =
 		dsl
 			.select(INTERNAL_USER.INTERNAL_USER_SEQ)

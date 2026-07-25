@@ -26,12 +26,17 @@ import paytech.practice.pay.application.identity.ChangeMerchantUserStatusResult
 import paytech.practice.pay.application.identity.ChangeMerchantUserStatusUseCase
 import paytech.practice.pay.application.identity.DuplicateMerchantUserException
 import paytech.practice.pay.application.identity.InvalidMerchantUserTransitionException
+import paytech.practice.pay.application.identity.InvitationNotManageableException
 import paytech.practice.pay.application.identity.InviteMerchantSubAccountResult
 import paytech.practice.pay.application.identity.InviteMerchantSubAccountUseCase
 import paytech.practice.pay.application.identity.LastActiveOwnerException
 import paytech.practice.pay.application.identity.ListMerchantUsersResult
 import paytech.practice.pay.application.identity.ListMerchantUsersUseCase
 import paytech.practice.pay.application.identity.MerchantUserCannotInviteSubAccountsException
+import paytech.practice.pay.application.identity.ResendMerchantUserInvitationResult
+import paytech.practice.pay.application.identity.ResendMerchantUserInvitationUseCase
+import paytech.practice.pay.application.identity.RevokeMerchantUserInvitationResult
+import paytech.practice.pay.application.identity.RevokeMerchantUserInvitationUseCase
 import paytech.practice.pay.application.port.outbound.MerchantUserSummary
 import paytech.practice.pay.domain.identity.AccountStatus
 import paytech.practice.pay.domain.identity.Email
@@ -85,6 +90,12 @@ class MerchantSubAccountControllerTest : FunSpec() {
 
 	@MockkBean
 	lateinit var changeMerchantUserRoleUseCase: ChangeMerchantUserRoleUseCase
+
+	@MockkBean
+	lateinit var resendMerchantUserInvitationUseCase: ResendMerchantUserInvitationUseCase
+
+	@MockkBean
+	lateinit var revokeMerchantUserInvitationUseCase: RevokeMerchantUserInvitationUseCase
 
 	init {
 		extensions(SpringExtension)
@@ -224,6 +235,7 @@ class MerchantSubAccountControllerTest : FunSpec() {
 								status = AccountStatus.INVITED,
 								lastLoginAt = null,
 								createdAt = Instant.parse("2026-07-19T00:00:00Z"),
+								pendingInvitationExpiresAt = Instant.parse("2026-07-26T00:00:00Z"),
 							),
 						),
 				)
@@ -333,6 +345,52 @@ class MerchantSubAccountControllerTest : FunSpec() {
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(objectMapper.writeValueAsString(ChangeMerchantUserRoleRequest(role = "NOT_A_ROLE"))),
 				).andExpect(status().isBadRequest)
+		}
+
+		test("resending an invitation returns 200 with a new token") {
+			every { resendMerchantUserInvitationUseCase.execute(any()) } returns
+				ResendMerchantUserInvitationResult(
+					merchantUserId = MerchantUserId("mu_001"),
+					invitationToken = "new-raw-token",
+					invitationExpiresAt = Instant.parse("2026-07-26T00:00:00Z"),
+				)
+
+			mockMvc
+				.perform(post("/merchant/merchant-users/mu_001/invitation/resend").with(csrf()).with(authenticatedAs(OWNER)))
+				.andExpect(status().isOk)
+				.andExpect(jsonPath("$.invitationToken").value("new-raw-token"))
+		}
+
+		test("revoking an invitation returns 200") {
+			every { revokeMerchantUserInvitationUseCase.execute(any()) } returns
+				RevokeMerchantUserInvitationResult(
+					merchantUserId = MerchantUserId("mu_001"),
+					revokedAt = Instant.parse("2026-07-19T00:00:00Z"),
+				)
+
+			mockMvc
+				.perform(post("/merchant/merchant-users/mu_001/invitation/revoke").with(csrf()).with(authenticatedAs(OWNER)))
+				.andExpect(status().isOk)
+				.andExpect(jsonPath("$.merchantUserId").value("mu_001"))
+		}
+
+		test("InvitationNotManageableException returns 409") {
+			every { resendMerchantUserInvitationUseCase.execute(any()) } throws
+				InvitationNotManageableException("이미 활성화된 계정입니다.")
+
+			mockMvc
+				.perform(post("/merchant/merchant-users/mu_001/invitation/resend").with(csrf()).with(authenticatedAs(OWNER)))
+				.andExpect(status().isConflict)
+		}
+
+		test("VIEWER cannot reach the invitation action paths") {
+			// 3번째 슬라이스에서 넓힌 /merchant/merchant-users/** 와일드카드가 이 하위 경로도 덮는지 확인한다.
+			mockMvc
+				.perform(post("/merchant/merchant-users/mu_001/invitation/resend").with(csrf()).with(authenticatedAs(VIEWER)))
+				.andExpect(status().isForbidden)
+			mockMvc
+				.perform(post("/merchant/merchant-users/mu_001/invitation/revoke").with(csrf()).with(authenticatedAs(VIEWER)))
+				.andExpect(status().isForbidden)
 		}
 
 		test("attempting to invite an OWNER returns 400 (domain require failure surfaces as IllegalArgumentException)") {

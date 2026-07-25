@@ -42,6 +42,9 @@ apps/
                      ChangeMerchantUserStatusUseCase/ChangeMerchantUserRoleUseCase
                      (POST /merchant/merchant-users/{id}/suspend|reactivate|terminate|role —
                      "최소 하나의 활성 OWNER를 유지한다" 불변식을 처음 구현한 자리),
+                     ResendMerchantUserInvitationUseCase/RevokeMerchantUserInvitationUseCase
+                     (POST /merchant/merchant-users/{id}/invitation/resend|revoke — 재발송은
+                     기존 초대를 revoke하고 새 Token을 발급한다),
                      IssueMerchantApiKeyUseCase/
                      RevokeMerchantApiKeyUseCase/ListMerchantApiKeysUseCase(POST·DELETE·GET
                      /merchant/api-keys, OWNER/ADMIN — GET도 VIEWER는 막는다)가

@@ -48,6 +48,10 @@ import paytech.practice.pay.application.identity.InviteMerchantSubAccountResult
 import paytech.practice.pay.application.identity.InviteMerchantSubAccountUseCase
 import paytech.practice.pay.application.identity.ListMerchantUsersResult
 import paytech.practice.pay.application.identity.ListMerchantUsersUseCase
+import paytech.practice.pay.application.identity.ResendMerchantUserInvitationResult
+import paytech.practice.pay.application.identity.ResendMerchantUserInvitationUseCase
+import paytech.practice.pay.application.identity.RevokeMerchantUserInvitationResult
+import paytech.practice.pay.application.identity.RevokeMerchantUserInvitationUseCase
 import paytech.practice.pay.application.port.outbound.MerchantApiKeySummary
 import paytech.practice.pay.application.port.outbound.MerchantUserSummary
 import paytech.practice.pay.domain.apikey.ApiEnvironment
@@ -167,6 +171,12 @@ class MerchantApiDocumentationTest : FunSpec() {
 
 	@MockkBean
 	lateinit var changeMerchantUserRoleUseCase: ChangeMerchantUserRoleUseCase
+
+	@MockkBean
+	lateinit var resendMerchantUserInvitationUseCase: ResendMerchantUserInvitationUseCase
+
+	@MockkBean
+	lateinit var revokeMerchantUserInvitationUseCase: RevokeMerchantUserInvitationUseCase
 
 	init {
 		extensions(SpringExtension)
@@ -431,6 +441,8 @@ class MerchantApiDocumentationTest : FunSpec() {
 								// 추론 못 해 필드를 스펙에서 통째로 빠뜨린다(1번째 슬라이스에서 겪은 함정).
 								lastLoginAt = NOW.plusSeconds(3_600),
 								createdAt = NOW,
+								// 같은 이유로 non-null을 넣는다(null이면 스펙에서 필드가 빠진다).
+								pendingInvitationExpiresAt = NOW.plusSeconds(604_800),
 							),
 						),
 				)
@@ -456,6 +468,11 @@ class MerchantApiDocumentationTest : FunSpec() {
 								.description("마지막 로그인 시각(UTC). 로그인한 적이 없으면 null.")
 								.optional(),
 							fieldWithPath("merchantUsers[].createdAt").description("생성(초대) 시각(UTC)"),
+							fieldWithPath("merchantUsers[].pendingInvitationExpiresAt")
+								.description(
+									"유효한(PENDING) 초대의 만료 시각(UTC). null이면 초대가 없거나 취소된 상태이고, " +
+										"과거면 만료된 것이다 — INVITED 사용자가 왜 활성화되지 않았는지를 여기서 판단한다.",
+								).optional(),
 						),
 				)
 
@@ -544,6 +561,69 @@ class MerchantApiDocumentationTest : FunSpec() {
 						.content(objectMapper.writeValueAsString(ChangeMerchantUserRoleRequest(role = "VIEWER"))),
 				).andExpect(status().isOk)
 				.andDo(document("merchant-change-user-role", snippet))
+		}
+
+		test("document POST resend invitation") {
+			every { resendMerchantUserInvitationUseCase.execute(any()) } returns
+				ResendMerchantUserInvitationResult(
+					merchantUserId = MerchantUserId("mu_002"),
+					invitationToken = "new-raw-invitation-token",
+					invitationExpiresAt = NOW.plusSeconds(604_800),
+				)
+
+			val snippet =
+				merchantResource(
+					summary = "초대 재발송",
+					description =
+						"초대 Token은 Hash만 저장돼 원문을 다시 볼 수 없으므로, 재발송은 기존 링크를 다시 보여주는 게 " +
+							"아니라 **새 Token을 발급하는 것**이다 — 이전 초대 링크는 이 시점에 무효가 된다. 대상이 " +
+							"INVITED가 아니면 409다(이미 활성화된 계정에 다시 보낼 이유가 없다).",
+					responseSchema = "ResendInvitationResponse",
+					responseFields =
+						listOf(
+							fieldWithPath("merchantUserId").description("대상 가맹점 사용자 식별자"),
+							fieldWithPath("invitationToken").description("새 초대 Token 원문. 최초 1회만 노출된다."),
+							fieldWithPath("invitationExpiresAt").description("새 초대의 만료 시각(UTC)"),
+						),
+					pathParameters = listOf(parameterWithName("merchantUserId").description("대상 가맹점 사용자 식별자")),
+				)
+
+			mockMvc
+				.perform(
+					post("/merchant/merchant-users/{merchantUserId}/invitation/resend", "mu_002")
+						.with(authenticatedAs(OWNER))
+						.with(csrf()),
+				).andExpect(status().isOk)
+				.andDo(document("merchant-resend-invitation", snippet))
+		}
+
+		test("document POST revoke invitation") {
+			every { revokeMerchantUserInvitationUseCase.execute(any()) } returns
+				RevokeMerchantUserInvitationResult(merchantUserId = MerchantUserId("mu_002"), revokedAt = NOW)
+
+			val snippet =
+				merchantResource(
+					summary = "초대 취소",
+					description =
+						"초대 Token을 무효화해 그 링크로는 더 이상 활성화할 수 없게 한다. **계정 자체는 INVITED로 남는다** " +
+							"— 계정을 없애려면 종료를 쓴다(되돌릴 수 없는 동작이 가벼운 이름 뒤에 숨지 않게 분리했다). " +
+							"취소할 PENDING 초대가 없으면 409다.",
+					responseSchema = "RevokeInvitationResponse",
+					responseFields =
+						listOf(
+							fieldWithPath("merchantUserId").description("대상 가맹점 사용자 식별자"),
+							fieldWithPath("revokedAt").description("취소 시각(UTC)"),
+						),
+					pathParameters = listOf(parameterWithName("merchantUserId").description("대상 가맹점 사용자 식별자")),
+				)
+
+			mockMvc
+				.perform(
+					post("/merchant/merchant-users/{merchantUserId}/invitation/revoke", "mu_002")
+						.with(authenticatedAs(OWNER))
+						.with(csrf()),
+				).andExpect(status().isOk)
+				.andDo(document("merchant-revoke-invitation", snippet))
 		}
 
 		test("document POST accept account invitation") {

@@ -17,4 +17,9 @@ data class MerchantUserSummaryResponse(
 	val status: String,
 	val lastLoginAt: Instant?,
 	val createdAt: Instant,
+	/**
+	 * 유효한(`PENDING`) 초대의 만료 시각. 없으면 `null`이다 — `INVITED` 사용자가 왜 아직
+	 * 활성화되지 않았는지를 화면이 판단하는 근거다(`null`=초대 없음/취소됨, 과거=만료됨).
+	 */
+	val pendingInvitationExpiresAt: Instant?,
 )

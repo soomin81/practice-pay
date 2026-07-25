@@ -6,6 +6,8 @@ import type {
 	InviteSubAccountRequest,
 	MerchantUserRole,
 	MerchantUserStatusAction,
+	ResendInvitationResponse,
+	RevokeInvitationResponse,
 	InviteSubAccountResponse,
 	IssueApiKeyRequest,
 	IssueApiKeyResponse,
@@ -177,4 +179,18 @@ export const merchantApi = {
 			method: 'POST',
 			body: JSON.stringify({ role }),
 		}),
+
+	/** 새 초대 Token을 발급한다 — **이전 초대 링크는 이 시점에 무효가 된다.** */
+	resendInvitation: (merchantUserId: string) =>
+		request<ResendInvitationResponse>(
+			`/merchant/merchant-users/${encodeURIComponent(merchantUserId)}/invitation/resend`,
+			{ method: 'POST' },
+		),
+
+	/** 초대 Token만 무효화한다. 계정은 INVITED로 남는다(종료와 분리된 동작). */
+	revokeInvitation: (merchantUserId: string) =>
+		request<RevokeInvitationResponse>(
+			`/merchant/merchant-users/${encodeURIComponent(merchantUserId)}/invitation/revoke`,
+			{ method: 'POST' },
+		),
 }

@@ -11,6 +11,8 @@ import paytech.practice.pay.application.identity.ChangeMerchantUserRoleUseCase
 import paytech.practice.pay.application.identity.ChangeMerchantUserStatusUseCase
 import paytech.practice.pay.application.identity.InviteMerchantSubAccountUseCase
 import paytech.practice.pay.application.identity.ListMerchantUsersUseCase
+import paytech.practice.pay.application.identity.ResendMerchantUserInvitationUseCase
+import paytech.practice.pay.application.identity.RevokeMerchantUserInvitationUseCase
 import paytech.practice.pay.application.port.outbound.AccountInvitationRepository
 import paytech.practice.pay.application.port.outbound.ApiKeySecretHasher
 import paytech.practice.pay.application.port.outbound.IdGenerator
@@ -146,4 +148,34 @@ class UseCaseConfiguration {
 		merchantUserRepository: MerchantUserRepository,
 		clock: Clock,
 	): ChangeMerchantUserRoleUseCase = ChangeMerchantUserRoleUseCase(merchantUserRepository, clock)
+
+	@Bean
+	fun resendMerchantUserInvitationUseCase(
+		merchantUserRepository: MerchantUserRepository,
+		accountInvitationRepository: AccountInvitationRepository,
+		invitationTokenHasher: InvitationTokenHasher,
+		idGenerator: IdGenerator,
+		transactionManager: TransactionManager,
+		clock: Clock,
+	): ResendMerchantUserInvitationUseCase =
+		ResendMerchantUserInvitationUseCase(
+			merchantUserRepository = merchantUserRepository,
+			accountInvitationRepository = accountInvitationRepository,
+			invitationTokenHasher = invitationTokenHasher,
+			idGenerator = idGenerator,
+			transactionManager = transactionManager,
+			clock = clock,
+		)
+
+	@Bean
+	fun revokeMerchantUserInvitationUseCase(
+		merchantUserRepository: MerchantUserRepository,
+		accountInvitationRepository: AccountInvitationRepository,
+		clock: Clock,
+	): RevokeMerchantUserInvitationUseCase =
+		RevokeMerchantUserInvitationUseCase(
+			merchantUserRepository = merchantUserRepository,
+			accountInvitationRepository = accountInvitationRepository,
+			clock = clock,
+		)
 }

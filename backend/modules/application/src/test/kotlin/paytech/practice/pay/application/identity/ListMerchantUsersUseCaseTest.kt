@@ -58,6 +58,7 @@ private fun summary(): MerchantUserSummary =
 		status = AccountStatus.INVITED,
 		lastLoginAt = null,
 		createdAt = NOW.minusSeconds(600),
+		pendingInvitationExpiresAt = NOW.plusSeconds(604_800),
 	)
 
 private fun newCommand(): ListMerchantUsersCommand = ListMerchantUsersCommand(queriedByMerchantUserId = QUERIER_ID)

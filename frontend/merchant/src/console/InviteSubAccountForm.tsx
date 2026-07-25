@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { useInviteSubAccount } from '@/console/useMerchantUsers'
 import { INVITABLE_ROLES, type InviteSubAccountResponse, type MerchantUserRole } from '@/api/types'
 import { MerchantApiError } from '@/api/client'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { InvitationReveal } from '@/console/InvitationReveal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -33,7 +33,7 @@ export function InviteSubAccountForm() {
 	}
 
 	if (invite.isSuccess) {
-		return <InvitationReveal invited={invite.data} onDone={reset} />
+		return <IssuedInvitation invited={invite.data} onDone={reset} />
 	}
 
 	return (
@@ -90,42 +90,21 @@ export function InviteSubAccountForm() {
 /**
  * 발급 결과. **토큰 문자열이 아니라 바로 쓸 수 있는 초대 링크를 보여준다** — MVP에는
  * 초대 메일 발송이 없어서 발급한 사람이 이 링크를 직접 전달해야 하기 때문이다.
+ * 링크를 만드는 방식과 1회 노출 UI는 재발송과 공유한다([InvitationReveal]).
  */
-function InvitationReveal({ invited, onDone }: { invited: InviteSubAccountResponse; onDone: () => void }) {
-	const [copied, setCopied] = useState(false)
-	const invitationUrl = `${window.location.origin}/accept-invitation?token=${encodeURIComponent(invited.invitationToken)}`
-
-	async function copy() {
-		try {
-			await navigator.clipboard.writeText(invitationUrl)
-			setCopied(true)
-		} catch {
-			// 클립보드 접근이 막힌 환경 — 사용자가 직접 선택해 복사한다.
-			setCopied(false)
-		}
-	}
-
+function IssuedInvitation({ invited, onDone }: { invited: InviteSubAccountResponse; onDone: () => void }) {
 	return (
-		<Alert variant="destructive" className="flex flex-col gap-3">
-			<AlertTitle>초대 링크가 발급되었습니다 — 이 링크는 다시 볼 수 없습니다</AlertTitle>
-			<AlertDescription>
-				<p className="mb-2">
+		<InvitationReveal
+			title="초대 링크가 발급되었습니다 — 이 링크는 다시 볼 수 없습니다"
+			description={
+				<>
 					<strong>{invited.loginId}</strong>({String(invited.role)}) 계정이 초대되었습니다. 아래 링크를 본인에게
 					전달하세요. 이 화면을 벗어나면 다시 확인할 수 없습니다.
-				</p>
-				<code className="block w-full break-all rounded-md bg-muted px-2 py-1.5 font-mono text-xs text-foreground">
-					{invitationUrl}
-				</code>
-			</AlertDescription>
-			<div className="flex items-center gap-2">
-				<Button size="sm" variant="outline" onClick={() => void copy()}>
-					{copied ? '복사됨' : '링크 복사'}
-				</Button>
-				<Button size="sm" onClick={onDone}>
-					확인했습니다
-				</Button>
-			</div>
-		</Alert>
+				</>
+			}
+			invitationToken={invited.invitationToken}
+			onDone={onDone}
+		/>
 	)
 }
 

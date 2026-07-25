@@ -31,6 +31,28 @@ export function useChangeMerchantUserStatus() {
 	})
 }
 
+export function useResendInvitation() {
+	const queryClient = useQueryClient()
+	return useMutation({
+		mutationFn: (merchantUserId: string) => merchantApi.resendInvitation(merchantUserId),
+		// 새 만료 시각이 명부에 반영돼야 한다.
+		onSuccess: () => {
+			void queryClient.invalidateQueries({ queryKey: MERCHANT_USERS_QUERY_KEY })
+		},
+	})
+}
+
+export function useRevokeInvitation() {
+	const queryClient = useQueryClient()
+	return useMutation({
+		mutationFn: (merchantUserId: string) => merchantApi.revokeInvitation(merchantUserId),
+		// 취소하면 pendingInvitationExpiresAt이 null이 되어 "초대 없음"으로 보여야 한다.
+		onSuccess: () => {
+			void queryClient.invalidateQueries({ queryKey: MERCHANT_USERS_QUERY_KEY })
+		},
+	})
+}
+
 export function useChangeMerchantUserRole() {
 	const queryClient = useQueryClient()
 	return useMutation({

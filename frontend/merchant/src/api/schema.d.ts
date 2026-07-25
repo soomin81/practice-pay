@@ -232,6 +232,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/merchant/merchant-users/{merchantUserId}/invitation/resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 초대 재발송
+         * @description 초대 Token은 Hash만 저장돼 원문을 다시 볼 수 없으므로, 재발송은 기존 링크를 다시 보여주는 게 아니라 **새 Token을 발급하는 것**이다 — 이전 초대 링크는 이 시점에 무효가 된다. 대상이 INVITED가 아니면 409다(이미 활성화된 계정에 다시 보낼 이유가 없다).
+         */
+        post: operations["merchant-resend-invitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merchant/merchant-users/{merchantUserId}/invitation/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 초대 취소
+         * @description 초대 Token을 무효화해 그 링크로는 더 이상 활성화할 수 없게 한다. **계정 자체는 INVITED로 남는다** — 계정을 없애려면 종료를 쓴다(되돌릴 수 없는 동작이 가벼운 이름 뒤에 숨지 않게 분리했다). 취소할 PENDING 초대가 없으면 409다.
+         */
+        post: operations["merchant-revoke-invitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -260,6 +300,15 @@ export interface components {
             /** @description 발급 응답에서 받은 초대 Token 원문 */
             invitationToken: string;
         };
+        /** ResendInvitationResponse */
+        ResendInvitationResponse: {
+            /** @description 새 초대의 만료 시각(UTC) */
+            invitationExpiresAt: string;
+            /** @description 대상 가맹점 사용자 식별자 */
+            merchantUserId: string;
+            /** @description 새 초대 Token 원문. 최초 1회만 노출된다. */
+            invitationToken: string;
+        };
         /** ChangeMerchantUserRoleResponse */
         ChangeMerchantUserRoleResponse: {
             /** @description 변경 후 역할 */
@@ -280,7 +329,7 @@ export interface components {
             /** @description 가맹점 내에서 유일한 이메일 */
             email: string;
         };
-        "merchant-merchant-users-merchantUserId-reactivate-33084672": Record<string, never>;
+        "merchant-merchant-users-merchantUserId-suspend-33084672": Record<string, never>;
         /** MerchantMeResponse */
         MerchantMeResponse: {
             /** @description OWNER | ADMIN | VIEWER */
@@ -305,6 +354,20 @@ export interface components {
             /** @description 사용자 이름 */
             userName: string;
         };
+        /** AcceptAccountInvitationResponse */
+        AcceptAccountInvitationResponse: {
+            /** @description 활성화된 계정의 로그인 아이디 */
+            loginId: string;
+            /** @description 활성화 시각(UTC) */
+            activatedAt: string;
+        };
+        /** RevokeInvitationResponse */
+        RevokeInvitationResponse: {
+            /** @description 대상 가맹점 사용자 식별자 */
+            merchantUserId: string;
+            /** @description 취소 시각(UTC) */
+            revokedAt: string;
+        };
         /** ListMerchantUsersResponse */
         ListMerchantUsersResponse: {
             /** @description 가맹점 사용자 요약 배열(최신 생성순) */
@@ -323,16 +386,11 @@ export interface components {
                 userName: string;
                 /** @description 이메일 */
                 email: string;
+                /** @description 유효한(PENDING) 초대의 만료 시각(UTC). null이면 초대가 없거나 취소된 상태이고, 과거면 만료된 것이다 — INVITED 사용자가 왜 활성화되지 않았는지를 여기서 판단한다. */
+                pendingInvitationExpiresAt?: string | null;
                 /** @description INVITED | ACTIVE | LOCKED | SUSPENDED | TERMINATED */
                 status: string;
             }[];
-        };
-        /** AcceptAccountInvitationResponse */
-        AcceptAccountInvitationResponse: {
-            /** @description 활성화된 계정의 로그인 아이디 */
-            loginId: string;
-            /** @description 활성화 시각(UTC) */
-            activatedAt: string;
         };
         /** ChangeMerchantUserStatusResponse */
         ChangeMerchantUserStatusResponse: {
@@ -498,7 +556,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-reactivate-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-suspend-33084672"];
             };
         };
         responses: {
@@ -611,7 +669,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-reactivate-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-suspend-33084672"];
             };
         };
         responses: {
@@ -638,7 +696,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-reactivate-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-suspend-33084672"];
             };
         };
         responses: {
@@ -692,7 +750,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-reactivate-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-suspend-33084672"];
             };
         };
         responses: {
@@ -719,7 +777,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-reactivate-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-suspend-33084672"];
             };
         };
         responses: {
@@ -730,6 +788,60 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChangeMerchantUserStatusResponse"];
+                };
+            };
+        };
+    };
+    "merchant-resend-invitation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 대상 가맹점 사용자 식별자 */
+                merchantUserId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-suspend-33084672"];
+            };
+        };
+        responses: {
+            /** @description 200 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResendInvitationResponse"];
+                };
+            };
+        };
+    };
+    "merchant-revoke-invitation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 대상 가맹점 사용자 식별자 */
+                merchantUserId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-suspend-33084672"];
+            };
+        };
+        responses: {
+            /** @description 200 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevokeInvitationResponse"];
                 };
             };
         };

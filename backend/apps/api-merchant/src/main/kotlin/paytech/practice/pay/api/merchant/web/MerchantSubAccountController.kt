@@ -20,6 +20,10 @@ import paytech.practice.pay.application.identity.InviteMerchantSubAccountUseCase
 import paytech.practice.pay.application.identity.ListMerchantUsersCommand
 import paytech.practice.pay.application.identity.ListMerchantUsersUseCase
 import paytech.practice.pay.application.identity.MerchantUserStatusAction
+import paytech.practice.pay.application.identity.ResendMerchantUserInvitationCommand
+import paytech.practice.pay.application.identity.ResendMerchantUserInvitationUseCase
+import paytech.practice.pay.application.identity.RevokeMerchantUserInvitationCommand
+import paytech.practice.pay.application.identity.RevokeMerchantUserInvitationUseCase
 import paytech.practice.pay.domain.identity.Email
 import paytech.practice.pay.domain.identity.LoginId
 import paytech.practice.pay.domain.identity.MerchantUserId
@@ -49,6 +53,8 @@ class MerchantSubAccountController(
 	private val listMerchantUsersUseCase: ListMerchantUsersUseCase,
 	private val changeMerchantUserStatusUseCase: ChangeMerchantUserStatusUseCase,
 	private val changeMerchantUserRoleUseCase: ChangeMerchantUserRoleUseCase,
+	private val resendMerchantUserInvitationUseCase: ResendMerchantUserInvitationUseCase,
+	private val revokeMerchantUserInvitationUseCase: RevokeMerchantUserInvitationUseCase,
 ) {
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
@@ -96,6 +102,7 @@ class MerchantSubAccountController(
 						status = summary.status.name,
 						lastLoginAt = summary.lastLoginAt,
 						createdAt = summary.createdAt,
+						pendingInvitationExpiresAt = summary.pendingInvitationExpiresAt,
 					)
 				},
 		)
@@ -138,6 +145,45 @@ class MerchantSubAccountController(
 			merchantUserId = result.merchantUserId.value,
 			role = result.role.name,
 			changedAt = result.changedAt,
+		)
+	}
+
+	@PostMapping("/{merchantUserId}/invitation/resend")
+	fun resendInvitation(
+		@PathVariable merchantUserId: String,
+		@AuthenticationPrincipal principal: MerchantUserPrincipal,
+	): ResendInvitationResponse {
+		val result =
+			resendMerchantUserInvitationUseCase.execute(
+				ResendMerchantUserInvitationCommand(
+					targetMerchantUserId = MerchantUserId(merchantUserId),
+					requestedByMerchantUserId = principal.merchantUserId,
+				),
+			)
+
+		return ResendInvitationResponse(
+			merchantUserId = result.merchantUserId.value,
+			invitationToken = result.invitationToken,
+			invitationExpiresAt = result.invitationExpiresAt,
+		)
+	}
+
+	@PostMapping("/{merchantUserId}/invitation/revoke")
+	fun revokeInvitation(
+		@PathVariable merchantUserId: String,
+		@AuthenticationPrincipal principal: MerchantUserPrincipal,
+	): RevokeInvitationResponse {
+		val result =
+			revokeMerchantUserInvitationUseCase.execute(
+				RevokeMerchantUserInvitationCommand(
+					targetMerchantUserId = MerchantUserId(merchantUserId),
+					requestedByMerchantUserId = principal.merchantUserId,
+				),
+			)
+
+		return RevokeInvitationResponse(
+			merchantUserId = result.merchantUserId.value,
+			revokedAt = result.revokedAt,
 		)
 	}
 

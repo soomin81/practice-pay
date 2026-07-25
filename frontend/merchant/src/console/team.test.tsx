@@ -16,9 +16,14 @@ function member(overrides: Partial<MerchantUserSummary> = {}): MerchantUserSumma
 		status: 'ACTIVE',
 		lastLoginAt: '2026-07-19T01:00:00Z',
 		createdAt: '2026-07-19T00:00:00Z',
+		pendingInvitationExpiresAt: null,
 		...overrides,
 	} as MerchantUserSummary
 }
+
+/** 항상 미래인 만료 시각 — 테스트가 시간이 지나도 깨지지 않게 한다. */
+const FUTURE = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString()
+const PAST = new Date(Date.now() - 3600 * 1000).toISOString()
 
 function fakeResponse(status: number, body: unknown = {}) {
 	return { ok: status >= 200 && status < 300, status, json: async () => body }
@@ -39,6 +44,31 @@ describe('MerchantUserTable', () => {
 		expect(screen.getByText('INVITED')).toBeInTheDocument()
 		// 로그인한 적이 없으면 대시로 그린다.
 		expect(screen.getByText('—')).toBeInTheDocument()
+	})
+
+	// 만료는 서버가 알려주지 않고 화면이 만료 시각으로 판단한다(만료 배치가 없다).
+	function invitedWith(expiresAt: string | null) {
+		return member({ status: 'INVITED', lastLoginAt: null, pendingInvitationExpiresAt: expiresAt })
+	}
+
+	it('유효한 초대는 만료 시각을 보여준다', () => {
+		renderWithRouter(<MerchantUserTable merchantUsers={[invitedWith(FUTURE)]} />)
+		expect(screen.getByText(/까지 유효/)).toBeInTheDocument()
+	})
+
+	it('만료된 초대는 "초대 만료됨"으로 표시한다', () => {
+		renderWithRouter(<MerchantUserTable merchantUsers={[invitedWith(PAST)]} />)
+		expect(screen.getByText('초대 만료됨')).toBeInTheDocument()
+	})
+
+	it('초대가 취소되어 없으면 "유효한 초대 없음"으로 표시한다', () => {
+		renderWithRouter(<MerchantUserTable merchantUsers={[invitedWith(null)]} />)
+		expect(screen.getByText('유효한 초대 없음')).toBeInTheDocument()
+	})
+
+	it('ACTIVE 행에는 초대 상태를 붙이지 않는다', () => {
+		renderWithRouter(<MerchantUserTable merchantUsers={[member({ pendingInvitationExpiresAt: FUTURE })]} />)
+		expect(screen.queryByText(/까지 유효/)).not.toBeInTheDocument()
 	})
 
 	it('빈 명부는 안내 문구를 보여준다', () => {
@@ -62,11 +92,18 @@ describe('MerchantUserTable 행 액션', () => {
 		expect(screen.queryByRole('button', { name: '정지' })).not.toBeInTheDocument()
 	})
 
-	it('INVITED 계정에는 종료만 있다(아직 활성화 전)', () => {
+	it('INVITED 계정에는 종료와 초대 관리가 있고 정지·역할 변경은 없다', () => {
 		renderWithRouter(<MerchantUserTable merchantUsers={[member({ status: 'INVITED', lastLoginAt: null })]} />)
 		expect(screen.getByRole('button', { name: '종료' })).toBeInTheDocument()
+		expect(screen.getByRole('button', { name: '초대 재발송' })).toBeInTheDocument()
+		expect(screen.getByRole('button', { name: '초대 취소' })).toBeInTheDocument()
 		expect(screen.queryByRole('button', { name: '정지' })).not.toBeInTheDocument()
 		expect(screen.queryByRole('button', { name: '역할 변경' })).not.toBeInTheDocument()
+	})
+
+	it('ACTIVE 계정에는 초대 관리가 없다', () => {
+		renderWithRouter(<MerchantUserTable merchantUsers={[member()]} />)
+		expect(screen.queryByRole('button', { name: '초대 재발송' })).not.toBeInTheDocument()
 	})
 
 	it('TERMINATED 계정에는 액션이 없다', () => {

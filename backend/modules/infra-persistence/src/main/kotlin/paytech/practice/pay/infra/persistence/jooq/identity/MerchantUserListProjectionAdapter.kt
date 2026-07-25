@@ -1,11 +1,14 @@
 package paytech.practice.pay.infra.persistence.jooq.identity
 
 import org.jooq.DSLContext
+import org.jooq.impl.DSL
 import org.springframework.stereotype.Repository
 import paytech.practice.pay.application.port.outbound.MerchantUserListProjection
 import paytech.practice.pay.application.port.outbound.MerchantUserSummary
+import paytech.practice.pay.dbcore.jooq.tables.AccountInvitation.Companion.ACCOUNT_INVITATION
 import paytech.practice.pay.dbcore.jooq.tables.Merchant.Companion.MERCHANT
 import paytech.practice.pay.dbcore.jooq.tables.MerchantUser.Companion.MERCHANT_USER
+import paytech.practice.pay.domain.identity.AccountInvitationStatus
 import paytech.practice.pay.domain.identity.AccountStatus
 import paytech.practice.pay.domain.identity.Email
 import paytech.practice.pay.domain.identity.LoginId
@@ -13,6 +16,7 @@ import paytech.practice.pay.domain.identity.MerchantUserId
 import paytech.practice.pay.domain.identity.MerchantUserRole
 import paytech.practice.pay.domain.merchant.MerchantId
 import paytech.practice.pay.infra.persistence.jooq.toUtcInstant
+import java.time.LocalDateTime
 
 /**
  * jOOQ로 [MerchantUserListProjection] Port를 구현한다
@@ -40,6 +44,18 @@ class MerchantUserListProjectionAdapter(
 				.fetchOne(MERCHANT.MERCHANT_SEQ)
 				?: return emptyList()
 
+		// 유효한(PENDING) 초대의 만료 시각을 스칼라 서브쿼리로 가져온다.
+		// **행을 늘리지 않으려고 JOIN이 아니라 MAX() 서브쿼리를 쓴다** — PENDING이 사용자당
+		// 하나라는 건 우리 로직의 규약이지 DB 제약이 아니라(AccountInvitationRepository의
+		// KDoc), 혹시 둘이 되어도 명부에 같은 사람이 두 번 나오면 안 된다.
+		val pendingInvitationExpiresAt =
+			DSL
+				.select(DSL.max(ACCOUNT_INVITATION.EXPIRES_AT))
+				.from(ACCOUNT_INVITATION)
+				.where(ACCOUNT_INVITATION.MERCHANT_USER_SEQ.eq(MERCHANT_USER.MERCHANT_USER_SEQ))
+				.and(ACCOUNT_INVITATION.INVITATION_STATUS.eq(AccountInvitationStatus.PENDING.name))
+				.asField<LocalDateTime>("pending_invitation_expires_at")
+
 		return dsl
 			.select(
 				MERCHANT_USER.MERCHANT_USER_ID,
@@ -50,6 +66,7 @@ class MerchantUserListProjectionAdapter(
 				MERCHANT_USER.USER_STATUS,
 				MERCHANT_USER.LAST_LOGIN_AT,
 				MERCHANT_USER.CREATED_AT,
+				pendingInvitationExpiresAt,
 			).from(MERCHANT_USER)
 			.where(MERCHANT_USER.MERCHANT_SEQ.eq(merchantSeq))
 			.orderBy(MERCHANT_USER.CREATED_AT.desc())
@@ -63,6 +80,7 @@ class MerchantUserListProjectionAdapter(
 					status = AccountStatus.valueOf(record.get(MERCHANT_USER.USER_STATUS)!!),
 					lastLoginAt = record.get(MERCHANT_USER.LAST_LOGIN_AT)?.toUtcInstant(),
 					createdAt = record.get(MERCHANT_USER.CREATED_AT)!!.toUtcInstant(),
+					pendingInvitationExpiresAt = record.get(pendingInvitationExpiresAt)?.toUtcInstant(),
 				)
 			}
 	}

@@ -1,4 +1,4 @@
-import { formatDateTime } from '@/console/format'
+import { describeInvitation, formatDateTime } from '@/console/format'
 import { MerchantUserActions } from '@/console/MerchantUserActions'
 import type { MerchantUserSummary } from '@/api/types'
 import { Badge } from '@/components/ui/badge'
@@ -44,6 +44,7 @@ export function MerchantUserTable({
 							<td className="py-2.5 pr-4 text-xs">{String(user.role)}</td>
 							<td className="py-2.5 pr-4">
 								<StatusBadge status={String(user.status)} />
+								{String(user.status) === 'INVITED' && <InvitationHint expiresAt={user.pendingInvitationExpiresAt} />}
 							</td>
 							<td className="py-2.5 pr-4 text-xs text-muted-foreground">{formatDateTime(user.lastLoginAt)}</td>
 							<td className="py-2.5 text-right">
@@ -58,6 +59,17 @@ export function MerchantUserTable({
 				</tbody>
 			</table>
 		</div>
+	)
+}
+
+/**
+ * `INVITED` 행에 왜 아직 활성화되지 않았는지를 덧붙인다 — 초대가 만료됐거나 취소됐으면
+ * 재발송이 필요하다는 뜻이라 강조한다.
+ */
+function InvitationHint({ expiresAt }: { expiresAt: string | null | undefined }) {
+	const { text, expired } = describeInvitation(expiresAt)
+	return (
+		<div className={`mt-0.5 text-xs ${expired ? 'text-destructive' : 'text-muted-foreground'}`}>{text}</div>
 	)
 }
 
