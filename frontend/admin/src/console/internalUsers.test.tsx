@@ -66,6 +66,64 @@ describe('InternalUserTable', () => {
 	})
 })
 
+describe('InternalUserTable 행 액션', () => {
+	it('ACTIVE 계정에는 정지·종료·역할 변경이 있다', () => {
+		renderWithRouter(<InternalUserTable internalUsers={[member()]} />)
+		expect(screen.getByRole('button', { name: '정지' })).toBeInTheDocument()
+		expect(screen.getByRole('button', { name: '종료' })).toBeInTheDocument()
+		expect(screen.getByRole('button', { name: '역할 변경' })).toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: '재개' })).not.toBeInTheDocument()
+	})
+
+	it('SUSPENDED 계정에는 재개가 있고 정지는 없다', () => {
+		renderWithRouter(<InternalUserTable internalUsers={[member({ status: 'SUSPENDED' })]} />)
+		expect(screen.getByRole('button', { name: '재개' })).toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: '정지' })).not.toBeInTheDocument()
+	})
+
+	it('INVITED 계정에는 종료만 있고 정지·역할 변경은 없다', () => {
+		// 내부 운영자에는 초대 재발송·취소가 아직 없다(가맹점 콘솔에만 있다).
+		renderWithRouter(<InternalUserTable internalUsers={[member({ status: 'INVITED', lastLoginAt: null })]} />)
+		expect(screen.getByRole('button', { name: '종료' })).toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: '정지' })).not.toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: '역할 변경' })).not.toBeInTheDocument()
+	})
+
+	it('TERMINATED 계정에는 액션이 없다', () => {
+		renderWithRouter(<InternalUserTable internalUsers={[member({ status: 'TERMINATED' })]} />)
+		expect(screen.queryByRole('button', { name: '종료' })).not.toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: '재개' })).not.toBeInTheDocument()
+	})
+
+	it('SUPER_ADMIN 행에는 역할 변경을 두지 않는다', () => {
+		// 강등은 마지막 SUPER_ADMIN 보호에 걸리기 쉽고 승격은 불가능하다 — 화면에서 미리 뺐다.
+		renderWithRouter(<InternalUserTable internalUsers={[member({ role: 'SUPER_ADMIN' })]} />)
+		expect(screen.queryByRole('button', { name: '역할 변경' })).not.toBeInTheDocument()
+	})
+
+	it('자기 자신 행에는 액션 대신 "본인"을 보여준다', () => {
+		// 서버도 403으로 막지만, 누를 수 있게 두고 거부하는 것보다 감추는 편이 낫다.
+		renderWithRouter(<InternalUserTable internalUsers={[member()]} currentInternalUserId="iu_001" />)
+		expect(screen.getByText('본인')).toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: '정지' })).not.toBeInTheDocument()
+	})
+
+	it('종료는 되돌릴 수 없다는 것을 확인 문구로 알린다', async () => {
+		renderWithRouter(<InternalUserTable internalUsers={[member()]} />)
+		await userEvent.click(screen.getByRole('button', { name: '종료' }))
+		expect(screen.getByText(/되돌릴 수 없습니다/)).toBeInTheDocument()
+	})
+
+	it('역할 선택지에 SUPER_ADMIN이 없다', async () => {
+		renderWithRouter(<InternalUserTable internalUsers={[member()]} />)
+		await userEvent.click(screen.getByRole('button', { name: '역할 변경' }))
+		expect(screen.getByLabelText('역할 선택')).toBeInTheDocument()
+		expect(screen.queryByRole('option', { name: 'SUPER_ADMIN' })).not.toBeInTheDocument()
+		expect(screen.getByRole('option', { name: 'OPERATOR' })).toBeInTheDocument()
+		expect(screen.getByRole('option', { name: 'VIEWER' })).toBeInTheDocument()
+	})
+})
+
 describe('IssueInternalUserForm', () => {
 	afterEach(() => {
 		vi.unstubAllGlobals()

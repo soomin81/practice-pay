@@ -1,6 +1,10 @@
 import type {
 	AcceptInvitationRequest,
 	AcceptInvitationResponse,
+	ChangeInternalUserRoleResponse,
+	ChangeInternalUserStatusResponse,
+	InternalUserRole,
+	InternalUserStatusAction,
 	IssueInternalUserRequest,
 	IssueInternalUserResponse,
 	ListInternalUsersResponse,
@@ -146,5 +150,18 @@ export const adminApi = {
 		request<AcceptInvitationResponse>('/admin/account-invitations/accept', {
 			method: 'POST',
 			body: JSON.stringify(body),
+		}),
+
+	/** 정지·재개·종료. 세 경로가 요청·응답 형태를 공유해서 하나로 다룬다. */
+	changeInternalUserStatus: (internalUserId: string, action: InternalUserStatusAction) =>
+		request<ChangeInternalUserStatusResponse>(
+			`/admin/internal-users/${encodeURIComponent(internalUserId)}/${action}`,
+			{ method: 'POST' },
+		),
+
+	changeInternalUserRole: (internalUserId: string, role: InternalUserRole) =>
+		request<ChangeInternalUserRoleResponse>(`/admin/internal-users/${encodeURIComponent(internalUserId)}/role`, {
+			method: 'POST',
+			body: JSON.stringify({ role }),
 		}),
 }

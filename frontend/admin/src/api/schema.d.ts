@@ -132,6 +132,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/internal-users/iu_002/role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 내부 운영자 역할 변경
+         * @description SUPER_ADMIN만 호출할 수 있다. role은 OPERATOR | VIEWER여야 한다 — **SUPER_ADMIN으로 승격하면 400이다**(초대와 같은 제약, 최초 SUPER_ADMIN은 Bootstrap으로만 만든다). 마지막 활성 SUPER_ADMIN을 강등하면 409다. 상태 변경 요청이라 CSRF 토큰이 필요하다.
+         */
+        post: operations["admin-change-internal-user-role"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/internal-users/iu_002/suspend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 내부 운영자 계정 상태 변경(정지·재개·종료)
+         * @description SUPER_ADMIN만 호출할 수 있다. 마지막 경로 세그먼트로 동작을 고른다: suspend(ACTIVE→SUSPENDED) · reactivate(SUSPENDED→ACTIVE) · terminate(→TERMINATED, 되돌릴 수 없음). 자기 자신은 대상으로 삼을 수 없고(403), 마지막 활성 SUPER_ADMIN을 정지·종료하면 409다. 상태 변경 요청이라 CSRF 토큰이 필요하다.
+         */
+        post: operations["admin-change-internal-user-status"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -180,22 +220,6 @@ export interface components {
             /** @description 내부 운영자 식별자 */
             internalUserId: string;
         };
-        /** ListMerchantsResponse */
-        ListMerchantsResponse: {
-            /** @description 가맹점 요약 배열 */
-            merchants: {
-                /** @description 등록 시각(UTC) */
-                createdAt: string;
-                /** @description 가맹점 코드(로그인 시 사용) */
-                merchantCode: string;
-                /** @description 가맹점 식별자 */
-                merchantId: string;
-                /** @description 가맹점 상태 */
-                status: string;
-                /** @description 가맹점 이름 */
-                merchantName: string;
-            }[];
-        };
         /** ListInternalUsersResponse */
         ListInternalUsersResponse: {
             /** @description 내부 운영자 요약 배열(최신 생성순) */
@@ -233,13 +257,24 @@ export interface components {
             /** @description 가맹점 이름 */
             merchantName: string;
         };
-        "admin-logout-33084672": Record<string, never>;
-        /** AdminLoginRequest */
-        AdminLoginRequest: {
-            /** @description 비밀번호 */
-            password: string;
-            /** @description 내부 운영자 로그인 아이디 */
-            loginId: string;
+        "admin-internal-users-iu_002-suspend-33084672": Record<string, never>;
+        /** ChangeInternalUserStatusResponse */
+        ChangeInternalUserStatusResponse: {
+            /** @description 변경 시각(UTC) */
+            changedAt: string;
+            /** @description 대상 내부 운영자 식별자 */
+            internalUserId: string;
+            /** @description 변경된 상태(ACTIVE | SUSPENDED | TERMINATED) */
+            status: string;
+        };
+        /** ChangeInternalUserRoleResponse */
+        ChangeInternalUserRoleResponse: {
+            /** @description 변경된 역할 */
+            role: string;
+            /** @description 변경 시각(UTC) */
+            changedAt: string;
+            /** @description 대상 내부 운영자 식별자 */
+            internalUserId: string;
         };
         /** AcceptAccountInvitationResponse */
         AcceptAccountInvitationResponse: {
@@ -247,6 +282,45 @@ export interface components {
             loginId: string;
             /** @description 활성화 시각(UTC) */
             activatedAt: string;
+        };
+        /** IssueInternalUserRequest */
+        IssueInternalUserRequest: {
+            /** @description OPERATOR | VIEWER. **SUPER_ADMIN을 보내면 400이다** — 최초 SUPER_ADMIN은 Bootstrap으로만 생성한다. */
+            role: string;
+            /** @description 전 시스템에서 유일한 로그인 아이디 */
+            loginId: string;
+            /** @description 사용자 이름 */
+            userName: string;
+            /** @description 전 시스템에서 유일한 이메일 */
+            email: string;
+        };
+        /** ChangeInternalUserRoleRequest */
+        ChangeInternalUserRoleRequest: {
+            /** @description 변경할 역할(OPERATOR | VIEWER) */
+            role: string;
+        };
+        /** ListMerchantsResponse */
+        ListMerchantsResponse: {
+            /** @description 가맹점 요약 배열 */
+            merchants: {
+                /** @description 등록 시각(UTC) */
+                createdAt: string;
+                /** @description 가맹점 코드(로그인 시 사용) */
+                merchantCode: string;
+                /** @description 가맹점 식별자 */
+                merchantId: string;
+                /** @description 가맹점 상태 */
+                status: string;
+                /** @description 가맹점 이름 */
+                merchantName: string;
+            }[];
+        };
+        /** AdminLoginRequest */
+        AdminLoginRequest: {
+            /** @description 비밀번호 */
+            password: string;
+            /** @description 내부 운영자 로그인 아이디 */
+            loginId: string;
         };
         /** RegisterMerchantResponse */
         RegisterMerchantResponse: {
@@ -266,17 +340,6 @@ export interface components {
             ownerEmail: string;
             /** @description 가맹점 이름 */
             merchantName: string;
-        };
-        /** IssueInternalUserRequest */
-        IssueInternalUserRequest: {
-            /** @description OPERATOR | VIEWER. **SUPER_ADMIN을 보내면 400이다** — 최초 SUPER_ADMIN은 Bootstrap으로만 생성한다. */
-            role: string;
-            /** @description 전 시스템에서 유일한 로그인 아이디 */
-            loginId: string;
-            /** @description 사용자 이름 */
-            userName: string;
-            /** @description 전 시스템에서 유일한 이메일 */
-            email: string;
         };
     };
     responses: never;
@@ -364,7 +427,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["admin-logout-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["admin-internal-users-iu_002-suspend-33084672"];
             };
         };
         responses: {
@@ -461,6 +524,54 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AcceptAccountInvitationResponse"];
+                };
+            };
+        };
+    };
+    "admin-change-internal-user-role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json;charset=UTF-8": components["schemas"]["ChangeInternalUserRoleRequest"];
+            };
+        };
+        responses: {
+            /** @description 200 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeInternalUserRoleResponse"];
+                };
+            };
+        };
+    };
+    "admin-change-internal-user-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/x-www-form-urlencoded": components["schemas"]["admin-internal-users-iu_002-suspend-33084672"];
+            };
+        };
+        responses: {
+            /** @description 200 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeInternalUserStatusResponse"];
                 };
             };
         };

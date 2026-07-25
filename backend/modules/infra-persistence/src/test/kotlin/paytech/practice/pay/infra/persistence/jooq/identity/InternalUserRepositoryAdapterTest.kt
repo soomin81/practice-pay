@@ -8,6 +8,7 @@ import paytech.practice.pay.domain.identity.AccountStatus
 import paytech.practice.pay.domain.identity.Email
 import paytech.practice.pay.domain.identity.InternalUser
 import paytech.practice.pay.domain.identity.InternalUserId
+import paytech.practice.pay.domain.identity.InternalUserRole
 import paytech.practice.pay.domain.identity.LoginId
 import paytech.practice.pay.infra.persistence.jooq.PersistenceTestSupport
 import paytech.practice.pay.infra.persistence.jooq.uniqueSuffix
@@ -109,5 +110,75 @@ class InternalUserRepositoryAdapterTest :
 
 		test("findById returns null when no such id exists") {
 			adapter.findById(InternalUserId("iu_no-such-id")).shouldBeNull()
+		}
+
+		test("save persists a changed role (the UPDATE must include role_code)") {
+			// MerchantUserRepositoryAdapter가 실제로 겪은 버그와 같은 자리다 — role이 val이던
+			// 시절 UPDATE에 role_code가 없었고, changeRole이 생기면 API는 200인데 DB는 옛 역할로
+			// 남는 조용한 유실이 된다. 여기서는 재현 전에 막았고 이 테스트가 그것을 고정한다.
+			val bootstrapped =
+				InternalUser.bootstrap(
+					id = InternalUserId("iu_${uniqueSuffix()}"),
+					loginId = LoginId("boot-${uniqueSuffix()}"),
+					email = Email("${uniqueSuffix()}@example.com"),
+					userName = "부트스트랩 관리자",
+					passwordHash = "hashed-password",
+					createdAt = NOW,
+				)
+			val operator =
+				InternalUser
+					.invite(
+						id = InternalUserId("iu_${uniqueSuffix()}"),
+						loginId = LoginId("op-${uniqueSuffix()}"),
+						email = Email("${uniqueSuffix()}@example.com"),
+						userName = "테스트 운영자",
+						role = InternalUserRole.OPERATOR,
+						createdByInternalUserId = bootstrapped.id,
+						createdAt = NOW,
+					).apply { activate("hashed-password", NOW) }
+			adapter.save(bootstrapped)
+			adapter.save(operator)
+
+			operator.changeRole(InternalUserRole.VIEWER, NOW.plusSeconds(60))
+			adapter.save(operator)
+
+			adapter.findById(operator.id)!!.role shouldBe InternalUserRole.VIEWER
+		}
+
+		test("countActiveSuperAdmins counts only ACTIVE SUPER_ADMINs") {
+			// "최소 하나의 활성 SUPER_ADMIN" 불변식이 기대는 집계다. 이 테스트는 DB를 다른
+			// 테스트와 공유하므로 절대 개수가 아니라 **증분**을 단언한다.
+			val before = adapter.countActiveSuperAdmins()
+
+			val activeSuperAdmin =
+				InternalUser.bootstrap(
+					id = InternalUserId("iu_${uniqueSuffix()}"),
+					loginId = LoginId("boot-${uniqueSuffix()}"),
+					email = Email("${uniqueSuffix()}@example.com"),
+					userName = "활성 관리자",
+					passwordHash = "hashed-password",
+					createdAt = NOW,
+				)
+			adapter.save(activeSuperAdmin)
+			adapter.countActiveSuperAdmins() shouldBe before + 1
+
+			// INVITED인 OPERATOR는 세지 않는다(역할·상태 둘 다 조건이다).
+			adapter.save(
+				InternalUser.invite(
+					id = InternalUserId("iu_${uniqueSuffix()}"),
+					loginId = LoginId("op-${uniqueSuffix()}"),
+					email = Email("${uniqueSuffix()}@example.com"),
+					userName = "초대된 운영자",
+					role = InternalUserRole.OPERATOR,
+					createdByInternalUserId = activeSuperAdmin.id,
+					createdAt = NOW,
+				),
+			)
+			adapter.countActiveSuperAdmins() shouldBe before + 1
+
+			// 정지되면 활성 SUPER_ADMIN에서 빠진다.
+			activeSuperAdmin.suspend(NOW.plusSeconds(60))
+			adapter.save(activeSuperAdmin)
+			adapter.countActiveSuperAdmins() shouldBe before
 		}
 	})

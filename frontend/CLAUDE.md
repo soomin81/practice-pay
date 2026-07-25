@@ -10,7 +10,7 @@
 |---|---|---|---|
 | `payment/` | **고객**(Hosted Checkout) | `api-payment` `:8081`의 `/checkout/**` | **구현 중** |
 | `merchant/` | 가맹점 운영자 | `api-merchant` `:8083`의 `/merchant/**` | **구현 중**(API Key 관리 + 팀 계정·초대) |
-| `admin/` | PG 내부 운영자 | `api-admin` `:8082`의 `/admin/**` | **구현 중**(로그인 → 가맹점 목록·등록) |
+| `admin/` | PG 내부 운영자 | `api-admin` `:8082`의 `/admin/**` | **구현 중**(로그인 → 가맹점 목록·등록 + 내부 직원 명부·발급·계정 관리) |
 
 **워크스페이스(pnpm/npm workspaces)를 쓰지 않는다 — 각 앱이 독립 프로젝트다.** 셋이 호출하는 API도 타입도 인증 방식도 전부 달라서 지금 공유할 것이 실질적으로 없다. 진짜 공유될 만한 UI 컴포넌트는 **두 번째 앱을 만들 때 무엇이 겹치는지 드러난 뒤** `frontend/packages/`로 뽑는다. 이 판단은 백엔드의 "지금 실제로 하는 일에만 맞춘다 — 나중에 할 일까지 미리 넣지 않는다"와 같은 원칙이다.
 
@@ -293,3 +293,23 @@ npm run gen:api        # api-admin의 openapi3.yaml → src/api/schema.d.ts
   SUPER_ADMIN은 Bootstrap으로만 만든다는 규정 때문이다. **도메인(`InternalUser.invite`)도
   같은 제약을 `require`로 갖는다**(merchant의 `OWNER` 승격과 같은 방식) — 화면의 선택지
   제한은 UX일 뿐이고 실제 방어선은 서버다(직접 호출하면 400).
+
+### admin 3차 — 내부 직원 명부의 행 액션(정지·재개·종료·역할 변경)
+
+`InternalUserActions`가 **계정 상태에 따라 다른 액션**을 그린다 — merchant의
+`MerchantUserActions`를 그대로 미러링했다: `ACTIVE`→정지·종료·역할 변경,
+`SUSPENDED`→재개·종료, `INVITED`→종료만, `TERMINATED`/`LOCKED`→없음.
+
+- **merchant와 다른 점은 초대 재발송·취소가 없다는 것뿐이다** — 그 흐름은 아직 내부
+  운영자 API에 없다(가맹점 콘솔에만 있다). 그래서 `INVITED` 행은 종료만 할 수 있다.
+- **`SUPER_ADMIN` 행에는 역할 변경을 두지 않는다**(merchant가 `OWNER` 행에 그런 것과
+  같은 판단) — 승격은 불가능하고(선택지가 `ISSUABLE_INTERNAL_ROLES` = OPERATOR/VIEWER),
+  강등은 마지막 SUPER_ADMIN 보호에 걸리기 쉬워 화면에서 미리 뺐다.
+- **자기 자신 행에는 액션 대신 "본인"을 그린다.** 현재 사용자는 `InternalUsersPage`가
+  `useMe()`에서 받아 `InternalUserTable`에 넘긴다(캐시된 쿼리라 추가 요청이 없다). 서버도
+  자기 자신 대상 요청을 403으로 막는다.
+- **오류는 status로 분기한다**(`AdminApiError`): 409(마지막 SUPER_ADMIN 보호·허용되지 않는
+  전이)는 **서버 메시지를 그대로** 보여주고, 403은 권한, 404는 없는 계정으로 옮긴다 —
+  merchant와 같은 방식이다.
+- 이 페이지 전체가 여전히 SUPER_ADMIN 전용이라(라우트·내비·서버 3중), 관리 액션도 그
+  안에서만 노출된다. 계약은 `docs/architecture/admin-console-api.md`의 4절에 있다.

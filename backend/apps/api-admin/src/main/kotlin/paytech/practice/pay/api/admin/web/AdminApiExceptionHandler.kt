@@ -8,8 +8,12 @@ import org.springframework.web.bind.annotation.RestControllerAdvice
 import paytech.practice.pay.application.identity.AccountLockedException
 import paytech.practice.pay.application.identity.DuplicateInternalUserException
 import paytech.practice.pay.application.identity.DuplicateMerchantException
+import paytech.practice.pay.application.identity.InternalUserNotFoundException
+import paytech.practice.pay.application.identity.InternalUserNotManageableException
 import paytech.practice.pay.application.identity.InvalidCredentialsException
+import paytech.practice.pay.application.identity.InvalidInternalUserTransitionException
 import paytech.practice.pay.application.identity.InvalidInvitationException
+import paytech.practice.pay.application.identity.LastActiveSuperAdminException
 
 /**
  * `application`/`domain` 계층이 던지는 예외를 HTTP 상태 코드로 옮긴다 — 이 매핑
@@ -38,6 +42,26 @@ class AdminApiExceptionHandler {
 	@ExceptionHandler(InvalidInvitationException::class)
 	@ResponseStatus(HttpStatus.BAD_REQUEST)
 	fun handleInvalidInvitation(ex: InvalidInvitationException): ErrorResponse = ErrorResponse(ex.message ?: "초대가 유효하지 않거나 만료되었습니다.")
+
+	@ExceptionHandler(InternalUserNotFoundException::class)
+	@ResponseStatus(HttpStatus.NOT_FOUND)
+	fun handleInternalUserNotFound(ex: InternalUserNotFoundException): ErrorResponse = ErrorResponse(ex.message ?: "내부 운영자를 찾을 수 없습니다.")
+
+	@ExceptionHandler(InternalUserNotManageableException::class)
+	@ResponseStatus(HttpStatus.FORBIDDEN)
+	fun handleInternalUserNotManageable(ex: InternalUserNotManageableException): ErrorResponse =
+		ErrorResponse(ex.message ?: "해당 계정을 변경할 수 없습니다.")
+
+	@ExceptionHandler(LastActiveSuperAdminException::class)
+	@ResponseStatus(HttpStatus.CONFLICT)
+	fun handleLastActiveSuperAdmin(ex: LastActiveSuperAdminException): ErrorResponse =
+		ErrorResponse(ex.message ?: "내부 운영자에는 최소 하나의 활성 SUPER_ADMIN이 있어야 합니다.")
+
+	/** 도메인 애그리게이트의 `checkTransition` 실패(예: 종료된 계정을 재개하려는 시도)를 409로 옮긴다. */
+	@ExceptionHandler(InvalidInternalUserTransitionException::class)
+	@ResponseStatus(HttpStatus.CONFLICT)
+	fun handleInvalidInternalUserTransition(ex: InvalidInternalUserTransitionException): ErrorResponse =
+		ErrorResponse(ex.message ?: "허용되지 않는 상태 전이입니다.")
 
 	@ExceptionHandler(MethodArgumentNotValidException::class)
 	@ResponseStatus(HttpStatus.BAD_REQUEST)

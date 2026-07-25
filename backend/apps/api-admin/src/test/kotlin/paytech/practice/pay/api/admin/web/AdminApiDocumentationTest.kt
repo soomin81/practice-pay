@@ -30,6 +30,10 @@ import paytech.practice.pay.application.identity.AcceptAccountInvitationResult
 import paytech.practice.pay.application.identity.AcceptAccountInvitationUseCase
 import paytech.practice.pay.application.identity.AuthenticateInternalUserResult
 import paytech.practice.pay.application.identity.AuthenticateInternalUserUseCase
+import paytech.practice.pay.application.identity.ChangeInternalUserRoleResult
+import paytech.practice.pay.application.identity.ChangeInternalUserRoleUseCase
+import paytech.practice.pay.application.identity.ChangeInternalUserStatusResult
+import paytech.practice.pay.application.identity.ChangeInternalUserStatusUseCase
 import paytech.practice.pay.application.identity.IssueInternalUserResult
 import paytech.practice.pay.application.identity.IssueInternalUserUseCase
 import paytech.practice.pay.application.identity.ListInternalUsersResult
@@ -135,6 +139,12 @@ class AdminApiDocumentationTest : FunSpec() {
 
 	@MockkBean
 	lateinit var acceptAccountInvitationUseCase: AcceptAccountInvitationUseCase
+
+	@MockkBean
+	lateinit var changeInternalUserStatusUseCase: ChangeInternalUserStatusUseCase
+
+	@MockkBean
+	lateinit var changeInternalUserRoleUseCase: ChangeInternalUserRoleUseCase
 
 	init {
 		extensions(SpringExtension)
@@ -476,6 +486,76 @@ class AdminApiDocumentationTest : FunSpec() {
 						),
 				).andExpect(status().isCreated)
 				.andDo(document("admin-register-merchant", snippet))
+		}
+		test("document POST change internal user status") {
+			every { changeInternalUserStatusUseCase.execute(any()) } returns
+				ChangeInternalUserStatusResult(
+					internalUserId = InternalUserId("iu_002"),
+					status = AccountStatus.SUSPENDED,
+					changedAt = NOW,
+				)
+
+			val snippet =
+				adminResource(
+					summary = "내부 운영자 계정 상태 변경(정지·재개·종료)",
+					description =
+						"SUPER_ADMIN만 호출할 수 있다. 마지막 경로 세그먼트로 동작을 고른다: " +
+							"suspend(ACTIVE→SUSPENDED) · reactivate(SUSPENDED→ACTIVE) · terminate(→TERMINATED, 되돌릴 수 없음). " +
+							"자기 자신은 대상으로 삼을 수 없고(403), 마지막 활성 SUPER_ADMIN을 정지·종료하면 409다. 상태 변경 " +
+							"요청이라 CSRF 토큰이 필요하다.",
+					responseSchema = "ChangeInternalUserStatusResponse",
+					responseFields =
+						listOf(
+							fieldWithPath("internalUserId").description("대상 내부 운영자 식별자"),
+							fieldWithPath("status").description("변경된 상태(ACTIVE | SUSPENDED | TERMINATED)"),
+							fieldWithPath("changedAt").description("변경 시각(UTC)"),
+						),
+				)
+
+			mockMvc
+				.perform(post("/admin/internal-users/iu_002/suspend").with(authenticatedAs(SUPER_ADMIN)).with(csrf()))
+				.andExpect(status().isOk)
+				.andDo(document("admin-change-internal-user-status", snippet))
+		}
+
+		test("document POST change internal user role") {
+			every { changeInternalUserRoleUseCase.execute(any()) } returns
+				ChangeInternalUserRoleResult(
+					internalUserId = InternalUserId("iu_002"),
+					role = InternalUserRole.VIEWER,
+					changedAt = NOW,
+				)
+
+			val snippet =
+				adminResource(
+					summary = "내부 운영자 역할 변경",
+					description =
+						"SUPER_ADMIN만 호출할 수 있다. role은 OPERATOR | VIEWER여야 한다 — **SUPER_ADMIN으로 승격하면 " +
+							"400이다**(초대와 같은 제약, 최초 SUPER_ADMIN은 Bootstrap으로만 만든다). 마지막 활성 SUPER_ADMIN을 " +
+							"강등하면 409다. 상태 변경 요청이라 CSRF 토큰이 필요하다.",
+					requestSchema = "ChangeInternalUserRoleRequest",
+					requestFields =
+						listOf(
+							fieldWithPath("role").description("변경할 역할(OPERATOR | VIEWER)"),
+						),
+					responseSchema = "ChangeInternalUserRoleResponse",
+					responseFields =
+						listOf(
+							fieldWithPath("internalUserId").description("대상 내부 운영자 식별자"),
+							fieldWithPath("role").description("변경된 역할"),
+							fieldWithPath("changedAt").description("변경 시각(UTC)"),
+						),
+				)
+
+			mockMvc
+				.perform(
+					post("/admin/internal-users/iu_002/role")
+						.with(authenticatedAs(SUPER_ADMIN))
+						.with(csrf())
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsString(ChangeInternalUserRoleRequest(role = "VIEWER"))),
+				).andExpect(status().isOk)
+				.andDo(document("admin-change-internal-user-role", snippet))
 		}
 	}
 }

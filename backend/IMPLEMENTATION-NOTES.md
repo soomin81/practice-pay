@@ -355,3 +355,22 @@
 
 - **막는 층을 셋 다 테스트로 고정했다**: 도메인(`InternalUserTest`), Use Case(`IssueInternalUserUseCaseTest`), 컨트롤러 400 매핑(`InternalUserControllerTest`). 프론트의 선택지 제한은 UX로 남기고, 실제 방어선은 도메인이다.
 - **MockK 함정 하나**: `every { repository.findByEmail(any()) }`처럼 value class 파라미터에 `any()`를 쓰면 MockK가 더미 인스턴스를 만들다 `Email`의 `require(contains("@"))`에 걸려 `InvocationTargetException`으로 죽는다. 이 파일의 다른 테스트들이 구체값(`EMAIL`)을 쓰고 있던 이유이기도 하다 — **`init { require(...) }`를 가진 value class에는 `any()`를 쓰지 않는다.**
+
+## 내부 운영자 계정 관리 Use Case(`ChangeInternalUserStatusUseCase`/`ChangeInternalUserRoleUseCase`)와 "최소 1 활성 SUPER_ADMIN" 불변식
+
+내부 직원을 정지·재개·종료하고 역할을 바꾸는 슬라이스다. 가맹점 쪽 "가맹점 계정 관리" 슬라이스를 내부 운영자로 옮긴 것이라 **구조·판단은 대부분 그대로 미러링했고, api-admin이 인가를 다루는 방식이 달라 갈리는 지점만** 여기 남긴다(공통 근거는 그 절 참고).
+
+- **도메인에 `InternalUser.changeRole(newRole, changedAt)`을 추가했다** — `MerchantUser.changeRole`과 짝이다. `role`이 `val`이라 변경 자체가 불가능했고, `var role ... private set`으로 바꿔 `changeRole`로만 갱신되게 했다. `SUPER_ADMIN`으로의 승격은 `require`로 막는다(`invite`가 같은 제약을 갖는 것과 짝 — 최초 SUPER_ADMIN은 Bootstrap 경로뿐이다). 종료된 계정의 역할 변경도 막는다.
+- **"최소 1 활성 SUPER_ADMIN" 불변식은 가맹점의 "최소 1 활성 OWNER"와 같은 자리(Use Case)·같은 성격이다.** 새 Port 메서드 `InternalUserRepository.countActiveSuperAdmins()`는 **범위 인자가 없다** — 내부 운영자는 가맹점에 속하지 않아서다(`countActiveOwners(merchantId)`와 다른 유일한 점). 정지·종료·강등 셋이 활성 SUPER_ADMIN 집합에서 빼는 연산일 때만 검사하고, 재개는 부르지 않는다. 사라지면 아무도 내부 계정을 발급할 수 없는 상태로 굳는다(발급이 SUPER_ADMIN 전용이고 그 위에 개입할 주체가 없다 — 복구는 Bootstrap뿐).
+- **`InternalUserManagementGuard`는 요청자 권한을 다시 확인하지 않는다 — 가맹점 쪽 Guard와 의도적으로 다른 핵심 지점이다.** api-admin은 인가를 `SecurityConfig`의 정적 규칙에 맡기는 앱이고(`ListInternalUsersUseCase`/`IssueInternalUserCommand`의 지역 관행), `/admin/internal-users/**`가 SUPER_ADMIN 전용이라 **이 코드가 실행된다는 것 자체가 이미 SUPER_ADMIN 세션**이다. 그래서 요청자 식별자는 인가가 아니라 **자기 자신 차단**에만 쓴다. 가맹점 쪽에 있던 "ADMIN은 OWNER를 못 건드린다"에 대응하는 규칙도 여기 없다 — 요청자 역할이 하나(SUPER_ADMIN)뿐이라 대응물이 없다. 테넌시 확인도 없다.
+- **`SecurityConfig`의 규칙을 `/admin/internal-users` 정확 경로 → `/admin/internal-users/**` 와일드카드로 넓혀야 했다.** 목록 조회(3번째 admin 슬라이스)에서는 새 `GET`이 base 경로와 **같은** 경로라 정확 규칙이 이미 덮어서 손대지 않았는데, 이번 관리 액션은 `/{id}/suspend` 같은 **다른** 하위 경로라 정확 규칙으로는 안 덮인다. 그대로 뒀다면 액션 경로가 `anyRequest, authenticated`로 떨어져 **OPERATOR/VIEWER도 정적 관문을 통과**했다(가맹점 쪽 `/merchant/merchant-users/**`와 정확히 같은 상황). Guard가 요청자 권한을 안 보고 "여기 왔으면 SUPER_ADMIN"을 전제하므로 이 1차 방어가 특히 중요하다 — `InternalUserControllerTest`에 OPERATOR가 액션 경로에서 403을 받는 회귀를 남겼다.
+- **`IllegalStateException`을 전역 409로 매핑하지 않았다** — 도메인 전이 호출 한 줄만 감싸 `InvalidInternalUserTransitionException`으로 바꾸고 그 타입만 409로 매핑한다(가맹점 쪽과 같은 판단). 예외 4종을 `AdminApiExceptionHandler`에 추가했다: `InternalUserNotFoundException`(404), `InternalUserNotManageableException`(403, 자기 자신), `LastActiveSuperAdminException`(409), `InvalidInternalUserTransitionException`(409). `SUPER_ADMIN` 승격 시도는 도메인의 `IllegalArgumentException`이라 기존 400 매핑이 처리한다(새 타입 불필요).
+- **`save()`의 UPDATE에 `ROLE_CODE`를 함께 넣었다 — 가맹점 쪽에서 실물로 겪은 버그를 재현 전에 막은 것이다.** `MerchantUserRepositoryAdapter`가 `role`을 `val`→`var`로 바꿀 때 UPDATE에 `role_code`가 빠져 "API는 200인데 DB는 옛 역할"인 조용한 유실을 겪었다(그 절 참고). `InternalUserRepositoryAdapter`도 같은 이유로 `role_code`가 빠져 있었고, `changeRole`을 추가하면서 같은 자리가 되므로 함께 채웠다. 회귀 테스트(`save persists a changed role`)를 어댑터 테스트에 남겼다.
+
+### 불변식이 오늘의 API로는 도달 불가능하다(가맹점 쪽과 같은 상황)
+
+요청자는 항상 활성 SUPER_ADMIN이고 자기 자신은 먼저 막히므로, 대상이 활성 SUPER_ADMIN이면 활성 SUPER_ADMIN이 이미 둘이다 — 그래서 `LastActiveSuperAdminException`은 **현재 HTTP 경로로는 트리거되지 않고** 단위 테스트로만 검증된다. 죽은 코드로 오해하지 않도록 남긴다: 규칙이 `docs/`("3.3")에 있고, 관리 권한 범위나 자기 자신 차단이 바뀌는 순간 곧바로 필요해진다(가맹점 쪽 `LastActiveOwnerException`과 같은 성격이며 계약 문서에도 적었다).
+
+### KDoc 안의 `/**`가 컴파일을 깨뜨렸다 — Kotlin 블록 주석은 중첩된다
+
+`InternalUserManagementGuard`의 KDoc에 `/admin/internal-users/**`를 그대로 적었더니 **파일 전체가 컴파일되지 않았다**("Unclosed comment"). Kotlin은 블록 주석이 **중첩**되므로, `/** ... */` 안의 `/**`(경로 와일드카드 표기)가 중첩 주석을 열어 바깥 KDoc의 `*/`가 그걸 닫고, 결국 주석이 EOF까지 이어진다. KDoc/블록 주석 본문에 `/**`나 `/*`를 문자 그대로 쓰지 않는다 — 경로 와일드카드는 "하위 경로 와일드카드"처럼 풀어 쓰거나, 정말 필요하면 `//` 라인 주석(중첩 안 됨)이나 코드 문자열 리터럴에만 둔다. `SecurityConfig`의 같은 표기는 `//` 라인 주석과 `authorize(...)` 문자열 리터럴이라 안전했다.

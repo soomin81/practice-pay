@@ -32,6 +32,15 @@ export type IssueInternalUserResponse = JsonResponse<'admin-issue-internal-user'
 export type AcceptInvitationRequest = JsonRequest<'admin-accept-invitation'>
 export type AcceptInvitationResponse = JsonResponse<'admin-accept-invitation', 200>
 
+export type ChangeInternalUserStatusResponse = JsonResponse<'admin-change-internal-user-status', 200>
+export type ChangeInternalUserRoleResponse = JsonResponse<'admin-change-internal-user-role', 200>
+
+/**
+ * 계정 상태 액션. 백엔드의 세 경로(`/suspend`·`/reactivate`·`/terminate`)에 그대로
+ * 대응한다 — 요청·응답 형태가 같아서 클라이언트도 하나로 다룬다(merchant 앱과 같은 모양).
+ */
+export type InternalUserStatusAction = 'suspend' | 'reactivate' | 'terminate'
+
 /** 계약(`docs/architecture/identity-access-api-key.md`의 "3.2")의 내부 운영자 역할. */
 export type InternalUserRole = 'SUPER_ADMIN' | 'OPERATOR' | 'VIEWER'
 

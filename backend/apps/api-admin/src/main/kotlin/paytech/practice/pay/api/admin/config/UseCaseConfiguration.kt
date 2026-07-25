@@ -4,6 +4,8 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import paytech.practice.pay.application.identity.AcceptAccountInvitationUseCase
 import paytech.practice.pay.application.identity.AuthenticateInternalUserUseCase
+import paytech.practice.pay.application.identity.ChangeInternalUserRoleUseCase
+import paytech.practice.pay.application.identity.ChangeInternalUserStatusUseCase
 import paytech.practice.pay.application.identity.IssueInternalUserUseCase
 import paytech.practice.pay.application.identity.ListInternalUsersUseCase
 import paytech.practice.pay.application.identity.RegisterMerchantUseCase
@@ -107,4 +109,16 @@ class UseCaseConfiguration {
 	@Bean
 	fun listInternalUsersUseCase(internalUserListProjection: InternalUserListProjection): ListInternalUsersUseCase =
 		ListInternalUsersUseCase(internalUserListProjection)
+
+	@Bean
+	fun changeInternalUserStatusUseCase(
+		internalUserRepository: InternalUserRepository,
+		clock: Clock,
+	): ChangeInternalUserStatusUseCase = ChangeInternalUserStatusUseCase(internalUserRepository, clock)
+
+	@Bean
+	fun changeInternalUserRoleUseCase(
+		internalUserRepository: InternalUserRepository,
+		clock: Clock,
+	): ChangeInternalUserRoleUseCase = ChangeInternalUserRoleUseCase(internalUserRepository, clock)
 }

@@ -20,9 +20,16 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPat
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import paytech.practice.pay.api.admin.config.SecurityConfig
 import paytech.practice.pay.api.admin.security.InternalUserPrincipal
+import paytech.practice.pay.application.identity.ChangeInternalUserRoleResult
+import paytech.practice.pay.application.identity.ChangeInternalUserRoleUseCase
+import paytech.practice.pay.application.identity.ChangeInternalUserStatusResult
+import paytech.practice.pay.application.identity.ChangeInternalUserStatusUseCase
 import paytech.practice.pay.application.identity.DuplicateInternalUserException
+import paytech.practice.pay.application.identity.InternalUserNotManageableException
+import paytech.practice.pay.application.identity.InvalidInternalUserTransitionException
 import paytech.practice.pay.application.identity.IssueInternalUserResult
 import paytech.practice.pay.application.identity.IssueInternalUserUseCase
+import paytech.practice.pay.application.identity.LastActiveSuperAdminException
 import paytech.practice.pay.application.identity.ListInternalUsersResult
 import paytech.practice.pay.application.identity.ListInternalUsersUseCase
 import paytech.practice.pay.application.port.outbound.InternalUserSummary
@@ -69,6 +76,12 @@ class InternalUserControllerTest : FunSpec() {
 
 	@MockkBean
 	lateinit var listInternalUsersUseCase: ListInternalUsersUseCase
+
+	@MockkBean
+	lateinit var changeInternalUserStatusUseCase: ChangeInternalUserStatusUseCase
+
+	@MockkBean
+	lateinit var changeInternalUserRoleUseCase: ChangeInternalUserRoleUseCase
 
 	init {
 		extensions(SpringExtension)
@@ -214,6 +227,96 @@ class InternalUserControllerTest : FunSpec() {
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(objectMapper.writeValueAsString(validRequest())),
 				).andExpect(status().isConflict)
+		}
+
+		test("SUPER_ADMIN suspending an internal user returns 200") {
+			every { changeInternalUserStatusUseCase.execute(any()) } returns
+				ChangeInternalUserStatusResult(
+					internalUserId = InternalUserId("iu_001"),
+					status = AccountStatus.SUSPENDED,
+					changedAt = Instant.parse("2026-07-25T00:00:00Z"),
+				)
+
+			mockMvc
+				.perform(post("/admin/internal-users/iu_001/suspend").with(csrf()).with(authenticatedAs(ISSUER)))
+				.andExpect(status().isOk)
+				.andExpect(jsonPath("$.status").value("SUSPENDED"))
+		}
+
+		test("OPERATOR hitting a management action returns 403 (the wildcard rule covers sub-paths)") {
+			// 하위 경로가 와일드카드로 덮이지 않으면 여기서 200/500이 나온다 — 이 테스트가
+			// SecurityConfig의 /admin/internal-users/** 규칙을 고정한다.
+			val operator = InternalUserPrincipal(InternalUserId("iu_operator"), LoginId("operator"), InternalUserRole.OPERATOR)
+
+			mockMvc
+				.perform(post("/admin/internal-users/iu_001/suspend").with(csrf()).with(authenticatedAs(operator)))
+				.andExpect(status().isForbidden)
+		}
+
+		test("no authentication for a management action returns 401 or 403") {
+			val result = mockMvc.perform(post("/admin/internal-users/iu_001/suspend").with(csrf())).andReturn()
+
+			result.response.status shouldBeIn listOf(401, 403)
+		}
+
+		test("InternalUserNotManageableException (self-targeting) returns 403") {
+			every { changeInternalUserStatusUseCase.execute(any()) } throws
+				InternalUserNotManageableException("자기 자신의 계정은 이 API로 변경할 수 없습니다.")
+
+			mockMvc
+				.perform(post("/admin/internal-users/iu_super_admin/suspend").with(csrf()).with(authenticatedAs(ISSUER)))
+				.andExpect(status().isForbidden)
+		}
+
+		test("LastActiveSuperAdminException returns 409") {
+			every { changeInternalUserStatusUseCase.execute(any()) } throws
+				LastActiveSuperAdminException("마지막 활성 SUPER_ADMIN입니다.")
+
+			mockMvc
+				.perform(post("/admin/internal-users/iu_001/terminate").with(csrf()).with(authenticatedAs(ISSUER)))
+				.andExpect(status().isConflict)
+		}
+
+		test("InvalidInternalUserTransitionException returns 409") {
+			every { changeInternalUserStatusUseCase.execute(any()) } throws
+				InvalidInternalUserTransitionException("종료된 계정은 재개할 수 없습니다.")
+
+			mockMvc
+				.perform(post("/admin/internal-users/iu_001/reactivate").with(csrf()).with(authenticatedAs(ISSUER)))
+				.andExpect(status().isConflict)
+		}
+
+		test("SUPER_ADMIN changing an internal user role returns 200") {
+			every { changeInternalUserRoleUseCase.execute(any()) } returns
+				ChangeInternalUserRoleResult(
+					internalUserId = InternalUserId("iu_001"),
+					role = InternalUserRole.VIEWER,
+					changedAt = Instant.parse("2026-07-25T00:00:00Z"),
+				)
+
+			mockMvc
+				.perform(
+					post("/admin/internal-users/iu_001/role")
+						.with(csrf())
+						.with(authenticatedAs(ISSUER))
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsString(ChangeInternalUserRoleRequest(role = "VIEWER"))),
+				).andExpect(status().isOk)
+				.andExpect(jsonPath("$.role").value("VIEWER"))
+		}
+
+		test("promoting to SUPER_ADMIN via role change returns 400 (domain require failure)") {
+			every { changeInternalUserRoleUseCase.execute(any()) } throws
+				IllegalArgumentException("역할 변경으로는 SUPER_ADMIN을 만들 수 없습니다: bootstrap을 사용하세요.")
+
+			mockMvc
+				.perform(
+					post("/admin/internal-users/iu_001/role")
+						.with(csrf())
+						.with(authenticatedAs(ISSUER))
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsString(ChangeInternalUserRoleRequest(role = "SUPER_ADMIN"))),
+				).andExpect(status().isBadRequest)
 		}
 	}
 }

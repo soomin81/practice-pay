@@ -26,9 +26,9 @@ class InternalUser private constructor(
 	val loginId: LoginId,
 	val email: Email,
 	val userName: String,
-	val role: InternalUserRole,
 	val createdByInternalUserId: InternalUserId?,
 	val createdAt: Instant,
+	role: InternalUserRole,
 	status: AccountStatus,
 	passwordHash: String?,
 	failedLoginCount: Int,
@@ -40,6 +40,10 @@ class InternalUser private constructor(
 	terminatedAt: Instant?,
 	updatedAt: Instant,
 ) {
+	/** 내부 운영자 역할. [changeRole]로만 바뀐다 — 호출부가 직접 대입할 수 없다. */
+	var role: InternalUserRole = role
+		private set
+
 	var status: AccountStatus = status
 		private set
 
@@ -124,6 +128,29 @@ class InternalUser private constructor(
 		status = AccountStatus.ACTIVE
 		failedLoginCount = 0
 		lockedUntil = null
+		updatedAt = changedAt
+	}
+
+	/**
+	 * 내부 운영자 역할을 바꾼다. 누가 이 메서드를 부를 수 있는지는 호출부가 판단한다
+	 * (`apps:api-admin`은 `SecurityConfig`의 `SUPER_ADMIN` 정적 규칙에 맡긴다).
+	 *
+	 * **`SUPER_ADMIN`으로 승격할 수 없다** — [invite]가 같은 제약을 갖는 것과 짝이다
+	 * (`docs/architecture/identity-access-api-key.md`의 "3.3": 최초 `SUPER_ADMIN`은
+	 * Bootstrap 경로로만 만든다). 이걸 빼면 초대는 막고 역할 변경으로는 뚫리는 구멍이 남는다.
+	 *
+	 * **"마지막 활성 SUPER_ADMIN을 강등하지 않는다"는 여기서 막지 않는다** — 다른
+	 * 내부 운영자를 세어봐야 아는 판단이라 애그리게이트가 할 수 없다(호출부가 막는다).
+	 */
+	fun changeRole(
+		newRole: InternalUserRole,
+		changedAt: Instant,
+	) {
+		require(newRole != InternalUserRole.SUPER_ADMIN) {
+			"역할 변경으로는 SUPER_ADMIN을 만들 수 없습니다: bootstrap을 사용하세요."
+		}
+		check(status != AccountStatus.TERMINATED) { "종료된 계정의 역할은 변경할 수 없습니다: 현재 상태=$status" }
+		role = newRole
 		updatedAt = changedAt
 	}
 

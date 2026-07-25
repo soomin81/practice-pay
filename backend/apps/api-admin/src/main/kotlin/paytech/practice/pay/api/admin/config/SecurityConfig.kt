@@ -82,7 +82,15 @@ class SecurityConfig {
 				authorize("/error", permitAll)
 				authorize("/admin/login", permitAll)
 				authorize("/admin/account-invitations/accept", permitAll)
-				authorize("/admin/internal-users", hasRole("SUPER_ADMIN"))
+				// **와일드카드가 필요하다.** 계정 관리 액션(`/{id}/suspend|reactivate|terminate|role`)이
+				// 생기면서 정확 경로 규칙(`/admin/internal-users`)으로는 그 하위 경로를 덮지 못하게
+				// 됐다 — 그대로 두면 액션 경로가 아래 `anyRequest, authenticated`로 떨어져
+				// OPERATOR/VIEWER도 정적 관문을 통과한다. `InternalUserManagementGuard`가 요청자
+				// 권한을 다시 확인하지 않고 "여기 왔으면 SUPER_ADMIN"을 전제하므로, 이 1차 방어가
+				// 반드시 있어야 한다(그 Guard의 KDoc 참고). 와일드카드는 base 경로
+				// (`POST`/`GET /admin/internal-users`)도 함께 덮는다 — 가맹점 쪽
+				// `/merchant/merchant-users/**`와 같은 Spring PathPattern 동작이다.
+				authorize("/admin/internal-users/**", hasRole("SUPER_ADMIN"))
 				authorize(HttpMethod.POST, "/admin/merchants", hasAnyRole("SUPER_ADMIN", "OPERATOR"))
 				authorize(anyRequest, authenticated)
 			}

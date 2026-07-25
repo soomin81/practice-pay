@@ -49,6 +49,37 @@ class InternalUserTest :
 			operator.createdByInternalUserId shouldBe InternalUserId("iu_test_001")
 		}
 
+		test("changeRole switches the role and stamps updatedAt") {
+			val operator = invitedOperator().apply { activate("hashed-password", CREATED_AT.plusSeconds(60)) }
+			val changedAt = CREATED_AT.plusSeconds(3_600)
+
+			operator.changeRole(InternalUserRole.VIEWER, changedAt)
+
+			operator.role shouldBe InternalUserRole.VIEWER
+			operator.updatedAt shouldBe changedAt
+		}
+
+		test("changeRole cannot promote to SUPER_ADMIN") {
+			// invite와 같은 제약 — 이걸 빼면 초대는 막고 역할 변경으로는 뚫린다.
+			val operator = invitedOperator().apply { activate("hashed-password", CREATED_AT.plusSeconds(60)) }
+
+			shouldThrow<IllegalArgumentException> {
+				operator.changeRole(InternalUserRole.SUPER_ADMIN, CREATED_AT.plusSeconds(120))
+			}
+		}
+
+		test("changeRole is rejected on a TERMINATED account") {
+			val operator =
+				invitedOperator().apply {
+					activate("hashed-password", CREATED_AT.plusSeconds(60))
+					terminate(CREATED_AT.plusSeconds(120))
+				}
+
+			shouldThrow<IllegalStateException> {
+				operator.changeRole(InternalUserRole.VIEWER, CREATED_AT.plusSeconds(180))
+			}
+		}
+
 		test("invite cannot create a SUPER_ADMIN") {
 			// docs "3.3 발급 정책": 최초 SUPER_ADMIN은 Bootstrap으로만 생성한다.
 			// MerchantUser.inviteSubAccount가 OWNER를 막는 것과 같은 제약이다.

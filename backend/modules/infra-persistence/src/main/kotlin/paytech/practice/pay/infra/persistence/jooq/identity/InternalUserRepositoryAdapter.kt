@@ -42,6 +42,13 @@ class InternalUserRepositoryAdapter(
 		} else {
 			dsl
 				.update(INTERNAL_USER)
+				// **ROLE_CODE를 반드시 함께 갱신한다.** 원래 이 UPDATE에는 빠져 있었다 —
+				// `InternalUser.role`이 `val`이라 바뀔 일이 없었기 때문이다. `changeRole()`을
+				// 추가하면서 조용한 데이터 유실이 될 자리라(API는 200인데 DB는 옛 역할) 같은
+				// 변경에서 함께 채웠다 — `MerchantUserRepositoryAdapter`가 실제로 그 버그를
+				// 겪었고, 그 교훈("필드를 불변→가변으로 바꿀 때 영속성 UPDATE 목록을 함께
+				// 확인한다")을 여기서는 재현 전에 적용한 것이다.
+				.set(INTERNAL_USER.ROLE_CODE, internalUser.role.name)
 				.set(INTERNAL_USER.USER_STATUS, internalUser.status.name)
 				.set(INTERNAL_USER.PASSWORD_HASH, internalUser.passwordHash)
 				.set(INTERNAL_USER.FAILED_LOGIN_COUNT, internalUser.failedLoginCount)
@@ -84,6 +91,15 @@ class InternalUserRepositoryAdapter(
 			.where(INTERNAL_USER.INTERNAL_USER_ID.eq(internalUserId.value))
 			.fetchOne()
 			?.toDomain()
+
+	/** "최소 하나의 활성 SUPER_ADMIN을 유지한다" 불변식용 집계다(Port의 KDoc 참고). */
+	override fun countActiveSuperAdmins(): Int =
+		dsl.fetchCount(
+			INTERNAL_USER,
+			INTERNAL_USER.ROLE_CODE
+				.eq(InternalUserRole.SUPER_ADMIN.name)
+				.and(INTERNAL_USER.USER_STATUS.eq(AccountStatus.ACTIVE.name)),
+		)
 
 	private fun resolveInternalUserSeq(internalUserId: InternalUserId): Long =
 		dsl

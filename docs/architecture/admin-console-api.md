@@ -48,6 +48,10 @@ PG 내부 운영자용 콘솔(브라우저 SPA, `frontend/admin`)이 호출하�
 | `POST /admin/merchants` | SUPER_ADMIN/OPERATOR | 필요 | 201 가맹점 + OWNER 초대 Token(1회) | 400 검증, 401, 403, 409 중복 |
 | `GET /admin/internal-users` | **SUPER_ADMIN만** | — | 200 명부 | 401, 403 |
 | `POST /admin/internal-users` | **SUPER_ADMIN만** | 필요 | 201 계정 + 초대 Token(1회) | **400 `role=SUPER_ADMIN`**, 400 검증, 401, 403, 409 중복 |
+| `POST /admin/internal-users/{id}/suspend` | **SUPER_ADMIN만** | 필요 | 200 상태(SUSPENDED) | 401, 403(자기 자신), 404, 409(마지막 SUPER_ADMIN·잘못된 전이) |
+| `POST /admin/internal-users/{id}/reactivate` | **SUPER_ADMIN만** | 필요 | 200 상태(ACTIVE) | 401, 403(자기 자신), 404, 409(잘못된 전이) |
+| `POST /admin/internal-users/{id}/terminate` | **SUPER_ADMIN만** | 필요 | 200 상태(TERMINATED) | 401, 403(자기 자신), 404, 409(마지막 SUPER_ADMIN·잘못된 전이) |
+| `POST /admin/internal-users/{id}/role` | **SUPER_ADMIN만** | 필요 | 200 역할 | **400 `role=SUPER_ADMIN`**, 401, 403(자기 자신), 404, 409(마지막 SUPER_ADMIN 강등·종료된 계정) |
 | `POST /admin/account-invitations/accept` | **공개** | **불필요**(2절) | 200 활성화 | 400 유효하지 않거나 만료된 초대 |
 
 - **두 경로의 메서드 스코핑이 정반대다 — 의도적이다.**
@@ -62,6 +66,20 @@ PG 내부 운영자용 콘솔(브라우저 SPA, `frontend/admin`)이 호출하�
 - **`SUPER_ADMIN`은 초대로 만들 수 없다**(400) — "3.3"이 최초 SUPER_ADMIN을 Bootstrap
   경로로만 만들도록 규정한다. 도메인 `InternalUser.invite`가 막으므로 API를 직접 호출해도
   통하지 않는다(가맹점 쪽에서 `OWNER`를 막는 것과 같은 방식).
+- **계정 상태·역할 관리(`/{id}/suspend|reactivate|terminate|role`)는 전부 `SUPER_ADMIN`
+  전용이다.** `SecurityConfig`가 `/admin/internal-users/**` 와일드카드로 하위 경로까지
+  `SUPER_ADMIN`으로 잠근다(가맹점 콘솔이 계정 관리 인가를 Use Case에서 동적으로 확인하는
+  것과 달리, admin은 정적 규칙에 맡긴다 — 그래서 요청자 식별자는 인가가 아니라 **자기
+  자신 차단**에만 쓴다).
+  - **자기 자신은 대상으로 삼을 수 없다**(403) — 스스로를 정지·종료·강등하면 복구
+    수단이 사라진다.
+  - **`role`은 `OPERATOR`|`VIEWER`여야 한다** — `SUPER_ADMIN`으로 승격하면 400이다(발급과
+    같은 제약, 도메인 `InternalUser.changeRole`가 막는다).
+  - **"최소 하나의 활성 SUPER_ADMIN을 유지한다"**("3.3") — 마지막 활성 SUPER_ADMIN을
+    정지·종료·강등하려는 요청은 409다. 사라지면 아무도 내부 계정을 발급할 수 없는 상태로
+    굳는다(복구는 Bootstrap 같은 운영 절차뿐이다). 가맹점 쪽 "최소 하나의 활성 OWNER"와
+    같은 성격의 불변식이다.
+  - **되돌릴 수 없는 상태 전이는 도메인이 막는다**(예: 종료된 계정 재개·역할 변경 → 409).
 
 ## 5. 초대 링크가 **두 종류**다 — 가리키는 콘솔이 다르다
 
@@ -108,5 +126,3 @@ PG 내부 운영자용 콘솔(브라우저 SPA, `frontend/admin`)이 호출하�
   **다만 `docs/`가 이 권한을 규정하지 않는다** — 역할 정의가 "가맹점·결제·운영 업무"
   (`OPERATOR`)/"전체 관리"(`SUPER_ADMIN`)로 모호할 뿐이라
   [identity-access-api-key.md](identity-access-api-key.md)에 설계 판단을 먼저 추가해야 한다.
-- **내부 직원 계정 상태·역할 관리**(정지·종료·역할 변경) — merchant 쪽에는 있지만 내부
-  운영자에는 아직 없다. `InternalUser` 도메인에는 전이 메서드가 이미 있다.

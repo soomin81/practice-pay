@@ -4,16 +4,23 @@ import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
 import paytech.practice.pay.api.admin.security.InternalUserPrincipal
+import paytech.practice.pay.application.identity.ChangeInternalUserRoleCommand
+import paytech.practice.pay.application.identity.ChangeInternalUserRoleUseCase
+import paytech.practice.pay.application.identity.ChangeInternalUserStatusCommand
+import paytech.practice.pay.application.identity.ChangeInternalUserStatusUseCase
+import paytech.practice.pay.application.identity.InternalUserStatusAction
 import paytech.practice.pay.application.identity.IssueInternalUserCommand
 import paytech.practice.pay.application.identity.IssueInternalUserUseCase
 import paytech.practice.pay.application.identity.ListInternalUsersUseCase
 import paytech.practice.pay.domain.identity.Email
+import paytech.practice.pay.domain.identity.InternalUserId
 import paytech.practice.pay.domain.identity.InternalUserRole
 import paytech.practice.pay.domain.identity.LoginId
 
@@ -35,12 +42,21 @@ import paytech.practice.pay.domain.identity.LoginId
  *
  * 발급자(`issuedByInternalUserId`)는 요청 본문이 아니라 `@AuthenticationPrincipal`로
  * 주입받는 [InternalUserPrincipal]에서 가져온다.
+ *
+ * **계정 관리 액션(`/{id}/suspend|reactivate|terminate|role`)도 같은 컨트롤러에 둔다**
+ * (가맹점 쪽 `MerchantSubAccountController`가 발급·목록·관리를 함께 갖는 것과 같은 모양).
+ * 이 하위 경로들은 base 경로 정확 매칭으로는 덮이지 않으므로 `SecurityConfig`의 규칙을
+ * `/admin/internal-users` 하위 경로 와일드카드로 넓혀 `SUPER_ADMIN` 전용을 유지했다 — 그래서
+ * 요청자([InternalUserManagementGuard]가 받는 `requestedBy`)는 인가가 아니라 **자기 자신
+ * 차단**에만 쓴다(그 Guard의 KDoc 참고).
  */
 @RestController
 @RequestMapping("/admin/internal-users")
 class InternalUserController(
 	private val issueInternalUserUseCase: IssueInternalUserUseCase,
 	private val listInternalUsersUseCase: ListInternalUsersUseCase,
+	private val changeInternalUserStatusUseCase: ChangeInternalUserStatusUseCase,
+	private val changeInternalUserRoleUseCase: ChangeInternalUserRoleUseCase,
 ) {
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
@@ -88,6 +104,68 @@ class InternalUserController(
 						createdAt = summary.createdAt,
 					)
 				},
+		)
+	}
+
+	@PostMapping("/{internalUserId}/suspend")
+	fun suspend(
+		@PathVariable internalUserId: String,
+		@AuthenticationPrincipal principal: InternalUserPrincipal,
+	): ChangeInternalUserStatusResponse = changeStatus(internalUserId, InternalUserStatusAction.SUSPEND, principal)
+
+	@PostMapping("/{internalUserId}/reactivate")
+	fun reactivate(
+		@PathVariable internalUserId: String,
+		@AuthenticationPrincipal principal: InternalUserPrincipal,
+	): ChangeInternalUserStatusResponse = changeStatus(internalUserId, InternalUserStatusAction.REACTIVATE, principal)
+
+	@PostMapping("/{internalUserId}/terminate")
+	fun terminate(
+		@PathVariable internalUserId: String,
+		@AuthenticationPrincipal principal: InternalUserPrincipal,
+	): ChangeInternalUserStatusResponse = changeStatus(internalUserId, InternalUserStatusAction.TERMINATE, principal)
+
+	@PostMapping("/{internalUserId}/role")
+	fun changeRole(
+		@PathVariable internalUserId: String,
+		@Valid @RequestBody request: ChangeInternalUserRoleRequest,
+		@AuthenticationPrincipal principal: InternalUserPrincipal,
+	): ChangeInternalUserRoleResponse {
+		val result =
+			changeInternalUserRoleUseCase.execute(
+				ChangeInternalUserRoleCommand(
+					targetInternalUserId = InternalUserId(internalUserId),
+					newRole = InternalUserRole.valueOf(request.role),
+					requestedByInternalUserId = principal.internalUserId,
+				),
+			)
+
+		return ChangeInternalUserRoleResponse(
+			internalUserId = result.internalUserId.value,
+			role = result.role.name,
+			changedAt = result.changedAt,
+		)
+	}
+
+	/** 세 상태 액션이 공유하는 호출 — 어떤 전이인지만 다르다([InternalUserStatusAction]). */
+	private fun changeStatus(
+		internalUserId: String,
+		action: InternalUserStatusAction,
+		principal: InternalUserPrincipal,
+	): ChangeInternalUserStatusResponse {
+		val result =
+			changeInternalUserStatusUseCase.execute(
+				ChangeInternalUserStatusCommand(
+					targetInternalUserId = InternalUserId(internalUserId),
+					action = action,
+					requestedByInternalUserId = principal.internalUserId,
+				),
+			)
+
+		return ChangeInternalUserStatusResponse(
+			internalUserId = result.internalUserId.value,
+			status = result.status.name,
+			changedAt = result.changedAt,
 		)
 	}
 }
