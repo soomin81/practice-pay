@@ -276,3 +276,25 @@
   - **이 과정에서 백엔드 버그가 아닌 함정을 하나 만났다**: Git Bash에서 `curl -d`에 한글을 그대로 실으면 UTF-8이 깨져 `HttpMessageNotReadableException: Invalid UTF-8 start byte`로 **400**이 난다. 서버 문제로 오인하기 쉬우니(응답 본문에 원인이 없다) 셸에서 검증할 때는 ASCII 값을 쓰거나 본문을 파일로 넘긴다 — `CLAUDE.md`의 "openssl base64가 `\r`를 남긴다"와 같은 계열의 Windows 셸 함정이다.
 
 
+
+## 가맹점 계정 관리 Use Case(`ChangeMerchantUserStatusUseCase`/`ChangeMerchantUserRoleUseCase`)와 "최소 1 활성 OWNER" 불변식
+
+콘솔에서 하위 계정을 정지·재개·종료하고 역할을 바꾸는 슬라이스다. **`docs/domain/domain-model.md`가 규정하는데 코드 어디에도 구현이 없던 불변식("최소 하나의 활성 OWNER를 유지한다")을 처음으로 구현한 자리**이기도 하다.
+
+- **도메인에 `MerchantUser.changeRole(newRole, changedAt)`을 추가했다** — `role`이 `val`이라 역할 변경 자체가 불가능했다. `OWNER`로의 승격은 `require`로 막는다(`inviteSubAccount`가 같은 제약을 갖는 것과 같은 이유 — 최초 OWNER는 가맹점 등록 트랜잭션에서만 생성된다). 종료된 계정의 역할 변경도 막는다.
+- **"마지막 활성 OWNER" 불변식은 애그리게이트가 아니라 Use Case에 뒀다.** 같은 가맹점의 *다른* 사용자를 세어봐야 아는 판단이라 애그리게이트가 혼자 할 수 없다(애그리게이트는 다른 애그리게이트를 모른다). `InviteMerchantSubAccountUseCase`가 `loginId` 중복을 Repository 조회로 막는 것과 같은 자리·같은 성격이다. 새 Port 메서드 `MerchantUserRepository.countActiveOwners(merchantId)`는 목록 화면용 복잡 조회가 아니라 **도메인 규칙 보조 조회**라 Projection이 아니라 Command Repository에 뒀다(`findByMerchantIdAndLoginId`/`findByMerchantIdAndEmail`과 같은 성격).
+- **정지·재개·종료를 Use Case 셋으로 쪼개지 않고 `ChangeMerchantUserStatusUseCase` 하나로 뒀다 — "동작마다 Use Case 하나" 관행에서 의도적으로 벗어난 지점이다.** 셋은 권한 확인·테넌시 확인·불변식이 완전히 같고 마지막에 부르는 도메인 메서드 하나만 다르다(`IssueMerchantApiKeyUseCase`/`RevokeMerchantApiKeyUseCase`가 별도인 것은 그 둘이 입력도 규칙도 실제로 다른 연산이기 때문이다). 특히 불변식이 **셋 중 둘**(정지·종료)에만 걸려서, 복제하면 빠뜨리기 쉬운 종류의 규칙이다. 두 Use Case가 공유하는 검사는 `MerchantUserManagementGuard`(순수 함수 묶음, Use Case가 아니다 — `ApplicationPurityTest`의 "Use Case는 다른 Use Case를 호출하지 않는다"를 지킨다)에 모았다.
+- **`docs/`에 없어 추론한 판단 둘**(각 예외/KDoc에 표시했다): ① **자기 자신은 대상이 될 수 없다** — 스스로를 정지·종료·강등하면 복구 수단이 사라진다. ② **`ADMIN`은 `OWNER`를 변경할 수 없다** — `docs/`의 "ADMIN은 기존 OWNER의 권한을 변경할 수 없다"(4.4)를 정지·종료까지 확장했다(권한만 못 바꾸고 정지는 할 수 있으면 규칙이 무의미해진다). 다른 가맹점 사용자는 403이 아니라 **404**로 취급한다 — 존재 여부를 응답 코드로 알려주지 않기 위해서다.
+- **`IllegalStateException`을 전역으로 409에 매핑하지 않았다.** 그렇게 하면 `checkNotNull`(세션이 가리키는 사용자가 DB에 없음)처럼 **500이 맞는 오류까지 409로 가려진다.** Use Case가 도메인 전이 호출 **한 줄만** 감싸 `InvalidMerchantUserTransitionException`으로 바꾸고, 핸들러는 그 타입만 409로 매핑한다 — `apps:api-payment`가 같은 이유로 그 매핑을 체크아웃 경로에만 좁힌 것과 같은 판단이고, 거기는 경로로, 여기는 예외 타입으로 좁혔다.
+- **`SecurityConfig`의 규칙을 `/merchant/merchant-users/**`로 넓혀야 했다.** 기존 정확 경로 규칙은 새 하위 경로(`/{id}/suspend` 등)를 덮지 못해서, 그대로 뒀다면 액션 경로가 `anyRequest, authenticated`로 떨어져 **VIEWER도 정적 1차 관문을 통과**했다(Use Case가 막긴 하지만 방어가 한 겹 사라진다). `MerchantSubAccountControllerTest`에 VIEWER가 액션 경로에서 403을 받는 회귀 테스트를 남겼다.
+
+### 실물 검증에서 잡은 진짜 버그 — `save()`가 `role_code`를 갱신하지 않았다
+
+`bootRun` + curl로 "역할을 VIEWER로 바꾼 뒤 그 계정으로 로그인해 명부를 조회하면 403이어야 한다"를 확인하다가 **200이 나와서** 발견했다. 원인은 `MerchantUserRepositoryAdapter.save()`의 UPDATE 분기에 `ROLE_CODE`가 없었던 것이다 — 그 어댑터를 쓸 당시 `role`이 `val`이라 바뀔 일이 없었기 때문이다. `changeRole()`이 생기면서 **조용한 데이터 유실**이 됐다: API는 200에 새 역할을 돌려주는데(메모리 상태) DB는 옛 역할 그대로였고, 그래서 권한도 축소되지 않았다.
+
+- **자동화 테스트로는 잡을 수 없는 층이었다**: Use Case 단위 테스트는 Repository를 Mock해서 저장 내용을 검증하지 않고, 어댑터 통합 테스트는 애초에 역할을 바꿔볼 수 없었다(불변이었으니까). `backend/CLAUDE.md`의 "테스트가 잡지 못하는 층" 표에 있는 사례들과 같은 성격이다 — **필드를 불변에서 가변으로 바꿀 때는 그 필드를 쓰는 영속성 UPDATE 목록을 반드시 함께 확인한다.**
+- 고친 뒤 회귀 테스트(`save persists a changed role`)를 `MerchantUserRepositoryAdapterTest`에 남겼고, 재기동해 DB에 `VIEWER`가 저장되고 그 계정의 명부 조회가 실제로 403이 되는 것까지 확인했다.
+
+### 불변식이 오늘의 API로는 도달 불가능하다는 사실
+
+실물 검증 중 확인했다: 요청자가 활성 OWNER이고 대상이 다른 활성 OWNER면 활성 OWNER가 이미 둘이라 통과하고, ADMIN은 "ADMIN은 OWNER를 변경할 수 없다"에서, 자기 자신은 그 앞에서 먼저 막힌다 — 그래서 `LastActiveOwnerException`은 **현재 HTTP 경로로는 트리거되지 않는다**(단위 테스트로만 검증된다). 죽은 코드로 오해하지 않도록 여기 남긴다: 규칙 자체가 `docs/`에 있고, 향후 경로(내부 운영자 API의 가맹점 계정 관리, 다중 OWNER 승격)에서 곧바로 필요해지므로 방어선으로 유지한다.

@@ -47,6 +47,61 @@ describe('MerchantUserTable', () => {
 	})
 })
 
+describe('MerchantUserTable 행 액션', () => {
+	it('ACTIVE 계정에는 정지·종료·역할 변경이 있다', () => {
+		renderWithRouter(<MerchantUserTable merchantUsers={[member()]} />)
+		expect(screen.getByRole('button', { name: '정지' })).toBeInTheDocument()
+		expect(screen.getByRole('button', { name: '종료' })).toBeInTheDocument()
+		expect(screen.getByRole('button', { name: '역할 변경' })).toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: '재개' })).not.toBeInTheDocument()
+	})
+
+	it('SUSPENDED 계정에는 재개가 있고 정지는 없다', () => {
+		renderWithRouter(<MerchantUserTable merchantUsers={[member({ status: 'SUSPENDED' })]} />)
+		expect(screen.getByRole('button', { name: '재개' })).toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: '정지' })).not.toBeInTheDocument()
+	})
+
+	it('INVITED 계정에는 종료만 있다(아직 활성화 전)', () => {
+		renderWithRouter(<MerchantUserTable merchantUsers={[member({ status: 'INVITED', lastLoginAt: null })]} />)
+		expect(screen.getByRole('button', { name: '종료' })).toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: '정지' })).not.toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: '역할 변경' })).not.toBeInTheDocument()
+	})
+
+	it('TERMINATED 계정에는 액션이 없다', () => {
+		renderWithRouter(<MerchantUserTable merchantUsers={[member({ status: 'TERMINATED' })]} />)
+		expect(screen.queryByRole('button', { name: '종료' })).not.toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: '재개' })).not.toBeInTheDocument()
+	})
+
+	it('OWNER 행에는 역할 변경을 두지 않는다', () => {
+		renderWithRouter(<MerchantUserTable merchantUsers={[member({ role: 'OWNER' })]} />)
+		expect(screen.queryByRole('button', { name: '역할 변경' })).not.toBeInTheDocument()
+	})
+
+	it('자기 자신 행에는 액션 대신 "본인"을 보여준다', () => {
+		// 서버도 403으로 막지만, 누를 수 있게 두고 거부하는 것보다 감추는 편이 낫다.
+		renderWithRouter(<MerchantUserTable merchantUsers={[member()]} currentMerchantUserId="mu_001" />)
+		expect(screen.getByText('본인')).toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: '정지' })).not.toBeInTheDocument()
+	})
+
+	it('종료는 되돌릴 수 없다는 것을 확인 문구로 알린다', async () => {
+		renderWithRouter(<MerchantUserTable merchantUsers={[member()]} />)
+		await userEvent.click(screen.getByRole('button', { name: '종료' }))
+		expect(screen.getByText(/되돌릴 수 없습니다/)).toBeInTheDocument()
+	})
+
+	it('역할 선택지에 OWNER가 없다', async () => {
+		renderWithRouter(<MerchantUserTable merchantUsers={[member()]} />)
+		await userEvent.click(screen.getByRole('button', { name: '역할 변경' }))
+		const select = screen.getByLabelText('역할 선택')
+		expect(select).toBeInTheDocument()
+		expect(screen.queryByRole('option', { name: 'OWNER' })).not.toBeInTheDocument()
+	})
+})
+
 describe('InviteSubAccountForm', () => {
 	afterEach(() => {
 		vi.unstubAllGlobals()

@@ -45,6 +45,11 @@ class MerchantUserRepositoryAdapter(
 		} else {
 			dsl
 				.update(MERCHANT_USER)
+				// **ROLE_CODE를 반드시 함께 갱신한다.** 원래 이 UPDATE에는 빠져 있었다 —
+				// 어댑터를 쓸 당시 `MerchantUser.role`이 `val`이라 바뀔 일이 없었기 때문이다.
+				// `changeRole()`이 생기면서 조용한 데이터 유실이 됐다(API는 200에 새 역할을
+				// 돌려주지만 DB는 옛 역할 그대로 — 실물 검증에서 발견했다).
+				.set(MERCHANT_USER.ROLE_CODE, merchantUser.role.name)
 				.set(MERCHANT_USER.USER_STATUS, merchantUser.status.name)
 				.set(MERCHANT_USER.PASSWORD_HASH, merchantUser.passwordHash)
 				.set(MERCHANT_USER.FAILED_LOGIN_COUNT, merchantUser.failedLoginCount)
@@ -95,6 +100,28 @@ class MerchantUserRepositoryAdapter(
 			.where(MERCHANT_USER.MERCHANT_USER_ID.eq(merchantUserId.value))
 			.fetchOne()
 			?.let { it.toDomain(resolveMerchantId(it.merchantSeq!!)) }
+
+	/**
+	 * "최소 하나의 활성 OWNER를 유지한다" 불변식용 집계다(Port의 KDoc 참고).
+	 * 가맹점이 없으면 0을 돌려준다 — 호출부는 "다른 활성 OWNER가 없다"로 해석한다.
+	 */
+	override fun countActiveOwners(merchantId: MerchantId): Int {
+		val merchantSeq =
+			dsl
+				.select(MERCHANT.MERCHANT_SEQ)
+				.from(MERCHANT)
+				.where(MERCHANT.MERCHANT_ID.eq(merchantId.value))
+				.fetchOne(MERCHANT.MERCHANT_SEQ)
+				?: return 0
+
+		return dsl.fetchCount(
+			MERCHANT_USER,
+			MERCHANT_USER.MERCHANT_SEQ
+				.eq(merchantSeq)
+				.and(MERCHANT_USER.ROLE_CODE.eq(MerchantUserRole.OWNER.name))
+				.and(MERCHANT_USER.USER_STATUS.eq(AccountStatus.ACTIVE.name)),
+		)
+	}
 
 	private fun resolveMerchantSeq(merchantId: MerchantId): Long =
 		dsl

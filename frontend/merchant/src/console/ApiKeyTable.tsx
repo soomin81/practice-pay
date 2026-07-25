@@ -52,7 +52,8 @@ export function ApiKeyTable({ apiKeys }: { apiKeys: readonly ApiKeySummary[] }) 
 function StatusBadge({ status }: { status: string }) {
 	if (status === 'ACTIVE') return <Badge variant="secondary">ACTIVE</Badge>
 	if (status === 'EXPIRED') return <Badge variant="destructive">EXPIRED</Badge>
-	return <Badge variant="muted">{status}</Badge>
+	// 그 밖의 상태(REVOKED 등)는 중립적으로 — shadcn 생성물의 variant 목록에 muted는 없다.
+	return <Badge variant="outline">{status}</Badge>
 }
 
 /**

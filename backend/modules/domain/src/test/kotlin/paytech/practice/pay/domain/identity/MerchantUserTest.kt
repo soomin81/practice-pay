@@ -24,6 +24,38 @@ private fun initialOwner(): MerchantUser =
 class MerchantUserTest :
 	FunSpec({
 
+		test("changeRole switches the role and stamps updatedAt") {
+			val user = initialOwner().apply { activate("hashed-password", CREATED_AT.plusSeconds(60)) }
+			val changedAt = CREATED_AT.plusSeconds(3_600)
+
+			user.changeRole(MerchantUserRole.VIEWER, changedAt)
+
+			user.role shouldBe MerchantUserRole.VIEWER
+			user.updatedAt shouldBe changedAt
+		}
+
+		test("changeRole cannot promote to OWNER") {
+			// 최초 OWNER는 가맹점 등록 트랜잭션에서만 생성된다(inviteSubAccount와 같은 제약).
+			val user = initialOwner().apply { activate("hashed-password", CREATED_AT.plusSeconds(60)) }
+			user.changeRole(MerchantUserRole.ADMIN, CREATED_AT.plusSeconds(120))
+
+			shouldThrow<IllegalArgumentException> {
+				user.changeRole(MerchantUserRole.OWNER, CREATED_AT.plusSeconds(180))
+			}
+		}
+
+		test("changeRole is rejected on a TERMINATED account") {
+			val user =
+				initialOwner().apply {
+					activate("hashed-password", CREATED_AT.plusSeconds(60))
+					terminate(CREATED_AT.plusSeconds(120))
+				}
+
+			shouldThrow<IllegalStateException> {
+				user.changeRole(MerchantUserRole.VIEWER, CREATED_AT.plusSeconds(180))
+			}
+		}
+
 		test("inviteInitialOwner creates an INVITED OWNER invited by an internal user") {
 			val owner = initialOwner()
 

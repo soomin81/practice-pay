@@ -7,6 +7,8 @@ import paytech.practice.pay.application.apikey.ListMerchantApiKeysUseCase
 import paytech.practice.pay.application.apikey.RevokeMerchantApiKeyUseCase
 import paytech.practice.pay.application.identity.AcceptAccountInvitationUseCase
 import paytech.practice.pay.application.identity.AuthenticateMerchantUserUseCase
+import paytech.practice.pay.application.identity.ChangeMerchantUserRoleUseCase
+import paytech.practice.pay.application.identity.ChangeMerchantUserStatusUseCase
 import paytech.practice.pay.application.identity.InviteMerchantSubAccountUseCase
 import paytech.practice.pay.application.identity.ListMerchantUsersUseCase
 import paytech.practice.pay.application.port.outbound.AccountInvitationRepository
@@ -132,4 +134,16 @@ class UseCaseConfiguration {
 			merchantUserRepository = merchantUserRepository,
 			merchantUserListProjection = merchantUserListProjection,
 		)
+
+	@Bean
+	fun changeMerchantUserStatusUseCase(
+		merchantUserRepository: MerchantUserRepository,
+		clock: Clock,
+	): ChangeMerchantUserStatusUseCase = ChangeMerchantUserStatusUseCase(merchantUserRepository, clock)
+
+	@Bean
+	fun changeMerchantUserRoleUseCase(
+		merchantUserRepository: MerchantUserRepository,
+		clock: Clock,
+	): ChangeMerchantUserRoleUseCase = ChangeMerchantUserRoleUseCase(merchantUserRepository, clock)
 }

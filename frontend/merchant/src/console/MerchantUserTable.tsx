@@ -1,9 +1,22 @@
 import { formatDateTime } from '@/console/format'
+import { MerchantUserActions } from '@/console/MerchantUserActions'
 import type { MerchantUserSummary } from '@/api/types'
 import { Badge } from '@/components/ui/badge'
 
-/** 가맹점 사용자 명부. 비밀번호 관련 값은 애초에 응답에 없다(Projection 단계에서 제외). */
-export function MerchantUserTable({ merchantUsers }: { merchantUsers: readonly MerchantUserSummary[] }) {
+/**
+ * 가맹점 사용자 명부. 비밀번호 관련 값은 애초에 응답에 없다(Projection 단계에서 제외).
+ *
+ * [currentMerchantUserId]가 주어지면 **그 행에는 액션을 그리지 않는다** — 자기 자신은
+ * 정지·종료·역할 변경의 대상이 될 수 없다(서버도 403으로 막지만, 누를 수 있게 두고
+ * 거부하는 것보다 아예 감추는 편이 낫다).
+ */
+export function MerchantUserTable({
+	merchantUsers,
+	currentMerchantUserId,
+}: {
+	merchantUsers: readonly MerchantUserSummary[]
+	currentMerchantUserId?: string
+}) {
 	if (merchantUsers.length === 0) {
 		return <p className="text-sm text-muted-foreground">아직 등록된 사용자가 없습니다.</p>
 	}
@@ -18,7 +31,8 @@ export function MerchantUserTable({ merchantUsers }: { merchantUsers: readonly M
 						<th className="py-2 pr-4 font-medium">이메일</th>
 						<th className="py-2 pr-4 font-medium">역할</th>
 						<th className="py-2 pr-4 font-medium">상태</th>
-						<th className="py-2 font-medium">마지막 로그인</th>
+						<th className="py-2 pr-4 font-medium">마지막 로그인</th>
+						<th className="py-2 font-medium" />
 					</tr>
 				</thead>
 				<tbody>
@@ -31,7 +45,14 @@ export function MerchantUserTable({ merchantUsers }: { merchantUsers: readonly M
 							<td className="py-2.5 pr-4">
 								<StatusBadge status={String(user.status)} />
 							</td>
-							<td className="py-2.5 text-xs text-muted-foreground">{formatDateTime(user.lastLoginAt)}</td>
+							<td className="py-2.5 pr-4 text-xs text-muted-foreground">{formatDateTime(user.lastLoginAt)}</td>
+							<td className="py-2.5 text-right">
+								{user.merchantUserId === currentMerchantUserId ? (
+									<span className="text-xs text-muted-foreground">본인</span>
+								) : (
+									<MerchantUserActions user={user} />
+								)}
+							</td>
 						</tr>
 					))}
 				</tbody>
@@ -47,5 +68,6 @@ function StatusBadge({ status }: { status: string }) {
 	if (status === 'LOCKED' || status === 'SUSPENDED' || status === 'TERMINATED') {
 		return <Badge variant="destructive">{status}</Badge>
 	}
-	return <Badge variant="muted">{status}</Badge>
+	// 그 밖의 상태는 중립적으로 — shadcn 생성물의 variant 목록에 muted는 없다.
+	return <Badge variant="outline">{status}</Badge>
 }

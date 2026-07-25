@@ -152,6 +152,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/merchant/merchant-users/{merchantUserId}/reactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 계정 재개
+         * @description OWNER/ADMIN만 호출할 수 있다. 자기 자신은 대상이 될 수 없고, ADMIN은 OWNER를 변경할 수 없다(403). 가맹점의 마지막 활성 OWNER를 정지·종료하려 하면 409다(최소 하나의 활성 OWNER를 유지한다). 허용되지 않는 상태 전이(예: 종료된 계정 재개)도 409다.
+         */
+        post: operations["merchant-reactivate-user"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merchant/merchant-users/{merchantUserId}/role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 역할 변경
+         * @description OWNER/ADMIN만 호출할 수 있다. **OWNER로 승격할 수 없다**(400) — 최초 OWNER는 가맹점 등록에서만 생성된다. ADMIN은 OWNER의 역할을 변경할 수 없고(403), 마지막 활성 OWNER는 강등할 수 없다(409).
+         */
+        post: operations["merchant-change-user-role"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merchant/merchant-users/{merchantUserId}/suspend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 계정 정지
+         * @description OWNER/ADMIN만 호출할 수 있다. 자기 자신은 대상이 될 수 없고, ADMIN은 OWNER를 변경할 수 없다(403). 가맹점의 마지막 활성 OWNER를 정지·종료하려 하면 409다(최소 하나의 활성 OWNER를 유지한다). 허용되지 않는 상태 전이(예: 종료된 계정 재개)도 409다.
+         */
+        post: operations["merchant-suspend-user"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merchant/merchant-users/{merchantUserId}/terminate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 계정 종료
+         * @description OWNER/ADMIN만 호출할 수 있다. 자기 자신은 대상이 될 수 없고, ADMIN은 OWNER를 변경할 수 없다(403). 가맹점의 마지막 활성 OWNER를 정지·종료하려 하면 409다(최소 하나의 활성 OWNER를 유지한다). 허용되지 않는 상태 전이(예: 종료된 계정 재개)도 409다.
+         */
+        post: operations["merchant-terminate-user"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -180,6 +260,15 @@ export interface components {
             /** @description 발급 응답에서 받은 초대 Token 원문 */
             invitationToken: string;
         };
+        /** ChangeMerchantUserRoleResponse */
+        ChangeMerchantUserRoleResponse: {
+            /** @description 변경 후 역할 */
+            role: string;
+            /** @description 변경 시각(UTC) */
+            changedAt: string;
+            /** @description 대상 가맹점 사용자 식별자 */
+            merchantUserId: string;
+        };
         /** InviteMerchantSubAccountRequest */
         InviteMerchantSubAccountRequest: {
             /** @description ADMIN | VIEWER (OWNER 불가) */
@@ -191,7 +280,7 @@ export interface components {
             /** @description 가맹점 내에서 유일한 이메일 */
             email: string;
         };
-        "merchant-api-keys-merchantApiKeyId-33084672": Record<string, never>;
+        "merchant-merchant-users-merchantUserId-reactivate-33084672": Record<string, never>;
         /** MerchantMeResponse */
         MerchantMeResponse: {
             /** @description OWNER | ADMIN | VIEWER */
@@ -244,6 +333,15 @@ export interface components {
             loginId: string;
             /** @description 활성화 시각(UTC) */
             activatedAt: string;
+        };
+        /** ChangeMerchantUserStatusResponse */
+        ChangeMerchantUserStatusResponse: {
+            /** @description 변경 시각(UTC) */
+            changedAt: string;
+            /** @description 대상 가맹점 사용자 식별자 */
+            merchantUserId: string;
+            /** @description 변경 후 계정 상태 */
+            status: string;
         };
         /** ListMerchantApiKeysResponse */
         ListMerchantApiKeysResponse: {
@@ -308,6 +406,11 @@ export interface components {
             merchantCode: string;
             /** @description 가맹점 내 로그인 아이디 */
             loginId: string;
+        };
+        /** ChangeMerchantUserRoleRequest */
+        ChangeMerchantUserRoleRequest: {
+            /** @description 변경할 역할. ADMIN | VIEWER (OWNER 불가) */
+            role: string;
         };
     };
     responses: never;
@@ -395,7 +498,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-api-keys-merchantApiKeyId-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-reactivate-33084672"];
             };
         };
         responses: {
@@ -508,7 +611,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-api-keys-merchantApiKeyId-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-reactivate-33084672"];
             };
         };
         responses: {
@@ -519,6 +622,114 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RevokeMerchantApiKeyResponse"];
+                };
+            };
+        };
+    };
+    "merchant-reactivate-user": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 대상 가맹점 사용자 식별자 */
+                merchantUserId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-reactivate-33084672"];
+            };
+        };
+        responses: {
+            /** @description 200 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeMerchantUserStatusResponse"];
+                };
+            };
+        };
+    };
+    "merchant-change-user-role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 대상 가맹점 사용자 식별자 */
+                merchantUserId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json;charset=UTF-8": components["schemas"]["ChangeMerchantUserRoleRequest"];
+            };
+        };
+        responses: {
+            /** @description 200 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeMerchantUserRoleResponse"];
+                };
+            };
+        };
+    };
+    "merchant-suspend-user": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 대상 가맹점 사용자 식별자 */
+                merchantUserId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-reactivate-33084672"];
+            };
+        };
+        responses: {
+            /** @description 200 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeMerchantUserStatusResponse"];
+                };
+            };
+        };
+    };
+    "merchant-terminate-user": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 대상 가맹점 사용자 식별자 */
+                merchantUserId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-reactivate-33084672"];
+            };
+        };
+        responses: {
+            /** @description 200 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeMerchantUserStatusResponse"];
                 };
             };
         };

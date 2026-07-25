@@ -70,6 +70,7 @@ src/index.css                 Tailwind import + shadcn 테마 변수
 
 - **`src/components/ui/`는 생성물로 취급한다.** 고치고 싶으면 그 파일을 직접 바꾸지 말고 감싸는 컴포넌트를 `src/checkout/components/`에 만든다 — `npx shadcn@latest add`를 다시 돌리면 덮어써진다. oxlint도 이 디렉토리를 `ignorePatterns`로 제외한다(생성 코드가 `only-export-components` 경고를 낸다).
 - **컴포넌트 추가는 CLI로 한다**: `npx shadcn@latest add <name>`. `init`은 이미 끝났고 설정은 `components.json`에 있다(스타일 `radix-nova`, base color `neutral`, CSS 변수 방식).
+  - **손으로 비슷하게 써 두고 나중에 CLI로 맞추면 variant가 어긋난다.** merchant의 `input`/`label`/`badge`를 그렇게 만들었다가 CLI로 교체했더니, 임의로 넣었던 `badge`의 `muted` variant가 실제 생성물에 없어서 그걸 쓰던 화면이 컴파일 에러로 드러났다(실제 목록은 `default`/`secondary`/`destructive`/`outline`/`ghost`/`link`). 다른 앱에서 복사하는 것도 같은 위험이 있으니 **처음부터 CLI로 받는다** — 교체 자체는 `--overwrite --yes`로 비대화형 실행이 되고, 그때 `package.json`/`components.json`/`index.css`는 건드리지 않는다.
 - **import 별칭 `@/`는 `src/`를 가리킨다.** shadcn 생성 코드가 그 형태로 import하기 때문에 필수다. `tsconfig.json`/`tsconfig.app.json`의 `paths`와 `vite.config.ts`의 `resolve.alias` **양쪽에** 있어야 한다 — 전자는 타입 검사용, 후자는 번들러용이라 하나만 있으면 다른 쪽에서 깨진다.
 - **`baseUrl`은 두지 않는다.** shadcn 문서는 `paths`와 함께 두라고 하지만 TypeScript 6에서 deprecated라 빌드가 TS5101로 막힌다. TS 6부터 `paths`는 tsconfig 위치 기준으로 해석되므로 `baseUrl` 없이 그대로 동작한다.
 
@@ -194,7 +195,24 @@ npm run gen:api        # api-merchant의 openapi3.yaml → src/api/schema.d.ts
   토큰 문자열이 아니라 **바로 쓸 수 있는 초대 링크**(`{origin}/accept-invitation?token=…`)를
   보여준다 — MVP에 초대 메일 발송이 없어서 발급한 사람이 직접 전달해야 하기 때문이다.
 - **역할 선택지에 `OWNER`가 없다**(`INVITABLE_ROLES`) — 하위 계정 발급으로는 OWNER를
-  만들 수 없다는 도메인 규칙이 화면에도 그대로 반영된다.
+  만들 수 없다는 도메인 규칙이 화면에도 그대로 반영된다. 역할 **변경** 폼도 같은 목록을
+  재사용한다.
+
+### 명부의 행 액션 (3번째 슬라이스)
+
+`MerchantUserActions`가 **계정 상태에 따라 다른 액션**을 그린다 — 도메인 상태 머신을
+화면에 옮긴 것이다: `ACTIVE`→정지·종료·역할 변경, `SUSPENDED`→재개·종료,
+`INVITED`→종료만, `TERMINATED`/`LOCKED`→없음.
+
+- **자기 자신 행에는 액션 대신 "본인"을 그린다.** 서버도 403으로 막지만, 누를 수 있게
+  두고 거부하는 것보다 감추는 편이 낫다. 현재 사용자는 `TeamPage`가 `useMe()`에서
+  받아 `MerchantUserTable`에 넘긴다(캐시된 쿼리라 추가 요청이 없다).
+- **OWNER 행에는 역할 변경을 두지 않는다** — 강등은 서버 규칙(마지막 OWNER 보호,
+  ADMIN 차단)에 걸리기 쉬워 화면에서 미리 뺐다.
+- 확인은 `ApiKeyTable`의 **인라인 확인 패턴**을 그대로 쓴다. 종료는 되돌릴 수 없다는
+  것을 확인 문구에 적는다.
+- 오류는 status로 분기한다: 409(마지막 OWNER 보호·허용되지 않는 전이)는 **서버 메시지를
+  그대로 보여준다**(둘을 프론트가 구분할 수 없고, 서버 문구가 이미 구체적이다).
 
 ## 현재 상태와 다음
 

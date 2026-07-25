@@ -40,6 +40,10 @@ import paytech.practice.pay.application.identity.AcceptAccountInvitationResult
 import paytech.practice.pay.application.identity.AcceptAccountInvitationUseCase
 import paytech.practice.pay.application.identity.AuthenticateMerchantUserResult
 import paytech.practice.pay.application.identity.AuthenticateMerchantUserUseCase
+import paytech.practice.pay.application.identity.ChangeMerchantUserRoleResult
+import paytech.practice.pay.application.identity.ChangeMerchantUserRoleUseCase
+import paytech.practice.pay.application.identity.ChangeMerchantUserStatusResult
+import paytech.practice.pay.application.identity.ChangeMerchantUserStatusUseCase
 import paytech.practice.pay.application.identity.InviteMerchantSubAccountResult
 import paytech.practice.pay.application.identity.InviteMerchantSubAccountUseCase
 import paytech.practice.pay.application.identity.ListMerchantUsersResult
@@ -157,6 +161,12 @@ class MerchantApiDocumentationTest : FunSpec() {
 
 	@MockkBean
 	lateinit var acceptAccountInvitationUseCase: AcceptAccountInvitationUseCase
+
+	@MockkBean
+	lateinit var changeMerchantUserStatusUseCase: ChangeMerchantUserStatusUseCase
+
+	@MockkBean
+	lateinit var changeMerchantUserRoleUseCase: ChangeMerchantUserRoleUseCase
 
 	init {
 		extensions(SpringExtension)
@@ -453,6 +463,87 @@ class MerchantApiDocumentationTest : FunSpec() {
 				.perform(get("/merchant/merchant-users").with(authenticatedAs(OWNER)))
 				.andExpect(status().isOk)
 				.andDo(document("merchant-list-merchant-users", snippet))
+		}
+
+		test("document account status actions (suspend/reactivate/terminate)") {
+			// 셋은 경로만 다르고 요청·응답 형태가 같아서 한 테스트에서 함께 문서화한다.
+			val actions =
+				listOf(
+					Triple("suspend", AccountStatus.SUSPENDED, "계정 정지"),
+					Triple("reactivate", AccountStatus.ACTIVE, "계정 재개"),
+					Triple("terminate", AccountStatus.TERMINATED, "계정 종료"),
+				)
+
+			actions.forEach { (path, resultingStatus, summary) ->
+				every { changeMerchantUserStatusUseCase.execute(any()) } returns
+					ChangeMerchantUserStatusResult(
+						merchantUserId = MerchantUserId("mu_002"),
+						status = resultingStatus,
+						changedAt = NOW,
+					)
+
+				val snippet =
+					merchantResource(
+						summary = summary,
+						description =
+							"OWNER/ADMIN만 호출할 수 있다. 자기 자신은 대상이 될 수 없고, ADMIN은 OWNER를 변경할 수 없다(403). " +
+								"가맹점의 마지막 활성 OWNER를 정지·종료하려 하면 409다(최소 하나의 활성 OWNER를 유지한다). " +
+								"허용되지 않는 상태 전이(예: 종료된 계정 재개)도 409다.",
+						responseSchema = "ChangeMerchantUserStatusResponse",
+						responseFields =
+							listOf(
+								fieldWithPath("merchantUserId").description("대상 가맹점 사용자 식별자"),
+								fieldWithPath("status").description("변경 후 계정 상태"),
+								fieldWithPath("changedAt").description("변경 시각(UTC)"),
+							),
+						pathParameters = listOf(parameterWithName("merchantUserId").description("대상 가맹점 사용자 식별자")),
+					)
+
+				mockMvc
+					.perform(
+						post("/merchant/merchant-users/{merchantUserId}/$path", "mu_002")
+							.with(authenticatedAs(OWNER))
+							.with(csrf()),
+					).andExpect(status().isOk)
+					.andDo(document("merchant-$path-user", snippet))
+			}
+		}
+
+		test("document POST change merchant user role") {
+			every { changeMerchantUserRoleUseCase.execute(any()) } returns
+				ChangeMerchantUserRoleResult(
+					merchantUserId = MerchantUserId("mu_002"),
+					role = MerchantUserRole.VIEWER,
+					changedAt = NOW,
+				)
+
+			val snippet =
+				merchantResource(
+					summary = "역할 변경",
+					description =
+						"OWNER/ADMIN만 호출할 수 있다. **OWNER로 승격할 수 없다**(400) — 최초 OWNER는 가맹점 등록에서만 " +
+							"생성된다. ADMIN은 OWNER의 역할을 변경할 수 없고(403), 마지막 활성 OWNER는 강등할 수 없다(409).",
+					requestSchema = "ChangeMerchantUserRoleRequest",
+					requestFields = listOf(fieldWithPath("role").description("변경할 역할. ADMIN | VIEWER (OWNER 불가)")),
+					responseSchema = "ChangeMerchantUserRoleResponse",
+					responseFields =
+						listOf(
+							fieldWithPath("merchantUserId").description("대상 가맹점 사용자 식별자"),
+							fieldWithPath("role").description("변경 후 역할"),
+							fieldWithPath("changedAt").description("변경 시각(UTC)"),
+						),
+					pathParameters = listOf(parameterWithName("merchantUserId").description("대상 가맹점 사용자 식별자")),
+				)
+
+			mockMvc
+				.perform(
+					post("/merchant/merchant-users/{merchantUserId}/role", "mu_002")
+						.with(authenticatedAs(OWNER))
+						.with(csrf())
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsString(ChangeMerchantUserRoleRequest(role = "VIEWER"))),
+				).andExpect(status().isOk)
+				.andDo(document("merchant-change-user-role", snippet))
 		}
 
 		test("document POST accept account invitation") {

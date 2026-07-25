@@ -20,9 +20,15 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPat
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import paytech.practice.pay.api.merchant.config.SecurityConfig
 import paytech.practice.pay.api.merchant.security.MerchantUserPrincipal
+import paytech.practice.pay.application.identity.ChangeMerchantUserRoleResult
+import paytech.practice.pay.application.identity.ChangeMerchantUserRoleUseCase
+import paytech.practice.pay.application.identity.ChangeMerchantUserStatusResult
+import paytech.practice.pay.application.identity.ChangeMerchantUserStatusUseCase
 import paytech.practice.pay.application.identity.DuplicateMerchantUserException
+import paytech.practice.pay.application.identity.InvalidMerchantUserTransitionException
 import paytech.practice.pay.application.identity.InviteMerchantSubAccountResult
 import paytech.practice.pay.application.identity.InviteMerchantSubAccountUseCase
+import paytech.practice.pay.application.identity.LastActiveOwnerException
 import paytech.practice.pay.application.identity.ListMerchantUsersResult
 import paytech.practice.pay.application.identity.ListMerchantUsersUseCase
 import paytech.practice.pay.application.identity.MerchantUserCannotInviteSubAccountsException
@@ -73,6 +79,12 @@ class MerchantSubAccountControllerTest : FunSpec() {
 
 	@MockkBean
 	lateinit var listMerchantUsersUseCase: ListMerchantUsersUseCase
+
+	@MockkBean
+	lateinit var changeMerchantUserStatusUseCase: ChangeMerchantUserStatusUseCase
+
+	@MockkBean
+	lateinit var changeMerchantUserRoleUseCase: ChangeMerchantUserRoleUseCase
 
 	init {
 		extensions(SpringExtension)
@@ -243,6 +255,84 @@ class MerchantSubAccountControllerTest : FunSpec() {
 			mockMvc
 				.perform(get("/merchant/merchant-users").with(authenticatedAs(OWNER)))
 				.andExpect(status().isForbidden)
+		}
+
+		test("OWNER suspending a sub-account returns 200") {
+			every { changeMerchantUserStatusUseCase.execute(any()) } returns
+				ChangeMerchantUserStatusResult(
+					merchantUserId = MerchantUserId("mu_001"),
+					status = AccountStatus.SUSPENDED,
+					changedAt = Instant.parse("2026-07-19T00:00:00Z"),
+				)
+
+			mockMvc
+				.perform(post("/merchant/merchant-users/mu_001/suspend").with(csrf()).with(authenticatedAs(OWNER)))
+				.andExpect(status().isOk)
+				.andExpect(jsonPath("$.status").value("SUSPENDED"))
+		}
+
+		test("VIEWER cannot reach the action paths (SecurityConfig wildcard covers sub-paths)") {
+			// 와일드카드를 좁히면 여기서 먼저 깨진다 — 정적 1차 관문이 사라지는 것을 막는 회귀 테스트다.
+			mockMvc
+				.perform(post("/merchant/merchant-users/mu_001/suspend").with(csrf()).with(authenticatedAs(VIEWER)))
+				.andExpect(status().isForbidden)
+			mockMvc
+				.perform(post("/merchant/merchant-users/mu_001/terminate").with(csrf()).with(authenticatedAs(VIEWER)))
+				.andExpect(status().isForbidden)
+		}
+
+		test("no authentication on an action path returns 401 or 403") {
+			val result = mockMvc.perform(post("/merchant/merchant-users/mu_001/suspend").with(csrf())).andReturn()
+
+			result.response.status shouldBeIn listOf(401, 403)
+		}
+
+		test("LastActiveOwnerException returns 409") {
+			every { changeMerchantUserStatusUseCase.execute(any()) } throws
+				LastActiveOwnerException("마지막 활성 OWNER입니다.")
+
+			mockMvc
+				.perform(post("/merchant/merchant-users/mu_001/suspend").with(csrf()).with(authenticatedAs(OWNER)))
+				.andExpect(status().isConflict)
+		}
+
+		test("InvalidMerchantUserTransitionException returns 409") {
+			every { changeMerchantUserStatusUseCase.execute(any()) } throws
+				InvalidMerchantUserTransitionException("종료된 계정은 재개할 수 없습니다.")
+
+			mockMvc
+				.perform(post("/merchant/merchant-users/mu_001/reactivate").with(csrf()).with(authenticatedAs(OWNER)))
+				.andExpect(status().isConflict)
+		}
+
+		test("changing a role returns 200") {
+			every { changeMerchantUserRoleUseCase.execute(any()) } returns
+				ChangeMerchantUserRoleResult(
+					merchantUserId = MerchantUserId("mu_001"),
+					role = MerchantUserRole.VIEWER,
+					changedAt = Instant.parse("2026-07-19T00:00:00Z"),
+				)
+
+			mockMvc
+				.perform(
+					post("/merchant/merchant-users/mu_001/role")
+						.with(csrf())
+						.with(authenticatedAs(OWNER))
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsString(ChangeMerchantUserRoleRequest(role = "VIEWER"))),
+				).andExpect(status().isOk)
+				.andExpect(jsonPath("$.role").value("VIEWER"))
+		}
+
+		test("an invalid role string returns 400") {
+			mockMvc
+				.perform(
+					post("/merchant/merchant-users/mu_001/role")
+						.with(csrf())
+						.with(authenticatedAs(OWNER))
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsString(ChangeMerchantUserRoleRequest(role = "NOT_A_ROLE"))),
+				).andExpect(status().isBadRequest)
 		}
 
 		test("attempting to invite an OWNER returns 400 (domain require failure surfaces as IllegalArgumentException)") {

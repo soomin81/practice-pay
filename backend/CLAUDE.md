@@ -38,7 +38,11 @@ apps/
                      (POST /merchant/login), AcceptAccountInvitationUseCase(POST /merchant/account-invitations/accept,
                      비인증, api-admin과 같은 공용 Use Case를 재사용), InviteMerchantSubAccountUseCase
                      (POST /merchant/merchant-users, OWNER/ADMIN), ListMerchantUsersUseCase
-                     (GET /merchant/merchant-users, OWNER/ADMIN — 팀 명부), IssueMerchantApiKeyUseCase/
+                     (GET /merchant/merchant-users, OWNER/ADMIN — 팀 명부),
+                     ChangeMerchantUserStatusUseCase/ChangeMerchantUserRoleUseCase
+                     (POST /merchant/merchant-users/{id}/suspend|reactivate|terminate|role —
+                     "최소 하나의 활성 OWNER를 유지한다" 불변식을 처음 구현한 자리),
+                     IssueMerchantApiKeyUseCase/
                      RevokeMerchantApiKeyUseCase/ListMerchantApiKeysUseCase(POST·DELETE·GET
                      /merchant/api-keys, OWNER/ADMIN — GET도 VIEWER는 막는다)가
                      있다(Apps 절 참고). 이 앱의 MVP 흐름이 전부 구현됐다. **브라우저

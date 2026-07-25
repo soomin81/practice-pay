@@ -11,6 +11,7 @@ import paytech.practice.pay.domain.identity.InternalUserId
 import paytech.practice.pay.domain.identity.LoginId
 import paytech.practice.pay.domain.identity.MerchantUser
 import paytech.practice.pay.domain.identity.MerchantUserId
+import paytech.practice.pay.domain.identity.MerchantUserRole
 import paytech.practice.pay.domain.merchant.MerchantId
 import paytech.practice.pay.infra.persistence.jooq.PersistenceTestSupport
 import paytech.practice.pay.infra.persistence.jooq.insertTestMerchant
@@ -141,5 +142,76 @@ class MerchantUserRepositoryAdapterTest :
 
 		test("findById returns null when no such id exists") {
 			adapter.findById(MerchantUserId("mu_no-such-id")).shouldBeNull()
+		}
+
+		test("countActiveOwners counts only ACTIVE OWNERs of that merchant") {
+			// "최소 하나의 활성 OWNER를 유지한다" 불변식이 기대는 집계다.
+			val merchantId = MerchantId(insertTestMerchant())
+			val internalUserId = insertTestInternalUser()
+
+			fun owner(activated: Boolean) =
+				MerchantUser
+					.inviteInitialOwner(
+						id = MerchantUserId("mu_${uniqueSuffix()}"),
+						merchantId = merchantId,
+						loginId = LoginId("owner-${uniqueSuffix()}"),
+						email = Email("${uniqueSuffix()}@example.com"),
+						userName = "테스트 오너",
+						invitedByInternalUserId = internalUserId,
+						createdAt = NOW,
+					).apply { if (activated) activate("hashed-password", NOW) }
+
+			val activeOwner = owner(activated = true)
+			adapter.save(activeOwner)
+			adapter.save(owner(activated = false)) // INVITED — 세지 않는다
+			adapter.save(
+				MerchantUser
+					.inviteSubAccount(
+						id = MerchantUserId("mu_${uniqueSuffix()}"),
+						merchantId = merchantId,
+						loginId = LoginId("admin-${uniqueSuffix()}"),
+						email = Email("${uniqueSuffix()}@example.com"),
+						userName = "테스트 어드민",
+						role = MerchantUserRole.ADMIN,
+						invitedByMerchantUserId = activeOwner.id,
+						createdAt = NOW,
+					).apply { activate("hashed-password", NOW) }, // ACTIVE지만 OWNER가 아니다
+			)
+
+			adapter.countActiveOwners(merchantId) shouldBe 1
+
+			// 정지되면 활성 OWNER에서 빠진다.
+			activeOwner.suspend(NOW.plusSeconds(60))
+			adapter.save(activeOwner)
+			adapter.countActiveOwners(merchantId) shouldBe 0
+		}
+
+		test("save persists a changed role (regression: the UPDATE used to omit role_code)") {
+			// 이 어댑터가 쓰일 당시 role이 val이라 UPDATE 목록에 role_code가 없었고,
+			// changeRole()이 생기면서 조용한 데이터 유실이 됐다 — API는 새 역할을 돌려주는데
+			// DB는 옛 역할 그대로였다. Mock을 쓰는 단위 테스트로는 잡히지 않는 층이라
+			// 실물 검증에서 드러났고, 그 회귀를 여기 고정한다.
+			val merchantId = MerchantId(insertTestMerchant())
+			val owner =
+				MerchantUser
+					.inviteInitialOwner(
+						id = MerchantUserId("mu_${uniqueSuffix()}"),
+						merchantId = merchantId,
+						loginId = LoginId("owner-${uniqueSuffix()}"),
+						email = Email("${uniqueSuffix()}@example.com"),
+						userName = "테스트 오너",
+						invitedByInternalUserId = insertTestInternalUser(),
+						createdAt = NOW,
+					).apply { activate("hashed-password", NOW) }
+			adapter.save(owner)
+
+			owner.changeRole(MerchantUserRole.VIEWER, NOW.plusSeconds(60))
+			adapter.save(owner)
+
+			adapter.findById(owner.id)!!.role shouldBe MerchantUserRole.VIEWER
+		}
+
+		test("countActiveOwners returns 0 for an unknown merchant") {
+			adapter.countActiveOwners(MerchantId("mrc_no_such_merchant")) shouldBe 0
 		}
 	})

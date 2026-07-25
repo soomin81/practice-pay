@@ -1,3 +1,4 @@
+import { useMe } from '@/auth/useAuth'
 import { useMerchantUsers } from '@/console/useMerchantUsers'
 import { InviteSubAccountForm } from '@/console/InviteSubAccountForm'
 import { MerchantUserTable } from '@/console/MerchantUserTable'
@@ -10,6 +11,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
  */
 export function TeamPage() {
 	const users = useMerchantUsers()
+	// 자기 자신 행의 액션을 감추기 위해 현재 사용자를 넘긴다(캐시된 쿼리라 추가 요청이 없다).
+	const { data: me } = useMe()
 
 	return (
 		<div className="flex flex-col gap-6">
@@ -33,7 +36,12 @@ export function TeamPage() {
 				<CardContent>
 					{users.isPending && <p className="text-sm text-muted-foreground">불러오는 중…</p>}
 					{users.isError && <p className="text-sm text-destructive">{listErrorMessage(users.error)}</p>}
-					{users.isSuccess && <MerchantUserTable merchantUsers={users.data.merchantUsers} />}
+					{users.isSuccess && (
+						<MerchantUserTable
+							merchantUsers={users.data.merchantUsers}
+							currentMerchantUserId={me?.merchantUserId}
+						/>
+					)}
 				</CardContent>
 			</Card>
 		</div>

@@ -4,18 +4,25 @@ import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
 import paytech.practice.pay.api.merchant.security.MerchantUserPrincipal
+import paytech.practice.pay.application.identity.ChangeMerchantUserRoleCommand
+import paytech.practice.pay.application.identity.ChangeMerchantUserRoleUseCase
+import paytech.practice.pay.application.identity.ChangeMerchantUserStatusCommand
+import paytech.practice.pay.application.identity.ChangeMerchantUserStatusUseCase
 import paytech.practice.pay.application.identity.InviteMerchantSubAccountCommand
 import paytech.practice.pay.application.identity.InviteMerchantSubAccountUseCase
 import paytech.practice.pay.application.identity.ListMerchantUsersCommand
 import paytech.practice.pay.application.identity.ListMerchantUsersUseCase
+import paytech.practice.pay.application.identity.MerchantUserStatusAction
 import paytech.practice.pay.domain.identity.Email
 import paytech.practice.pay.domain.identity.LoginId
+import paytech.practice.pay.domain.identity.MerchantUserId
 import paytech.practice.pay.domain.identity.MerchantUserRole
 
 /**
@@ -40,6 +47,8 @@ import paytech.practice.pay.domain.identity.MerchantUserRole
 class MerchantSubAccountController(
 	private val inviteMerchantSubAccountUseCase: InviteMerchantSubAccountUseCase,
 	private val listMerchantUsersUseCase: ListMerchantUsersUseCase,
+	private val changeMerchantUserStatusUseCase: ChangeMerchantUserStatusUseCase,
+	private val changeMerchantUserRoleUseCase: ChangeMerchantUserRoleUseCase,
 ) {
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
@@ -89,6 +98,68 @@ class MerchantSubAccountController(
 						createdAt = summary.createdAt,
 					)
 				},
+		)
+	}
+
+	@PostMapping("/{merchantUserId}/suspend")
+	fun suspend(
+		@PathVariable merchantUserId: String,
+		@AuthenticationPrincipal principal: MerchantUserPrincipal,
+	): ChangeMerchantUserStatusResponse = changeStatus(merchantUserId, MerchantUserStatusAction.SUSPEND, principal)
+
+	@PostMapping("/{merchantUserId}/reactivate")
+	fun reactivate(
+		@PathVariable merchantUserId: String,
+		@AuthenticationPrincipal principal: MerchantUserPrincipal,
+	): ChangeMerchantUserStatusResponse = changeStatus(merchantUserId, MerchantUserStatusAction.REACTIVATE, principal)
+
+	@PostMapping("/{merchantUserId}/terminate")
+	fun terminate(
+		@PathVariable merchantUserId: String,
+		@AuthenticationPrincipal principal: MerchantUserPrincipal,
+	): ChangeMerchantUserStatusResponse = changeStatus(merchantUserId, MerchantUserStatusAction.TERMINATE, principal)
+
+	@PostMapping("/{merchantUserId}/role")
+	fun changeRole(
+		@PathVariable merchantUserId: String,
+		@Valid @RequestBody request: ChangeMerchantUserRoleRequest,
+		@AuthenticationPrincipal principal: MerchantUserPrincipal,
+	): ChangeMerchantUserRoleResponse {
+		val result =
+			changeMerchantUserRoleUseCase.execute(
+				ChangeMerchantUserRoleCommand(
+					targetMerchantUserId = MerchantUserId(merchantUserId),
+					newRole = MerchantUserRole.valueOf(request.role),
+					requestedByMerchantUserId = principal.merchantUserId,
+				),
+			)
+
+		return ChangeMerchantUserRoleResponse(
+			merchantUserId = result.merchantUserId.value,
+			role = result.role.name,
+			changedAt = result.changedAt,
+		)
+	}
+
+	/** 세 상태 액션이 공유하는 호출 — 어떤 전이인지만 다르다([MerchantUserStatusAction]). */
+	private fun changeStatus(
+		merchantUserId: String,
+		action: MerchantUserStatusAction,
+		principal: MerchantUserPrincipal,
+	): ChangeMerchantUserStatusResponse {
+		val result =
+			changeMerchantUserStatusUseCase.execute(
+				ChangeMerchantUserStatusCommand(
+					targetMerchantUserId = MerchantUserId(merchantUserId),
+					action = action,
+					requestedByMerchantUserId = principal.merchantUserId,
+				),
+			)
+
+		return ChangeMerchantUserStatusResponse(
+			merchantUserId = result.merchantUserId.value,
+			status = result.status.name,
+			changedAt = result.changedAt,
 		)
 	}
 }

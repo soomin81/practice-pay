@@ -65,6 +65,10 @@
 | `GET /merchant/merchant-users` | OWNER/ADMIN | — | 200 명부 | 401, 403(VIEWER) |
 | `POST /merchant/merchant-users` | OWNER/ADMIN | 필요 | 201 초대(invitationToken 1회) | 400 검증, 401, 403, 409 중복 |
 | `POST /merchant/account-invitations/accept` | **공개** | **불필요**(2절) | 200 활성화 | 400 유효하지 않거나 만료된 초대 |
+| `POST /merchant/merchant-users/{id}/suspend` | OWNER/ADMIN | 필요 | 200 `SUSPENDED` | 403, 404, 409(6절) |
+| `POST /merchant/merchant-users/{id}/reactivate` | OWNER/ADMIN | 필요 | 200 `ACTIVE` | 403, 404, 409 |
+| `POST /merchant/merchant-users/{id}/terminate` | OWNER/ADMIN | 필요 | 200 `TERMINATED` | 403, 404, 409 |
+| `POST /merchant/merchant-users/{id}/role` | OWNER/ADMIN | 필요 | 200 변경된 역할 | 400 OWNER 승격, 403, 404, 409 |
 
 - **`rawApiKey`는 발급 응답에서만 원문으로 보인다**(6.4). 목록에는 Secret 관련 필드가
   아예 담기지 않는다. **`invitationToken`도 같은 규칙**이다 — 초대 발급 응답에서만
@@ -87,8 +91,29 @@ MVP에는 초대 메일 발송이 없다. 그래서 **발급한 OWNER/ADMIN이 �
 초대받은 사람이 그 링크에서 비밀번호를 설정하면 계정이 `INVITED → ACTIVE`가 된다.
 활성화 자체는 로그인이 아니므로(세션이 만들어지지 않는다) 화면은 로그인으로 안내한다.
 
-## 6. 다음 슬라이스로 미룬 것
+## 6. 계정 관리 규칙 (정지·재개·종료·역할 변경)
 
-- 하위 계정의 **역할 변경·정지·종료**(백엔드에도 아직 Use Case가 없다 — 도메인
-  메서드 `suspend()`/`terminate()`만 있다).
-- 초대 **재발송·취소**(`AccountInvitation.revoke()`는 도메인에 있다).
+네 액션이 공유하는 거부 규칙이다. 앞의 것이 먼저 걸린다:
+
+1. **요청자는 `ACTIVE`인 `OWNER`/`ADMIN`이어야 한다** → 아니면 403. `SecurityConfig`가
+   역할로 1차로 거르고, `ACTIVE` 여부는 Use Case가 DB를 다시 읽어 확인한다(세션이
+   살아 있는 동안 계정이 정지될 수 있다).
+2. **자기 자신은 대상이 될 수 없다** → 403. 스스로를 정지·종료·강등하면 복구 수단이
+   사라진다. `docs/`에 없어 구현에서 판단한 규칙이다.
+3. **`ADMIN`은 `OWNER`를 변경할 수 없다** → 403. `identity-access-api-key.md`의 "4.4"가
+   권한 변경만 금지하지만, 정지·종료까지 같은 취지로 확장했다.
+4. **다른 가맹점 사용자는 "없음"으로 취급한다** → 404(403이 아니다). 남의 가맹점
+   사용자의 존재 여부를 응답 코드로 알려주지 않는다.
+5. **최소 하나의 활성 OWNER를 유지한다**(`domain-model.md`) → 위반하면 409.
+   - 다만 **오늘의 API 조합으로는 이 거부가 실제로 발생하지 않는다**: 요청자가 활성
+     OWNER이고 대상이 다른 활성 OWNER라면 활성 OWNER가 이미 둘이고, ADMIN은 3번에서,
+     자기 자신은 2번에서 먼저 막히기 때문이다. 그래도 규칙을 구현해 둔 것은 향후
+     경로(내부 운영자 API의 가맹점 계정 관리, 다중 OWNER 승격)에서 곧바로 필요해지기
+     때문이다.
+6. **허용되지 않는 상태 전이**(예: 종료된 계정 재개) → 409.
+7. **`OWNER`로 승격할 수 없다** → 400. 최초 OWNER는 가맹점 등록에서만 생성된다(4.3).
+
+## 7. 다음 슬라이스로 미룬 것
+
+- 초대 **목록·재발송·취소**(`AccountInvitation.revoke()`는 도메인에 있지만 Repository에
+  조회 수단이 `findByTokenHash`뿐이라 새 조회 Port가 필요하다).

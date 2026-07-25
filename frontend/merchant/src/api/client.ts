@@ -1,7 +1,11 @@
 import type {
 	AcceptInvitationRequest,
 	AcceptInvitationResponse,
+	ChangeUserRoleResponse,
+	ChangeUserStatusResponse,
 	InviteSubAccountRequest,
+	MerchantUserRole,
+	MerchantUserStatusAction,
 	InviteSubAccountResponse,
 	IssueApiKeyRequest,
 	IssueApiKeyResponse,
@@ -159,5 +163,18 @@ export const merchantApi = {
 		request<AcceptInvitationResponse>('/merchant/account-invitations/accept', {
 			method: 'POST',
 			body: JSON.stringify(body),
+		}),
+
+	/** 정지·재개·종료. 세 경로가 요청·응답 형태를 공유해서 하나로 다룬다. */
+	changeMerchantUserStatus: (merchantUserId: string, action: MerchantUserStatusAction) =>
+		request<ChangeUserStatusResponse>(
+			`/merchant/merchant-users/${encodeURIComponent(merchantUserId)}/${action}`,
+			{ method: 'POST' },
+		),
+
+	changeMerchantUserRole: (merchantUserId: string, role: MerchantUserRole) =>
+		request<ChangeUserRoleResponse>(`/merchant/merchant-users/${encodeURIComponent(merchantUserId)}/role`, {
+			method: 'POST',
+			body: JSON.stringify({ role }),
 		}),
 }

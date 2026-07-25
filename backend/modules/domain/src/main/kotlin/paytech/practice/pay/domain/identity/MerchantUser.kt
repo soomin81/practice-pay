@@ -29,10 +29,10 @@ class MerchantUser private constructor(
 	val loginId: LoginId,
 	val email: Email,
 	val userName: String,
-	val role: MerchantUserRole,
 	val invitedByInternalUserId: InternalUserId?,
 	val invitedByMerchantUserId: MerchantUserId?,
 	val createdAt: Instant,
+	role: MerchantUserRole,
 	status: AccountStatus,
 	passwordHash: String?,
 	failedLoginCount: Int,
@@ -44,6 +44,10 @@ class MerchantUser private constructor(
 	terminatedAt: Instant?,
 	updatedAt: Instant,
 ) {
+	/** 가맹점 역할. [changeRole]로만 바뀐다 — 호출부가 직접 대입할 수 없다. */
+	var role: MerchantUserRole = role
+		private set
+
 	var status: AccountStatus = status
 		private set
 
@@ -91,6 +95,32 @@ class MerchantUser private constructor(
 
 	/** `ACTIVE` 상태의 `OWNER` 또는 `ADMIN`만 API Key를 발급·폐기할 수 있다. */
 	fun canManageApiKeys(): Boolean = status == AccountStatus.ACTIVE && (role == MerchantUserRole.OWNER || role == MerchantUserRole.ADMIN)
+
+	/**
+	 * 가맹점 역할을 바꾼다(`docs/domain/domain-model.md`의 "ADMIN은 OWNER를 생성하거나
+	 * OWNER 권한을 변경할 수 없다" — 누가 이 메서드를 부를 수 있는지는 호출부가
+	 * [canInviteSubAccounts]와 요청자 역할로 판단한다).
+	 *
+	 * **`OWNER`로 승격할 수 없다.** [inviteSubAccount]가 같은 제약을 갖는 것과 정확히
+	 * 같은 이유다 — 최초 `OWNER`는 가맹점 등록 트랜잭션에서만 생성된다
+	 * (`docs/architecture/identity-access-api-key.md`의 "4.3"). MVP 단순화이며, 다중
+	 * OWNER가 실제로 필요해지면 그때 이 제약과 함께 승격 경로를 설계한다.
+	 *
+	 * **"마지막 활성 OWNER를 강등하지 않는다"는 여기서 막지 않는다** — 그 판단은 같은
+	 * 가맹점의 *다른* 사용자를 세어봐야 알 수 있는데, 애그리게이트는 다른 애그리게이트를
+	 * 모른다(`docs/domain/domain-model.md`의 설계 규칙). 호출부(Use Case)가 막는다.
+	 */
+	fun changeRole(
+		newRole: MerchantUserRole,
+		changedAt: Instant,
+	) {
+		require(newRole != MerchantUserRole.OWNER) {
+			"역할 변경으로는 OWNER를 만들 수 없습니다: 최초 OWNER는 가맹점 등록에서만 생성됩니다."
+		}
+		check(status != AccountStatus.TERMINATED) { "종료된 계정의 역할은 변경할 수 없습니다: 현재 상태=$status" }
+		role = newRole
+		updatedAt = changedAt
+	}
 
 	/** `INVITED` → `ACTIVE`. 초대받은 계정이 비밀번호를 설정해 활성화된다. */
 	fun activate(

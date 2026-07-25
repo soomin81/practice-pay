@@ -76,7 +76,13 @@ class SecurityConfig {
 				authorize("/error", permitAll)
 				authorize("/merchant/login", permitAll)
 				authorize("/merchant/account-invitations/accept", permitAll)
-				authorize("/merchant/merchant-users", hasAnyRole("OWNER", "ADMIN"))
+				// **와일드카드가 필요하다.** 계정 관리 액션(`/{id}/suspend` 등)이 생기면서
+				// 정확 경로 규칙(`/merchant/merchant-users`)으로는 그 하위 경로를 덮지 못하게 됐다 —
+				// 그대로 두면 액션 경로가 아래 `anyRequest, authenticated`로 떨어져 VIEWER도
+				// 정적 관문을 통과한다(Use Case가 막긴 하지만 1차 방어가 사라진다).
+				// 이 와일드카드는 base 경로(`POST`/`GET /merchant/merchant-users`)도 함께 덮는다
+				// — `/merchant/api-keys/**`에서 이미 확인한 Spring PathPattern 동작이다.
+				authorize("/merchant/merchant-users/**", hasAnyRole("OWNER", "ADMIN"))
 				authorize("/merchant/api-keys/**", hasAnyRole("OWNER", "ADMIN"))
 				authorize(anyRequest, authenticated)
 			}

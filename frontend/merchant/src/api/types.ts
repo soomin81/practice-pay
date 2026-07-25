@@ -38,6 +38,16 @@ export type MerchantUserSummary = ListMerchantUsersResponse['merchantUsers'][num
 export type AcceptInvitationRequest = JsonRequest<'merchant-accept-invitation'>
 export type AcceptInvitationResponse = JsonResponse<'merchant-accept-invitation', 200>
 
+export type ChangeUserStatusResponse = JsonResponse<'merchant-suspend-user', 200>
+export type ChangeUserRoleRequest = JsonRequest<'merchant-change-user-role'>
+export type ChangeUserRoleResponse = JsonResponse<'merchant-change-user-role', 200>
+
+/**
+ * 계정 상태 액션. 백엔드의 세 경로(`/suspend`·`/reactivate`·`/terminate`)에 그대로
+ * 대응한다 — 요청·응답 형태가 같아서 클라이언트도 하나로 다룬다.
+ */
+export type MerchantUserStatusAction = 'suspend' | 'reactivate' | 'terminate'
+
 /** 계약(`docs/architecture/identity-access-api-key.md`)의 값들. 화면 분기·표시는 이 값들이 이끈다. */
 export type MerchantUserRole = 'OWNER' | 'ADMIN' | 'VIEWER'
 export type ApiKeyStatus = 'ACTIVE' | 'REVOKED' | 'EXPIRED'

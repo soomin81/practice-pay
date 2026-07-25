@@ -38,4 +38,18 @@ interface MerchantUserRepository {
 
 	/** `merchant_user_id`로 MerchantUser를 찾는다. 없으면 `null`이다. */
 	fun findById(merchantUserId: MerchantUserId): MerchantUser?
+
+	/**
+	 * 주어진 가맹점의 **`ACTIVE` 상태인 `OWNER` 수**를 센다.
+	 *
+	 * `docs/domain/domain-model.md`의 "최소 하나의 활성 OWNER를 유지한다" 불변식을
+	 * 강제하기 위한 조회다 — 마지막 활성 OWNER를 정지·종료·강등하려는 요청을 거부할
+	 * 때 쓴다. 이 판단은 같은 가맹점의 *다른* 사용자를 봐야 알 수 있어서 애그리게이트가
+	 * 혼자 할 수 없다(애그리게이트는 다른 애그리게이트를 모른다).
+	 *
+	 * 목록 화면용 복잡 조회가 아니라 **도메인 규칙 보조 조회**라 Projection이 아니라
+	 * 여기(Command Repository)에 둔다 — [findByMerchantIdAndLoginId]/[findByMerchantIdAndEmail]이
+	 * 중복 검사를 위해 이미 같은 자리에 있는 것과 같은 성격이다.
+	 */
+	fun countActiveOwners(merchantId: MerchantId): Int
 }
