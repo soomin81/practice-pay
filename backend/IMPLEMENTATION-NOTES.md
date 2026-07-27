@@ -374,3 +374,16 @@
 ### KDoc 안의 `/**`가 컴파일을 깨뜨렸다 — Kotlin 블록 주석은 중첩된다
 
 `InternalUserManagementGuard`의 KDoc에 `/admin/internal-users/**`를 그대로 적었더니 **파일 전체가 컴파일되지 않았다**("Unclosed comment"). Kotlin은 블록 주석이 **중첩**되므로, `/** ... */` 안의 `/**`(경로 와일드카드 표기)가 중첩 주석을 열어 바깥 KDoc의 `*/`가 그걸 닫고, 결국 주석이 EOF까지 이어진다. KDoc/블록 주석 본문에 `/**`나 `/*`를 문자 그대로 쓰지 않는다 — 경로 와일드카드는 "하위 경로 와일드카드"처럼 풀어 쓰거나, 정말 필요하면 `//` 라인 주석(중첩 안 됨)이나 코드 문자열 리터럴에만 둔다. `SecurityConfig`의 같은 표기는 `//` 라인 주석과 `authorize(...)` 문자열 리터럴이라 안전했다.
+
+## 내부 운영자 콘솔에서 가맹점 계정 관리(`AdminChangeMerchantUser*UseCase`) — "최소 1 활성 OWNER"가 실제로 트리거되는 첫 경로
+
+내부 운영자(`api-admin`)가 임의 가맹점의 사용자를 정지·재개·종료·역할 변경하는 슬라이스다. 가맹점이 스스로 잠기거나(마지막 OWNER 정지) 계정 사고가 났을 때 PG가 개입하는 경로다. `docs/`가 이 권한을 규정하지 않아 설계 판단을 먼저 `identity-access-api-key.md`의 4.6에 명문화했다(관리 행위=SUPER_ADMIN/OPERATOR, 조회=전원 — 가맹점 등록 `POST /admin/merchants`와 같은 스코핑).
+
+- **merchant-side Use Case를 그대로 못 쓴다 — 행위자가 `MerchantUser`가 아니라 `InternalUser`라서다.** `ChangeMerchantUserStatusUseCase`는 `MerchantUserManagementGuard.loadAuthorizedRequester`로 요청자의 OWNER/ADMIN·ACTIVE를 확인하고 테넌시를 `requester.merchantId`로 잡고 자기 자신·ADMIN→OWNER를 막는데, admin 컨텍스트에는 그 요청자가 없다. 그래서 `Admin` 접두어 Use Case 3개를 새로 뒀되 **도메인 전이 메서드·`countActiveOwners`·불변식·예외·Projection은 그대로 재사용**했다. 인가는 `SecurityConfig` 정적 규칙이 지므로 Use Case는 요청자를 아예 받지 않고, 테넌시는 경로가 지정한 `merchantId`로 잡는다.
+- **공유 Guard에 `loadTargetInMerchant(repo, merchantId, targetId)`만 더했다** — 테넌시 확인(다른 가맹점이면 404, 존재 여부 숨김)만 하는 메서드다. "최소 1 활성 OWNER"는 기존 `requireAnotherActiveOwnerRemains`를 그대로 부른다. merchant-user 관리 접근 로직을 한 파일에 유지했다.
+- **이 경로가 `LastActiveOwnerException`을 HTTP로 처음 도달 가능하게 만든다.** 가맹점 계정 관리 슬라이스에서 "요청자 자기 자신 차단·ADMIN 제한 때문에 현재 HTTP 경로로는 트리거되지 않는다"고 적었던 그 방어선이다 — 내부 운영자 경로엔 그 제약이 없어 실제로 작동한다. Use Case 테스트에 그 케이스를 명시적으로 고정했다(`the last ACTIVE OWNER cannot be suspended — reachable via this HTTP path for the first time`).
+- **조회는 `MerchantUserListProjection.findByMerchantId(merchantId)`를 그대로 재사용**했다(merchantId를 직접 받는 형태라 admin 조회에 그대로 맞았다). **가맹점 존재 확인은 생략**했다 — 없는 merchantId면 빈 목록일 뿐이고, 변경 경로는 대상 조회에서 이미 테넌시 404를 낸다. 그래서 `MerchantRepository`·별도 NotFound가 필요 없었다(계획 단계에서 넣으려다 뺐다).
+- **`SecurityConfig`: `authorize(HttpMethod.POST, "/admin/merchants/**", hasAnyRole("SUPER_ADMIN","OPERATOR"))`로 넓혔다.** 기존 정확 경로 규칙(`POST /admin/merchants`)을 이 와일드카드가 대체하며, `GET`은 `anyRequest, authenticated`로 떨어져 VIEWER 포함 전원 조회가 된다(조회/변경 인가가 메서드로 갈린다). 하위 경로 mutation의 인가를 이 정적 규칙에만 맡기므로(Use Case가 요청자를 안 봄) 이게 유일한 관문이다.
+- **프론트: 가맹점 목록 행 → 상세(`/merchants/:merchantId`)로 링크**하고, 상세에서 그 가맹점의 사용자 명부와 액션을 보여준다. 관리 액션은 `canManageMerchantAccounts`(SUPER_ADMIN/OPERATOR)일 때만 그린다 — VIEWER는 명부만. 가맹점 헤더 정보는 별도 단건 조회 엔드포인트 없이 이미 캐시된 가맹점 목록에서 찾는다. 액션 컴포넌트는 내부 직원판(`InternalUserActions`)과 같은 모양이되 OWNER 행은 역할 변경을 감추고(강등이 마지막 OWNER 보호에 걸리기 쉬움) 초대 재발송·취소는 없다.
+- **또 KDoc 안의 `/admin/merchants/**`가 컴파일을 깨뜨렸다**(바로 위 절의 재발). 컨트롤러 KDoc에서 그 표기를 "하위 경로 POST 와일드카드 규칙"으로 풀어 고쳤다 — 이 함정은 슬라이스마다 반복되니 경로 와일드카드를 KDoc에 쓰려는 순간 멈춘다.
+- **실물 검증(권장)은 아직 안 했다** — `bootRun`으로 OPERATOR 세션이 마지막 활성 OWNER 정지 시 409를 받는지가 이 슬라이스의 핵심 확인이다(HTTP로 처음 도달하는 불변식). `@WebMvcTest`가 정적 관문(VIEWER 403·GET 200)은 검증하지만 오류 디스패치·필터 체인은 실물로만 확인된다.

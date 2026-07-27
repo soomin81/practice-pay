@@ -35,6 +35,11 @@ export type AcceptInvitationResponse = JsonResponse<'admin-accept-invitation', 2
 export type ChangeInternalUserStatusResponse = JsonResponse<'admin-change-internal-user-status', 200>
 export type ChangeInternalUserRoleResponse = JsonResponse<'admin-change-internal-user-role', 200>
 
+export type ListMerchantUsersResponse = JsonResponse<'admin-list-merchant-users', 200>
+export type MerchantUserSummary = ListMerchantUsersResponse['merchantUsers'][number]
+export type ChangeMerchantUserStatusResponse = JsonResponse<'admin-change-merchant-user-status', 200>
+export type ChangeMerchantUserRoleResponse = JsonResponse<'admin-change-merchant-user-role', 200>
+
 /**
  * 계정 상태 액션. 백엔드의 세 경로(`/suspend`·`/reactivate`·`/terminate`)에 그대로
  * 대응한다 — 요청·응답 형태가 같아서 클라이언트도 하나로 다룬다(merchant 앱과 같은 모양).
@@ -55,6 +60,28 @@ export const ISSUABLE_INTERNAL_ROLES: readonly InternalUserRole[] = ['OPERATOR',
 /** 내부 직원 관리(명부·발급)는 SUPER_ADMIN 전용이다 — 서버도 403으로 막는다. */
 export function canManageInternalUsers(role: string): boolean {
 	return role === 'SUPER_ADMIN'
+}
+
+/** 계약(`docs/architecture/identity-access-api-key.md`의 "4.2")의 가맹점 사용자 역할. */
+export type MerchantUserRole = 'OWNER' | 'ADMIN' | 'VIEWER'
+
+/**
+ * 내부 운영자가 가맹점 사용자 역할을 바꿀 때 고를 수 있는 값. **`OWNER`는 없다** —
+ * `OWNER` 승격은 도메인(`MerchantUser.changeRole`)이 막고(최초 OWNER는 가맹점 등록
+ * 트랜잭션에서만 생성), 서버도 400을 낸다. 가맹점 콘솔의 `INVITABLE_ROLES`와 같은 결이다.
+ */
+export const INVITABLE_MERCHANT_ROLES: readonly MerchantUserRole[] = ['ADMIN', 'VIEWER']
+
+/** 가맹점 사용자 계정 상태 액션. 백엔드의 세 경로(`/suspend`·`/reactivate`·`/terminate`)에 대응한다. */
+export type MerchantUserStatusAction = 'suspend' | 'reactivate' | 'terminate'
+
+/**
+ * 가맹점 계정 관리(정지·재개·종료·역할 변경)를 할 수 있는 내부 역할. 서버도
+ * `POST /admin/merchants/**`를 SUPER_ADMIN/OPERATOR로 좁힌다(가맹점 등록과 같은 스코핑) —
+ * VIEWER는 조회만 하므로 액션 버튼을 아예 감춘다. 조회(GET)는 VIEWER 포함 전원이 가능하다.
+ */
+export function canManageMerchantAccounts(role: string): boolean {
+	return role === 'SUPER_ADMIN' || role === 'OPERATOR'
 }
 
 /**

@@ -5,6 +5,7 @@ import paytech.practice.pay.domain.identity.AccountStatus
 import paytech.practice.pay.domain.identity.MerchantUser
 import paytech.practice.pay.domain.identity.MerchantUserId
 import paytech.practice.pay.domain.identity.MerchantUserRole
+import paytech.practice.pay.domain.merchant.MerchantId
 
 /**
  * [ChangeMerchantUserStatusUseCase]와 [ChangeMerchantUserRoleUseCase]가 공유하는
@@ -65,6 +66,28 @@ internal object MerchantUserManagementGuard {
 		}
 		return target
 	}
+
+	/**
+	 * 대상을 읽고 **주어진 가맹점 소속인지**만 확인한다 — 요청자가 `MerchantUser`가 아니라
+	 * `InternalUser`인 admin 경로([AdminChangeMerchantUserStatusUseCase] 등)가 쓴다.
+	 *
+	 * [loadManageableTarget]과 달리 요청자 기반 검사(자기 자신·ADMIN→OWNER)가 없다 — admin은
+	 * 인가를 `SecurityConfig` 정적 규칙(`SUPER_ADMIN`/`OPERATOR`)에 맡기고, 행위자가 특정
+	 * 가맹점 사용자가 아니라 어느 가맹점이든 관리하는 내부 운영자라서다. 테넌시는 요청자
+	 * 소속이 아니라 **경로가 지정한 `merchantId`**로 잡는다.
+	 *
+	 * 없거나 다른 가맹점 소속이면 [MerchantUserNotFoundException](404) — 남의 가맹점 사용자의
+	 * 존재 여부를 응답으로 알려주지 않는다([loadManageableTarget]과 같은 판단).
+	 */
+	fun loadTargetInMerchant(
+		merchantUserRepository: MerchantUserRepository,
+		merchantId: MerchantId,
+		targetMerchantUserId: MerchantUserId,
+	): MerchantUser =
+		merchantUserRepository
+			.findById(targetMerchantUserId)
+			?.takeIf { it.merchantId == merchantId }
+			?: throw MerchantUserNotFoundException("MerchantUser(${targetMerchantUserId.value})를 찾을 수 없습니다.")
 
 	/**
 	 * "최소 하나의 활성 OWNER를 유지한다"(`docs/domain/domain-model.md`)를 강제한다.

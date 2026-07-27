@@ -3,12 +3,17 @@ import type {
 	AcceptInvitationResponse,
 	ChangeInternalUserRoleResponse,
 	ChangeInternalUserStatusResponse,
+	ChangeMerchantUserRoleResponse,
+	ChangeMerchantUserStatusResponse,
 	InternalUserRole,
 	InternalUserStatusAction,
 	IssueInternalUserRequest,
 	IssueInternalUserResponse,
 	ListInternalUsersResponse,
+	ListMerchantUsersResponse,
 	ListMerchantsResponse,
+	MerchantUserRole,
+	MerchantUserStatusAction,
 	LoginRequest,
 	LoginResponse,
 	MeResponse,
@@ -164,4 +169,21 @@ export const adminApi = {
 			method: 'POST',
 			body: JSON.stringify({ role }),
 		}),
+
+	/** 어느 가맹점의 사용자 명부를 조회한다(VIEWER 포함 인증된 내부 사용자 전원). */
+	listMerchantUsers: (merchantId: string) =>
+		request<ListMerchantUsersResponse>(`/admin/merchants/${encodeURIComponent(merchantId)}/users`),
+
+	/** 가맹점 사용자 정지·재개·종료. 세 경로가 요청·응답 형태를 공유해서 하나로 다룬다. */
+	changeMerchantUserStatus: (merchantId: string, merchantUserId: string, action: MerchantUserStatusAction) =>
+		request<ChangeMerchantUserStatusResponse>(
+			`/admin/merchants/${encodeURIComponent(merchantId)}/users/${encodeURIComponent(merchantUserId)}/${action}`,
+			{ method: 'POST' },
+		),
+
+	changeMerchantUserRole: (merchantId: string, merchantUserId: string, role: MerchantUserRole) =>
+		request<ChangeMerchantUserRoleResponse>(
+			`/admin/merchants/${encodeURIComponent(merchantId)}/users/${encodeURIComponent(merchantUserId)}/role`,
+			{ method: 'POST', body: JSON.stringify({ role }) },
+		),
 }

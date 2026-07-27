@@ -52,6 +52,11 @@ PG 내부 운영자용 콘솔(브라우저 SPA, `frontend/admin`)이 호출하�
 | `POST /admin/internal-users/{id}/reactivate` | **SUPER_ADMIN만** | 필요 | 200 상태(ACTIVE) | 401, 403(자기 자신), 404, 409(잘못된 전이) |
 | `POST /admin/internal-users/{id}/terminate` | **SUPER_ADMIN만** | 필요 | 200 상태(TERMINATED) | 401, 403(자기 자신), 404, 409(마지막 SUPER_ADMIN·잘못된 전이) |
 | `POST /admin/internal-users/{id}/role` | **SUPER_ADMIN만** | 필요 | 200 역할 | **400 `role=SUPER_ADMIN`**, 401, 403(자기 자신), 404, 409(마지막 SUPER_ADMIN 강등·종료된 계정) |
+| `GET /admin/merchants/{merchantId}/users` | **내부 운영자 전원**(VIEWER 포함) | — | 200 명부 | 401 |
+| `POST /admin/merchants/{merchantId}/users/{id}/suspend` | SUPER_ADMIN/OPERATOR | 필요 | 200 상태(SUSPENDED) | 401, 403, 404, 409(마지막 OWNER·잘못된 전이) |
+| `POST /admin/merchants/{merchantId}/users/{id}/reactivate` | SUPER_ADMIN/OPERATOR | 필요 | 200 상태(ACTIVE) | 401, 403, 404, 409(잘못된 전이) |
+| `POST /admin/merchants/{merchantId}/users/{id}/terminate` | SUPER_ADMIN/OPERATOR | 필요 | 200 상태(TERMINATED) | 401, 403, 404, 409(마지막 OWNER·잘못된 전이) |
+| `POST /admin/merchants/{merchantId}/users/{id}/role` | SUPER_ADMIN/OPERATOR | 필요 | 200 역할 | **400 `role=OWNER`**, 401, 403, 404, 409(마지막 OWNER 강등·종료된 계정) |
 | `POST /admin/account-invitations/accept` | **공개** | **불필요**(2절) | 200 활성화 | 400 유효하지 않거나 만료된 초대 |
 
 - **두 경로의 메서드 스코핑이 정반대다 — 의도적이다.**
@@ -80,6 +85,16 @@ PG 내부 운영자용 콘솔(브라우저 SPA, `frontend/admin`)이 호출하�
     굳는다(복구는 Bootstrap 같은 운영 절차뿐이다). 가맹점 쪽 "최소 하나의 활성 OWNER"와
     같은 성격의 불변식이다.
   - **되돌릴 수 없는 상태 전이는 도메인이 막는다**(예: 종료된 계정 재개·역할 변경 → 409).
+- **가맹점 계정 관리(`/admin/merchants/{id}/users/**`)는 조회와 변경의 인가가 갈린다.**
+  조회(`GET`)는 인증된 내부 사용자 전원(VIEWER 포함 — `GET /admin/merchants`와 같은
+  스코핑), 변경(`POST`)은 `SUPER_ADMIN`/`OPERATOR`다(가맹점 등록 `POST /admin/merchants`와
+  같은 역할 집합, `identity-access-api-key.md`의 4.6). `SecurityConfig`가 `HttpMethod.POST`로
+  `/admin/merchants/**`를 좁혀 이 갈림을 만든다.
+  - `role`은 `ADMIN`|`VIEWER`여야 한다 — `OWNER`로 승격하면 400(도메인이 막는다).
+  - **"가맹점에는 최소 하나의 활성 OWNER"** — 마지막 활성 OWNER를 정지·종료·강등하면 409다.
+    **이 API가 그 불변식이 실제로 트리거되는 첫 경로다**(가맹점 콘솔 경로에서는 자기 자신
+    차단·ADMIN 제한 때문에 도달할 수 없었다).
+  - 대상이 경로의 가맹점 소속이 아니면 404다(남의 가맹점 사용자의 존재 여부를 숨긴다).
 
 ## 5. 초대 링크가 **두 종류**다 — 가리키는 콘솔이 다르다
 
@@ -120,9 +135,7 @@ PG 내부 운영자용 콘솔(브라우저 SPA, `frontend/admin`)이 호출하�
 
 ## 6. 다음 슬라이스로 미룬 것
 
-- **내부 운영자의 가맹점 계정 관리**(가맹점 사용자 정지·종료·역할 변경) — 그때 merchant
-  콘솔에 구현해 둔 "최소 하나의 활성 OWNER를 유지한다" 불변식이 실제로 트리거되는 첫
-  경로가 된다([merchant-console-api.md](merchant-console-api.md)의 6절 5번).
-  **다만 `docs/`가 이 권한을 규정하지 않는다** — 역할 정의가 "가맹점·결제·운영 업무"
-  (`OPERATOR`)/"전체 관리"(`SUPER_ADMIN`)로 모호할 뿐이라
-  [identity-access-api-key.md](identity-access-api-key.md)에 설계 판단을 먼저 추가해야 한다.
+- 지금까지 이 문서가 미뤄 둔 항목(내부 직원 계정 관리, 내부 운영자의 가맹점 계정 관리)은
+  전부 구현됐다. 후속 후보는 만료된 초대를 `EXPIRED`로 정리하는 배치
+  ([merchant-console-api.md](merchant-console-api.md)의 7절)와 로그인·감사 조회
+  ([identity-access-api-key.md](identity-access-api-key.md)의 9절 후속)이다.

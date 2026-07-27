@@ -50,6 +50,11 @@ describe('MerchantTable', () => {
 		renderWithRouter(<MerchantTable merchants={[]} />)
 		expect(screen.getByText('아직 등록된 가맹점이 없습니다.')).toBeInTheDocument()
 	})
+
+	it('가맹점 이름은 상세 화면으로 가는 링크다', () => {
+		renderWithRouter(<MerchantTable merchants={[merchant()]} />)
+		expect(screen.getByRole('link', { name: '테스트 가맹점' })).toHaveAttribute('href', '/merchants/mrc_001')
+	})
 })
 
 describe('MerchantsPage 권한 분기', () => {

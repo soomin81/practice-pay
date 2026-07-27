@@ -36,6 +36,12 @@ apps/
                      SUPER_ADMIN 전용 — "최소 하나의 활성 SUPER_ADMIN을 유지한다" 불변식,
                      인가를 SecurityConfig 정적 규칙에 맡겨 요청자 권한을 Use Case에서 다시
                      확인하지 않는 것이 가맹점 쪽과 다르다),
+                     AdminListMerchantUsersUseCase/AdminChangeMerchantUserStatusUseCase/
+                     AdminChangeMerchantUserRoleUseCase(GET·POST
+                     /admin/merchants/{merchantId}/users/... — 내부 운영자가 임의 가맹점의
+                     사용자를 조회·관리한다. 조회는 전원, 변경은 SUPER_ADMIN/OPERATOR.
+                     "최소 하나의 활성 OWNER를 유지한다" 불변식이 실제 HTTP로 트리거되는
+                     첫 경로다 — IMPLEMENTATION-NOTES 참고),
                      RegisterMerchantUseCase(POST /admin/merchants, SUPER_ADMIN/OPERATOR),
                      ListMerchantsUseCase(GET /admin/merchants, 인증된 내부 사용자 전원 —
                      VIEWER 포함), AcceptAccountInvitationUseCase(POST /admin/account-invitations/accept,

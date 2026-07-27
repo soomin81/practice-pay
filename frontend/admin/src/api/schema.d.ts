@@ -172,6 +172,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/merchants/mrc_001/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 가맹점 사용자 명부 조회
+         * @description 인증된 내부 운영자 전원이 조회할 수 있다 — VIEWER도 포함된다(GET /admin/merchants와 같은 스코핑). 관리 액션(POST)만 SUPER_ADMIN/OPERATOR로 제한된다. 비밀번호 해시는 담기지 않는다.
+         */
+        get: operations["admin-list-merchant-users"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/merchants/mrc_001/users/mu_001/role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 가맹점 사용자 역할 변경
+         * @description SUPER_ADMIN/OPERATOR만 호출할 수 있다. role은 ADMIN | VIEWER여야 한다 — OWNER로 승격하면 400이다(도메인이 막는다). 마지막 활성 OWNER를 강등하면 409다. 상태 변경이라 CSRF 토큰이 필요하다.
+         */
+        post: operations["admin-change-merchant-user-role"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/merchants/mrc_001/users/mu_001/suspend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 가맹점 사용자 상태 변경(정지·재개·종료)
+         * @description SUPER_ADMIN/OPERATOR만 호출할 수 있다. 마지막 경로 세그먼트로 동작을 고른다: suspend · reactivate · terminate(되돌릴 수 없음). 대상이 경로의 가맹점 소속이 아니면 404. 마지막 활성 OWNER를 정지·종료하면 409다 — 이 API가 그 불변식이 실제로 트리거되는 첫 경로다. 상태 변경이라 CSRF 토큰이 필요하다.
+         */
+        post: operations["admin-change-merchant-user-status"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -208,6 +268,11 @@ export interface components {
             loginId: string;
             /** @description 내부 운영자 식별자 */
             internalUserId: string;
+        };
+        /** ChangeMerchantUserRoleRequest */
+        ChangeMerchantUserRoleRequest: {
+            /** @description 변경할 역할(ADMIN | VIEWER) */
+            role: string;
         };
         /** AdminLoginResponse */
         AdminLoginResponse: {
@@ -257,7 +322,7 @@ export interface components {
             /** @description 가맹점 이름 */
             merchantName: string;
         };
-        "admin-internal-users-iu_002-suspend-33084672": Record<string, never>;
+        "admin-logout-33084672": Record<string, never>;
         /** ChangeInternalUserStatusResponse */
         ChangeInternalUserStatusResponse: {
             /** @description 변경 시각(UTC) */
@@ -293,6 +358,48 @@ export interface components {
             userName: string;
             /** @description 전 시스템에서 유일한 이메일 */
             email: string;
+        };
+        /** AdminListMerchantUsersResponse */
+        AdminListMerchantUsersResponse: {
+            /** @description 가맹점 사용자 요약 배열(최신 생성순) */
+            merchantUsers: {
+                /** @description 생성(초대) 시각(UTC) */
+                createdAt: string;
+                /** @description 마지막 로그인 시각(UTC). 없으면 null. */
+                lastLoginAt?: string | null;
+                /** @description OWNER | ADMIN | VIEWER */
+                role: string;
+                /** @description 로그인 아이디 */
+                loginId: string;
+                /** @description 가맹점 사용자 식별자 */
+                merchantUserId: string;
+                /** @description 사용자 이름 */
+                userName: string;
+                /** @description 이메일 */
+                email: string;
+                /** @description 유효한 초대의 만료 시각(UTC). 없으면 null. */
+                pendingInvitationExpiresAt?: string | null;
+                /** @description INVITED | ACTIVE | LOCKED | SUSPENDED | TERMINATED */
+                status: string;
+            }[];
+        };
+        /** ChangeMerchantUserRoleResponse */
+        ChangeMerchantUserRoleResponse: {
+            /** @description 변경된 역할 */
+            role: string;
+            /** @description 변경 시각(UTC) */
+            changedAt: string;
+            /** @description 대상 가맹점 사용자 식별자 */
+            merchantUserId: string;
+        };
+        /** ChangeMerchantUserStatusResponse */
+        ChangeMerchantUserStatusResponse: {
+            /** @description 변경 시각(UTC) */
+            changedAt: string;
+            /** @description 대상 가맹점 사용자 식별자 */
+            merchantUserId: string;
+            /** @description 변경된 상태(ACTIVE | SUSPENDED | TERMINATED) */
+            status: string;
         };
         /** ChangeInternalUserRoleRequest */
         ChangeInternalUserRoleRequest: {
@@ -427,7 +534,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["admin-internal-users-iu_002-suspend-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["admin-logout-33084672"];
             };
         };
         responses: {
@@ -561,7 +668,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["admin-internal-users-iu_002-suspend-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["admin-logout-33084672"];
             };
         };
         responses: {
@@ -572,6 +679,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChangeInternalUserStatusResponse"];
+                };
+            };
+        };
+    };
+    "admin-list-merchant-users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 200 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminListMerchantUsersResponse"];
+                };
+            };
+        };
+    };
+    "admin-change-merchant-user-role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json;charset=UTF-8": components["schemas"]["ChangeMerchantUserRoleRequest"];
+            };
+        };
+        responses: {
+            /** @description 200 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeMerchantUserRoleResponse"];
+                };
+            };
+        };
+    };
+    "admin-change-merchant-user-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/x-www-form-urlencoded": components["schemas"]["admin-logout-33084672"];
+            };
+        };
+        responses: {
+            /** @description 200 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeMerchantUserStatusResponse"];
                 };
             };
         };

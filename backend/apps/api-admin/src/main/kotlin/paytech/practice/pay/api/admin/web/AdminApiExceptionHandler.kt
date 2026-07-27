@@ -13,7 +13,10 @@ import paytech.practice.pay.application.identity.InternalUserNotManageableExcept
 import paytech.practice.pay.application.identity.InvalidCredentialsException
 import paytech.practice.pay.application.identity.InvalidInternalUserTransitionException
 import paytech.practice.pay.application.identity.InvalidInvitationException
+import paytech.practice.pay.application.identity.InvalidMerchantUserTransitionException
+import paytech.practice.pay.application.identity.LastActiveOwnerException
 import paytech.practice.pay.application.identity.LastActiveSuperAdminException
+import paytech.practice.pay.application.identity.MerchantUserNotFoundException
 
 /**
  * `application`/`domain` 계층이 던지는 예외를 HTTP 상태 코드로 옮긴다 — 이 매핑
@@ -61,6 +64,19 @@ class AdminApiExceptionHandler {
 	@ExceptionHandler(InvalidInternalUserTransitionException::class)
 	@ResponseStatus(HttpStatus.CONFLICT)
 	fun handleInvalidInternalUserTransition(ex: InvalidInternalUserTransitionException): ErrorResponse =
+		ErrorResponse(ex.message ?: "허용되지 않는 상태 전이입니다.")
+
+	@ExceptionHandler(MerchantUserNotFoundException::class)
+	@ResponseStatus(HttpStatus.NOT_FOUND)
+	fun handleMerchantUserNotFound(ex: MerchantUserNotFoundException): ErrorResponse = ErrorResponse(ex.message ?: "가맹점 사용자를 찾을 수 없습니다.")
+
+	@ExceptionHandler(LastActiveOwnerException::class)
+	@ResponseStatus(HttpStatus.CONFLICT)
+	fun handleLastActiveOwner(ex: LastActiveOwnerException): ErrorResponse = ErrorResponse(ex.message ?: "가맹점에는 최소 한 명의 활성 OWNER가 있어야 합니다.")
+
+	@ExceptionHandler(InvalidMerchantUserTransitionException::class)
+	@ResponseStatus(HttpStatus.CONFLICT)
+	fun handleInvalidMerchantUserTransition(ex: InvalidMerchantUserTransitionException): ErrorResponse =
 		ErrorResponse(ex.message ?: "허용되지 않는 상태 전이입니다.")
 
 	@ExceptionHandler(MethodArgumentNotValidException::class)

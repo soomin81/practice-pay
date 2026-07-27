@@ -10,7 +10,7 @@
 |---|---|---|---|
 | `payment/` | **고객**(Hosted Checkout) | `api-payment` `:8081`의 `/checkout/**` | **구현 중** |
 | `merchant/` | 가맹점 운영자 | `api-merchant` `:8083`의 `/merchant/**` | **구현 중**(API Key 관리 + 팀 계정·초대) |
-| `admin/` | PG 내부 운영자 | `api-admin` `:8082`의 `/admin/**` | **구현 중**(로그인 → 가맹점 목록·등록 + 내부 직원 명부·발급·계정 관리) |
+| `admin/` | PG 내부 운영자 | `api-admin` `:8082`의 `/admin/**` | **구현 중**(로그인 → 가맹점 목록·등록·상세(사용자 관리) + 내부 직원 명부·발급·계정 관리) |
 
 **워크스페이스(pnpm/npm workspaces)를 쓰지 않는다 — 각 앱이 독립 프로젝트다.** 셋이 호출하는 API도 타입도 인증 방식도 전부 달라서 지금 공유할 것이 실질적으로 없다. 진짜 공유될 만한 UI 컴포넌트는 **두 번째 앱을 만들 때 무엇이 겹치는지 드러난 뒤** `frontend/packages/`로 뽑는다. 이 판단은 백엔드의 "지금 실제로 하는 일에만 맞춘다 — 나중에 할 일까지 미리 넣지 않는다"와 같은 원칙이다.
 
@@ -293,6 +293,23 @@ npm run gen:api        # api-admin의 openapi3.yaml → src/api/schema.d.ts
   SUPER_ADMIN은 Bootstrap으로만 만든다는 규정 때문이다. **도메인(`InternalUser.invite`)도
   같은 제약을 `require`로 갖는다**(merchant의 `OWNER` 승격과 같은 방식) — 화면의 선택지
   제한은 UX일 뿐이고 실제 방어선은 서버다(직접 호출하면 400).
+
+### admin 4차 — 가맹점 상세와 그 가맹점 사용자 계정 관리
+
+가맹점 목록 행(이름)을 누르면 상세(`/merchants/:merchantId`)로 가고, 거기서 그 가맹점의
+사용자 명부와 계정 관리(정지·재개·종료·역할 변경)를 한다. 내부 직원판(3차)의 가맹점판
+미러링이다.
+
+- **관리 액션은 SUPER_ADMIN/OPERATOR에게만 그린다**(`canManageMerchantAccounts`) — VIEWER는
+  명부만. 서버도 `POST /admin/merchants/**`를 그 역할로 좁힌다(조회 GET은 전원). `MeResponse`의
+  역할로 판단해 `AdminMerchantUserTable`에 `canManage`로 넘긴다.
+- **가맹점 헤더 정보(이름·코드)는 별도 단건 조회 없이 캐시된 목록(`useMerchants`)에서 찾는다** —
+  깊은 링크로 캐시에 없으면 식별자만 보여준다. 백엔드에 "가맹점 단건 조회" 엔드포인트를
+  만들지 않기 위한 선택이다.
+- **자기 자신 개념이 없다**(내부 직원판과 다른 점) — 내부 운영자는 가맹점 사용자가 될 수
+  없어서다. OWNER 행은 역할 변경을 감추고(가맹점 콘솔과 같은 판단), 역할 선택지는
+  ADMIN/VIEWER(`INVITABLE_MERCHANT_ROLES`, OWNER 승격은 서버가 400). 초대 재발송·취소는 없다.
+- 오류는 status로 분기한다(409는 마지막 OWNER 보호·허용되지 않는 전이 — 서버 메시지 그대로).
 
 ### admin 3차 — 내부 직원 명부의 행 액션(정지·재개·종료·역할 변경)
 

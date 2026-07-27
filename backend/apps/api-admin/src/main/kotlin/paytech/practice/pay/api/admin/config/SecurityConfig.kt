@@ -91,7 +91,14 @@ class SecurityConfig {
 				// (`POST`/`GET /admin/internal-users`)도 함께 덮는다 — 가맹점 쪽
 				// `/merchant/merchant-users/**`와 같은 Spring PathPattern 동작이다.
 				authorize("/admin/internal-users/**", hasRole("SUPER_ADMIN"))
-				authorize(HttpMethod.POST, "/admin/merchants", hasAnyRole("SUPER_ADMIN", "OPERATOR"))
+				// 가맹점 관련 POST(등록 + 가맹점 사용자 관리)를 SUPER_ADMIN/OPERATOR로 좁힌다.
+				// HttpMethod.POST로만 좁혀 GET은 인증된 내부 사용자 전원(VIEWER 포함)에게 열려
+				// 있다 — 가맹점 목록·가맹점 사용자 명부 조회가 VIEWER의 조회 업무다. 와일드카드는
+				// base 경로(POST /admin/merchants)와 하위 경로
+				// (POST /admin/merchants/{id}/users/{id}/suspend 등)를 함께 덮는다. 하위 경로 관리
+				// 액션의 인가를 이 정적 규칙에만 맡기므로(AdminMerchantUserController의 KDoc), 이
+				// 규칙이 mutation의 1차이자 유일한 관문이다.
+				authorize(HttpMethod.POST, "/admin/merchants/**", hasAnyRole("SUPER_ADMIN", "OPERATOR"))
 				authorize(anyRequest, authenticated)
 			}
 		}

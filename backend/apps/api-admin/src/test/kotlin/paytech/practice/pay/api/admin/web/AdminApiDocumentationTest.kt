@@ -28,28 +28,36 @@ import paytech.practice.pay.api.admin.config.SecurityConfig
 import paytech.practice.pay.api.admin.security.InternalUserPrincipal
 import paytech.practice.pay.application.identity.AcceptAccountInvitationResult
 import paytech.practice.pay.application.identity.AcceptAccountInvitationUseCase
+import paytech.practice.pay.application.identity.AdminChangeMerchantUserRoleUseCase
+import paytech.practice.pay.application.identity.AdminChangeMerchantUserStatusUseCase
+import paytech.practice.pay.application.identity.AdminListMerchantUsersUseCase
 import paytech.practice.pay.application.identity.AuthenticateInternalUserResult
 import paytech.practice.pay.application.identity.AuthenticateInternalUserUseCase
 import paytech.practice.pay.application.identity.ChangeInternalUserRoleResult
 import paytech.practice.pay.application.identity.ChangeInternalUserRoleUseCase
 import paytech.practice.pay.application.identity.ChangeInternalUserStatusResult
 import paytech.practice.pay.application.identity.ChangeInternalUserStatusUseCase
+import paytech.practice.pay.application.identity.ChangeMerchantUserRoleResult
+import paytech.practice.pay.application.identity.ChangeMerchantUserStatusResult
 import paytech.practice.pay.application.identity.IssueInternalUserResult
 import paytech.practice.pay.application.identity.IssueInternalUserUseCase
 import paytech.practice.pay.application.identity.ListInternalUsersResult
 import paytech.practice.pay.application.identity.ListInternalUsersUseCase
+import paytech.practice.pay.application.identity.ListMerchantUsersResult
 import paytech.practice.pay.application.identity.RegisterMerchantResult
 import paytech.practice.pay.application.identity.RegisterMerchantUseCase
 import paytech.practice.pay.application.merchant.ListMerchantsResult
 import paytech.practice.pay.application.merchant.ListMerchantsUseCase
 import paytech.practice.pay.application.port.outbound.InternalUserSummary
 import paytech.practice.pay.application.port.outbound.MerchantSummary
+import paytech.practice.pay.application.port.outbound.MerchantUserSummary
 import paytech.practice.pay.domain.identity.AccountStatus
 import paytech.practice.pay.domain.identity.Email
 import paytech.practice.pay.domain.identity.InternalUserId
 import paytech.practice.pay.domain.identity.InternalUserRole
 import paytech.practice.pay.domain.identity.LoginId
 import paytech.practice.pay.domain.identity.MerchantUserId
+import paytech.practice.pay.domain.identity.MerchantUserRole
 import paytech.practice.pay.domain.merchant.MerchantCode
 import paytech.practice.pay.domain.merchant.MerchantId
 import paytech.practice.pay.domain.merchant.MerchantStatus
@@ -110,6 +118,7 @@ private fun adminResource(
 		AdminLogoutController::class,
 		MerchantController::class,
 		InternalUserController::class,
+		AdminMerchantUserController::class,
 		AcceptAccountInvitationController::class,
 	],
 )
@@ -145,6 +154,15 @@ class AdminApiDocumentationTest : FunSpec() {
 
 	@MockkBean
 	lateinit var changeInternalUserRoleUseCase: ChangeInternalUserRoleUseCase
+
+	@MockkBean
+	lateinit var adminListMerchantUsersUseCase: AdminListMerchantUsersUseCase
+
+	@MockkBean
+	lateinit var adminChangeMerchantUserStatusUseCase: AdminChangeMerchantUserStatusUseCase
+
+	@MockkBean
+	lateinit var adminChangeMerchantUserRoleUseCase: AdminChangeMerchantUserRoleUseCase
 
 	init {
 		extensions(SpringExtension)
@@ -556,6 +574,124 @@ class AdminApiDocumentationTest : FunSpec() {
 						.content(objectMapper.writeValueAsString(ChangeInternalUserRoleRequest(role = "VIEWER"))),
 				).andExpect(status().isOk)
 				.andDo(document("admin-change-internal-user-role", snippet))
+		}
+		test("document GET merchant users") {
+			every { adminListMerchantUsersUseCase.execute(any()) } returns
+				ListMerchantUsersResult(
+					merchantUsers =
+						listOf(
+							MerchantUserSummary(
+								merchantUserId = MerchantUserId("mu_001"),
+								loginId = LoginId("owner01"),
+								email = Email("owner01@example.com"),
+								userName = "오너",
+								role = MerchantUserRole.OWNER,
+								status = AccountStatus.ACTIVE,
+								// non-null을 넣는다 — null이면 restdocs-api-spec이 타입을 추론 못 해 필드를 뺀다.
+								lastLoginAt = NOW.plusSeconds(3_600),
+								createdAt = NOW,
+								pendingInvitationExpiresAt = NOW.plusSeconds(604_800),
+							),
+						),
+				)
+
+			val snippet =
+				adminResource(
+					summary = "가맹점 사용자 명부 조회",
+					description =
+						"인증된 내부 운영자 전원이 조회할 수 있다 — VIEWER도 포함된다(GET /admin/merchants와 같은 스코핑). " +
+							"관리 액션(POST)만 SUPER_ADMIN/OPERATOR로 제한된다. 비밀번호 해시는 담기지 않는다.",
+					responseSchema = "AdminListMerchantUsersResponse",
+					responseFields =
+						listOf(
+							fieldWithPath("merchantUsers").description("가맹점 사용자 요약 배열(최신 생성순)"),
+							fieldWithPath("merchantUsers[].merchantUserId").description("가맹점 사용자 식별자"),
+							fieldWithPath("merchantUsers[].loginId").description("로그인 아이디"),
+							fieldWithPath("merchantUsers[].email").description("이메일"),
+							fieldWithPath("merchantUsers[].userName").description("사용자 이름"),
+							fieldWithPath("merchantUsers[].role").description("OWNER | ADMIN | VIEWER"),
+							fieldWithPath("merchantUsers[].status").description("INVITED | ACTIVE | LOCKED | SUSPENDED | TERMINATED"),
+							fieldWithPath("merchantUsers[].lastLoginAt").description("마지막 로그인 시각(UTC). 없으면 null.").optional(),
+							fieldWithPath("merchantUsers[].createdAt").description("생성(초대) 시각(UTC)"),
+							fieldWithPath("merchantUsers[].pendingInvitationExpiresAt")
+								.description("유효한 초대의 만료 시각(UTC). 없으면 null.")
+								.optional(),
+						),
+				)
+
+			mockMvc
+				.perform(get("/admin/merchants/mrc_001/users").with(authenticatedAs(OPERATOR)))
+				.andExpect(status().isOk)
+				.andDo(document("admin-list-merchant-users", snippet))
+		}
+
+		test("document POST change merchant user status") {
+			every { adminChangeMerchantUserStatusUseCase.execute(any()) } returns
+				ChangeMerchantUserStatusResult(
+					merchantUserId = MerchantUserId("mu_001"),
+					status = AccountStatus.SUSPENDED,
+					changedAt = NOW,
+				)
+
+			val snippet =
+				adminResource(
+					summary = "가맹점 사용자 상태 변경(정지·재개·종료)",
+					description =
+						"SUPER_ADMIN/OPERATOR만 호출할 수 있다. 마지막 경로 세그먼트로 동작을 고른다: suspend · reactivate · " +
+							"terminate(되돌릴 수 없음). 대상이 경로의 가맹점 소속이 아니면 404. 마지막 활성 OWNER를 정지·종료하면 " +
+							"409다 — 이 API가 그 불변식이 실제로 트리거되는 첫 경로다. 상태 변경이라 CSRF 토큰이 필요하다.",
+					responseSchema = "ChangeMerchantUserStatusResponse",
+					responseFields =
+						listOf(
+							fieldWithPath("merchantUserId").description("대상 가맹점 사용자 식별자"),
+							fieldWithPath("status").description("변경된 상태(ACTIVE | SUSPENDED | TERMINATED)"),
+							fieldWithPath("changedAt").description("변경 시각(UTC)"),
+						),
+				)
+
+			mockMvc
+				.perform(post("/admin/merchants/mrc_001/users/mu_001/suspend").with(authenticatedAs(OPERATOR)).with(csrf()))
+				.andExpect(status().isOk)
+				.andDo(document("admin-change-merchant-user-status", snippet))
+		}
+
+		test("document POST change merchant user role") {
+			every { adminChangeMerchantUserRoleUseCase.execute(any()) } returns
+				ChangeMerchantUserRoleResult(
+					merchantUserId = MerchantUserId("mu_001"),
+					role = MerchantUserRole.VIEWER,
+					changedAt = NOW,
+				)
+
+			val snippet =
+				adminResource(
+					summary = "가맹점 사용자 역할 변경",
+					description =
+						"SUPER_ADMIN/OPERATOR만 호출할 수 있다. role은 ADMIN | VIEWER여야 한다 — OWNER로 승격하면 400이다" +
+							"(도메인이 막는다). 마지막 활성 OWNER를 강등하면 409다. 상태 변경이라 CSRF 토큰이 필요하다.",
+					requestSchema = "ChangeMerchantUserRoleRequest",
+					requestFields =
+						listOf(
+							fieldWithPath("role").description("변경할 역할(ADMIN | VIEWER)"),
+						),
+					responseSchema = "ChangeMerchantUserRoleResponse",
+					responseFields =
+						listOf(
+							fieldWithPath("merchantUserId").description("대상 가맹점 사용자 식별자"),
+							fieldWithPath("role").description("변경된 역할"),
+							fieldWithPath("changedAt").description("변경 시각(UTC)"),
+						),
+				)
+
+			mockMvc
+				.perform(
+					post("/admin/merchants/mrc_001/users/mu_001/role")
+						.with(authenticatedAs(OPERATOR))
+						.with(csrf())
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsString(ChangeMerchantUserRoleRequest(role = "VIEWER"))),
+				).andExpect(status().isOk)
+				.andDo(document("admin-change-merchant-user-role", snippet))
 		}
 	}
 }

@@ -3,6 +3,9 @@ package paytech.practice.pay.api.admin.config
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import paytech.practice.pay.application.identity.AcceptAccountInvitationUseCase
+import paytech.practice.pay.application.identity.AdminChangeMerchantUserRoleUseCase
+import paytech.practice.pay.application.identity.AdminChangeMerchantUserStatusUseCase
+import paytech.practice.pay.application.identity.AdminListMerchantUsersUseCase
 import paytech.practice.pay.application.identity.AuthenticateInternalUserUseCase
 import paytech.practice.pay.application.identity.ChangeInternalUserRoleUseCase
 import paytech.practice.pay.application.identity.ChangeInternalUserStatusUseCase
@@ -17,6 +20,7 @@ import paytech.practice.pay.application.port.outbound.InternalUserRepository
 import paytech.practice.pay.application.port.outbound.InvitationTokenHasher
 import paytech.practice.pay.application.port.outbound.MerchantListProjection
 import paytech.practice.pay.application.port.outbound.MerchantRepository
+import paytech.practice.pay.application.port.outbound.MerchantUserListProjection
 import paytech.practice.pay.application.port.outbound.MerchantUserRepository
 import paytech.practice.pay.application.port.outbound.PasswordEncoder
 import paytech.practice.pay.application.port.outbound.TransactionManager
@@ -121,4 +125,20 @@ class UseCaseConfiguration {
 		internalUserRepository: InternalUserRepository,
 		clock: Clock,
 	): ChangeInternalUserRoleUseCase = ChangeInternalUserRoleUseCase(internalUserRepository, clock)
+
+	@Bean
+	fun adminListMerchantUsersUseCase(merchantUserListProjection: MerchantUserListProjection): AdminListMerchantUsersUseCase =
+		AdminListMerchantUsersUseCase(merchantUserListProjection)
+
+	@Bean
+	fun adminChangeMerchantUserStatusUseCase(
+		merchantUserRepository: MerchantUserRepository,
+		clock: Clock,
+	): AdminChangeMerchantUserStatusUseCase = AdminChangeMerchantUserStatusUseCase(merchantUserRepository, clock)
+
+	@Bean
+	fun adminChangeMerchantUserRoleUseCase(
+		merchantUserRepository: MerchantUserRepository,
+		clock: Clock,
+	): AdminChangeMerchantUserRoleUseCase = AdminChangeMerchantUserRoleUseCase(merchantUserRepository, clock)
 }

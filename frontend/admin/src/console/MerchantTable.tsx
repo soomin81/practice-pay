@@ -1,8 +1,14 @@
+import { Link } from 'react-router-dom'
 import { formatDateTime } from '@/console/format'
 import type { MerchantSummary } from '@/api/types'
 import { Badge } from '@/components/ui/badge'
 
-/** 가맹점 목록. 인증된 내부 운영자 전원이 볼 수 있다(VIEWER 포함). */
+/**
+ * 가맹점 목록. 인증된 내부 운영자 전원이 볼 수 있다(VIEWER 포함).
+ *
+ * 가맹점 이름은 상세 화면(`/merchants/{id}`)으로 가는 링크다 — 거기서 그 가맹점의 사용자
+ * 명부와 계정 관리를 한다.
+ */
 export function MerchantTable({ merchants }: { merchants: readonly MerchantSummary[] }) {
 	if (merchants.length === 0) {
 		return <p className="text-sm text-muted-foreground">아직 등록된 가맹점이 없습니다.</p>
@@ -23,7 +29,11 @@ export function MerchantTable({ merchants }: { merchants: readonly MerchantSumma
 					{merchants.map((merchant) => (
 						<tr key={merchant.merchantId} className="border-b last:border-0">
 							<td className="py-2.5 pr-4 font-mono text-xs">{merchant.merchantCode}</td>
-							<td className="py-2.5 pr-4">{merchant.merchantName}</td>
+							<td className="py-2.5 pr-4">
+								<Link to={`/merchants/${merchant.merchantId}`} className="text-primary underline-offset-2 hover:underline">
+									{merchant.merchantName}
+								</Link>
+							</td>
 							<td className="py-2.5 pr-4">
 								<StatusBadge status={String(merchant.status)} />
 							</td>
