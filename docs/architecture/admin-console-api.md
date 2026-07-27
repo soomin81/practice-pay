@@ -135,7 +135,6 @@ PG 내부 운영자용 콘솔(브라우저 SPA, `frontend/admin`)이 호출하�
 
 ## 6. 다음 슬라이스로 미룬 것
 
-- 지금까지 이 문서가 미뤄 둔 항목(내부 직원 계정 관리, 내부 운영자의 가맹점 계정 관리)은
-  전부 구현됐다. 후속 후보는 만료된 초대를 `EXPIRED`로 정리하는 배치
-  ([merchant-console-api.md](merchant-console-api.md)의 7절)와 로그인·감사 조회
-  ([identity-access-api-key.md](identity-access-api-key.md)의 9절 후속)이다.
+- 지금까지 이 문서가 미뤄 둔 항목(내부 직원 계정 관리, 내부 운영자의 가맹점 계정 관리,
+  만료 초대 정리 배치)은 전부 구현됐다. 남은 후속 후보는 로그인·API 감사 조회
+  ([identity-access-api-key.md](identity-access-api-key.md)의 9절 후속)다.

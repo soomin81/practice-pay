@@ -387,3 +387,14 @@
 - **프론트: 가맹점 목록 행 → 상세(`/merchants/:merchantId`)로 링크**하고, 상세에서 그 가맹점의 사용자 명부와 액션을 보여준다. 관리 액션은 `canManageMerchantAccounts`(SUPER_ADMIN/OPERATOR)일 때만 그린다 — VIEWER는 명부만. 가맹점 헤더 정보는 별도 단건 조회 엔드포인트 없이 이미 캐시된 가맹점 목록에서 찾는다. 액션 컴포넌트는 내부 직원판(`InternalUserActions`)과 같은 모양이되 OWNER 행은 역할 변경을 감추고(강등이 마지막 OWNER 보호에 걸리기 쉬움) 초대 재발송·취소는 없다.
 - **또 KDoc 안의 `/admin/merchants/**`가 컴파일을 깨뜨렸다**(바로 위 절의 재발). 컨트롤러 KDoc에서 그 표기를 "하위 경로 POST 와일드카드 규칙"으로 풀어 고쳤다 — 이 함정은 슬라이스마다 반복되니 경로 와일드카드를 KDoc에 쓰려는 순간 멈춘다.
 - **실물 검증(권장)은 아직 안 했다** — `bootRun`으로 OPERATOR 세션이 마지막 활성 OWNER 정지 시 409를 받는지가 이 슬라이스의 핵심 확인이다(HTTP로 처음 도달하는 불변식). `@WebMvcTest`가 정적 관문(VIEWER 403·GET 200)은 검증하지만 오류 디스패치·필터 체인은 실물로만 확인된다.
+
+## 만료 Sweep 배치(`apps:batch`의 `expireAccountInvitationsJob`/`expireCheckoutsJob`)
+
+도메인에 `expire()` 전이는 있는데 호출부가 없어 만료를 화면이 `expiresAt` 비교로만 판단하던 gap을 메운다(`AccountInvitation`은 명부, `CheckoutSession`/`Payment`는 체크아웃 조회의 410). `apps:batch`의 기존 3개 폴링 Worker(Scheduler+JobConfiguration+Tasklet 3파일 세트)를 그대로 복제해 Sweep Job 2개를 붙였다.
+
+- **후보 애그리게이트를 그대로 전이시키지 않고 식별자로 다시 읽는다 — 재검증이 유일한 동시성 안전장치다.** Tasklet이 `findExpirablePending(now)`/`findExpirable(now)`로 후보를 뽑고, Use Case가 그 id로 다시 읽어 여전히 만료 가능한 상태일 때만 전이한다. 후보를 뽑은 뒤 초대가 수락되거나 결제가 진행됐을 수 있어서다(폴링이라 창이 있다). 상태가 이미 넘어갔으면 조용히 지나간다(Sweep은 best-effort 정리). 그래서 조회 결과가 살짝 낡아도 안전하다.
+- **초대 Sweep은 단일 애그리게이트라 트랜잭션 경계가 없다.** `ExpireAccountInvitationUseCase`는 재검증 후 `expire()`+save뿐이다. `AccountInvitation.expire()`는 다른 두 대상과 달리 타임스탬프를 받지 않는다(`account_invitation`에 `updated_at`이 없다).
+- **체크아웃 Sweep은 Payment와 CheckoutSession을 한 트랜잭션에서, 그러나 독립적으로 가드한다.** `ExpireCheckoutUseCase`는 `TransactionManager.runInTransaction` 안에서 Payment가 `CREATED`/`READY`면 만료, 세션이 `PAYMENT_SUBMITTED` 이전이면 만료 — 한쪽이 이미 그 창을 벗어나도 다른 쪽을 막지 않는다. 세션은 결제 생성 직후엔 아직 없을 수 있어 `null`도 정상이다(Payment가 먼저 `CREATED`로 생긴다). Sweep은 만료된 **Payment**를 후보로 몰아가고 세션은 `findByPaymentId`로 딸려 온다.
+- **새 포트 조회는 Projection이 아니라 Command Repository에 뒀다** — `findPendingExchangeSettlement()`와 같은 도메인 규칙 보조 조회다(`PaymentRepository.findExpirable`, `AccountInvitationRepository.findExpirablePending`+`findById`). 상태·시각 조건의 jOOQ select이고, 어댑터 통합 테스트가 "PENDING+만료만/CREATED·READY+만료만 잡힌다"를 고정한다.
+- **폴링 60초** — 만료 정리는 결제 흐름을 진행시키는 Confirm/Webhook/매도(10초)와 달리 급하지 않다. 다른 Worker와 다른 유일한 상수라 Scheduler KDoc에 근거를 남겼다.
+- **실물 검증(권장)은 아직 안 했다** — 로컬 MySQL에 `expires_at`이 과거인 `PENDING` 초대·`CREATED` 결제를 넣고 `apps:batch:bootRun` → 한 폴링 뒤 각각 `EXPIRED`가 되고 이미 `ACCEPTED`/`PROCESSING`인 것은 안 건드리는지 확인하는 것이 핵심이다. 배치 폴링·트랜잭션 경계는 유닛/통합 테스트가 못 잡는 층이다.

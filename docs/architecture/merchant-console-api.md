@@ -134,8 +134,8 @@ MVP에는 초대 메일 발송이 없다. 그래서 **발급한 OWNER/ADMIN이 �
 
 ## 7. 다음 슬라이스로 미룬 것
 
-- 만료된 초대를 `EXPIRED`로 정리하는 **배치**(`AccountInvitation.expire()`는 도메인에
-  있지만 호출부가 없다). 지금은 화면이 만료 시각으로 판단하므로 동작에 문제는 없다.
+> 만료된 초대를 `EXPIRED`로 정리하는 배치는 구현됐다(`apps:batch`의 `expireAccountInvitationsJob`,
+> 60초 폴링). 화면의 만료 시각 비교는 그대로 두되(폴링 사이 창), 이제 상태도 실제와 맞춰진다.
 
 > 내부 운영자(`api-admin`)의 가맹점 계정 관리는 구현됐다 — 6절 5번(마지막 활성 OWNER)
 > 규칙이 실제로 트리거되는 첫 경로다([admin-console-api.md](admin-console-api.md)의 4절).

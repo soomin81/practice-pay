@@ -4,6 +4,7 @@ import paytech.practice.pay.domain.merchant.MerchantId
 import paytech.practice.pay.domain.payment.MerchantOrderId
 import paytech.practice.pay.domain.payment.Payment
 import paytech.practice.pay.domain.payment.PaymentId
+import java.time.Instant
 
 /**
  * [Payment] Aggregate를 저장·복원하는 Command Repository Outbound Port다.
@@ -39,4 +40,16 @@ interface PaymentRepository {
 	 * 있지는 않다 — Confirm Worker/Outbox 발행과 달리 알려진 gap).
 	 */
 	fun findPendingExchangeSettlement(): List<Payment>
+
+	/**
+	 * **아직 만료 전이되지 않은, 만료 시각이 지난 Payment**를 전부 찾는다 — 만료 Sweep
+	 * Worker(`apps:batch`)가 폴링 대상을 뽑을 때 쓴다. `status IN (CREATED, READY)`이고
+	 * `expires_at < now`인 것만 돌려준다([Payment.expire]가 그 두 상태에서만 허용된다).
+	 *
+	 * [findPendingExchangeSettlement]와 같은 성격의 **도메인 규칙 보조 조회**라 Projection이
+	 * 아니라 Command Repository에 둔다. 후보를 뽑은 뒤 실제 전이 직전에 Use Case가 다시
+	 * 읽어 상태를 재검증하므로(그 사이 결제가 진행됐을 수 있다), 이 조회 결과가 살짝 낡아도
+	 * 안전하다.
+	 */
+	fun findExpirable(now: Instant): List<Payment>
 }

@@ -1,6 +1,8 @@
 package paytech.practice.pay.infra.persistence.jooq.identity
 
 import io.kotest.core.spec.style.FunSpec
+import io.kotest.matchers.collections.shouldContain
+import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -110,5 +112,54 @@ class AccountInvitationRepositoryAdapterTest :
 
 		test("findByTokenHash returns null when no such token hash exists") {
 			adapter.findByTokenHash("no-such-token-hash-${uniqueSuffix()}").shouldBeNull()
+		}
+
+		test("findById returns the invitation") {
+			val internalUser = savedInternalUser()
+			val invitation =
+				AccountInvitation.forInternalUser(
+					id = AccountInvitationId("ai_${uniqueSuffix()}"),
+					internalUserId = internalUser.id,
+					tokenHash = "hashed-token-${uniqueSuffix()}",
+					expiresAt = NOW.plusSeconds(604_800),
+					createdAt = NOW,
+				)
+			adapter.save(invitation)
+
+			adapter.findById(invitation.id).shouldNotBeNull().id shouldBe invitation.id
+			adapter.findById(AccountInvitationId("ai_no-such-${uniqueSuffix()}")).shouldBeNull()
+		}
+
+		test("findExpirablePending returns only PENDING invitations past their expiry") {
+			// DB를 다른 테스트와 공유하므로 절대 목록이 아니라 내가 심은 id의 포함/제외를 단언한다.
+			val internalUser = savedInternalUser()
+
+			fun invite(
+				tokenSuffix: String,
+				expiresAt: Instant,
+				accepted: Boolean,
+			): AccountInvitationId {
+				val invitation =
+					AccountInvitation.forInternalUser(
+						id = AccountInvitationId("ai_${uniqueSuffix()}"),
+						internalUserId = internalUser.id,
+						tokenHash = "hash-$tokenSuffix-${uniqueSuffix()}",
+						expiresAt = expiresAt,
+						createdAt = NOW.minusSeconds(7_200),
+					)
+				if (accepted) invitation.accept(NOW)
+				adapter.save(invitation)
+				return invitation.id
+			}
+
+			val expiredPending = invite("expired", NOW.minusSeconds(3_600), accepted = false)
+			val futurePending = invite("future", NOW.plusSeconds(3_600), accepted = false)
+			val expiredAccepted = invite("accepted", NOW.minusSeconds(3_600), accepted = true)
+
+			val ids = adapter.findExpirablePending(NOW).map { it.id }
+
+			ids shouldContain expiredPending
+			ids shouldNotContain futurePending
+			ids shouldNotContain expiredAccepted
 		}
 	})

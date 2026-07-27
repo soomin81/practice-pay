@@ -141,4 +141,49 @@ class PaymentRepositoryAdapterTest :
 			result.map { it.id } shouldNotContain alreadySoldPayment.id
 			result.map { it.id } shouldNotContain readyPayment.id
 		}
+
+		test("findExpirable returns only CREATED/READY payments past their expiry") {
+			// DB 공유라 내가 심은 id의 포함/제외를 단언한다.
+			val merchantId = MerchantId(insertTestMerchant())
+
+			fun payment(
+				expiresAt: Instant,
+				advance: (Payment) -> Unit = {},
+			): PaymentId {
+				val payment =
+					Payment.create(
+						id = PaymentId("pay_${uniqueSuffix()}"),
+						merchantId = merchantId,
+						merchantOrderId = MerchantOrderId("order-${uniqueSuffix()}"),
+						orderName = "테스트 주문",
+						orderAmount = Money(10_000),
+						paymentAsset = Asset.USDC,
+						paymentAmount = TokenAmount(6_666_667),
+						tokenDecimals = 6,
+						network = BlockchainNetwork.BASE_SEPOLIA,
+						receivingWallet = RECEIVING_WALLET,
+						expiresAt = expiresAt,
+						createdAt = NOW.minusSeconds(7_200),
+					)
+				advance(payment)
+				adapter.save(payment)
+				return payment.id
+			}
+
+			val createdExpired = payment(NOW.minusSeconds(3_600))
+			val readyExpired = payment(NOW.minusSeconds(3_600)) { it.ready(NOW.minusSeconds(3_000)) }
+			val createdFuture = payment(NOW.plusSeconds(3_600))
+			val processingExpired =
+				payment(NOW.minusSeconds(3_600)) {
+					it.ready(NOW.minusSeconds(3_000))
+					it.submit(RECEIVING_WALLET, NOW.minusSeconds(2_000))
+				}
+
+			val ids = adapter.findExpirable(NOW).map { it.id }
+
+			ids shouldContain createdExpired
+			ids shouldContain readyExpired
+			ids shouldNotContain createdFuture
+			ids shouldNotContain processingExpired
+		}
 	})

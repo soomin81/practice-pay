@@ -5,8 +5,10 @@ import org.springframework.context.annotation.Configuration
 import paytech.practice.pay.application.exchange.SellToFakeExchangeUseCase
 import paytech.practice.pay.application.outbox.PublishOutboxEventUseCase
 import paytech.practice.pay.application.payment.ConfirmBlockchainTransactionUseCase
+import paytech.practice.pay.application.port.outbound.AccountInvitationRepository
 import paytech.practice.pay.application.port.outbound.BlockchainClient
 import paytech.practice.pay.application.port.outbound.BlockchainTransactionRepository
+import paytech.practice.pay.application.port.outbound.CheckoutSessionRepository
 import paytech.practice.pay.application.port.outbound.ExchangeOrderRepository
 import paytech.practice.pay.application.port.outbound.ExchangeRateProvider
 import paytech.practice.pay.application.port.outbound.IdGenerator
@@ -17,6 +19,8 @@ import paytech.practice.pay.application.port.outbound.SettlementReceivableReposi
 import paytech.practice.pay.application.port.outbound.TransactionManager
 import paytech.practice.pay.application.port.outbound.WebhookDeliveryRepository
 import paytech.practice.pay.application.port.outbound.WebhookSender
+import paytech.practice.pay.application.sweep.ExpireAccountInvitationUseCase
+import paytech.practice.pay.application.sweep.ExpireCheckoutUseCase
 import java.time.Clock
 
 /**
@@ -88,6 +92,24 @@ class UseCaseConfiguration {
 			outboxEventRepository = outboxEventRepository,
 			exchangeRateProvider = exchangeRateProvider,
 			idGenerator = idGenerator,
+			transactionManager = transactionManager,
+			clock = clock,
+		)
+
+	@Bean
+	fun expireAccountInvitationUseCase(accountInvitationRepository: AccountInvitationRepository): ExpireAccountInvitationUseCase =
+		ExpireAccountInvitationUseCase(accountInvitationRepository)
+
+	@Bean
+	fun expireCheckoutUseCase(
+		paymentRepository: PaymentRepository,
+		checkoutSessionRepository: CheckoutSessionRepository,
+		transactionManager: TransactionManager,
+		clock: Clock,
+	): ExpireCheckoutUseCase =
+		ExpireCheckoutUseCase(
+			paymentRepository = paymentRepository,
+			checkoutSessionRepository = checkoutSessionRepository,
 			transactionManager = transactionManager,
 			clock = clock,
 		)

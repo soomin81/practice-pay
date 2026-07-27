@@ -70,11 +70,14 @@ apps/
                      GET /merchant/me와 POST /merchant/logout을 더했으며, api-payment처럼
                      openapi3 스펙도 생성한다(계약 문서 docs/architecture/merchant-console-api.md).
   batch/             실제 Gradle 서브프로젝트, 독립 배포 가능한 Spring Boot 앱 — spring-boot-starter-batch +
-                     jooq + modules:application/infra-persistence/infra-blockchain에 의존한다. Job 셋:
+                     jooq + modules:application/infra-persistence/infra-blockchain에 의존한다. Job 5개:
                      confirmBlockchainTransactionJob(BlockchainTransaction 감지·Confirm 폴링 Worker),
                      publishOutboxEventJob(OutboxEvent 발행 Worker, Webhook HTTP 호출 포함),
-                     sellToFakeExchangeJob(Fake Exchange 매도 폴링 Worker) 셋 다 10초 주기다
-                     (셋의 구현 판단은 IMPLEMENTATION-NOTES.md 참고). 웹 스타터는 여전히 없다.
+                     sellToFakeExchangeJob(Fake Exchange 매도 폴링 Worker) 셋은 10초 주기이고,
+                     expireAccountInvitationsJob(만료된 PENDING 초대 → EXPIRED)/
+                     expireCheckoutsJob(만료된 Payment와 딸린 CheckoutSession → EXPIRED) 둘은
+                     만료 정리라 급하지 않아 60초 주기다(구현 판단은 IMPLEMENTATION-NOTES.md
+                     참고). 웹 스타터는 여전히 없다.
 modules/
   application/       실제 Gradle 서브프로젝트, domain에 의존; ConnectCheckoutWalletUseCase(application.checkout,
                      지갑 연결 슬라이스), CreatePaymentUseCase(결제 생성 슬라이스),

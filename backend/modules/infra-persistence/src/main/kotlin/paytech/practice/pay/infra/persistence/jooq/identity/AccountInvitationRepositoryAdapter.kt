@@ -15,6 +15,7 @@ import paytech.practice.pay.domain.identity.InvitationAccountType
 import paytech.practice.pay.domain.identity.MerchantUserId
 import paytech.practice.pay.infra.persistence.jooq.toUtcInstant
 import paytech.practice.pay.infra.persistence.jooq.toUtcLocalDateTime
+import java.time.Instant
 
 /**
  * jOOQ로 [AccountInvitationRepository] Port를 구현한다.
@@ -85,6 +86,22 @@ class AccountInvitationRepositoryAdapter(
 			.limit(1)
 			.fetchOne()
 			?.toDomain()
+
+	override fun findById(accountInvitationId: AccountInvitationId): AccountInvitation? =
+		dsl
+			.selectFrom(ACCOUNT_INVITATION)
+			.where(ACCOUNT_INVITATION.ACCOUNT_INVITATION_ID.eq(accountInvitationId.value))
+			.fetchOne()
+			?.toDomain()
+
+	/** 만료 Sweep용 — `PENDING`이고 `expires_at < now`인 초대(Port의 KDoc 참고). */
+	override fun findExpirablePending(now: Instant): List<AccountInvitation> =
+		dsl
+			.selectFrom(ACCOUNT_INVITATION)
+			.where(ACCOUNT_INVITATION.INVITATION_STATUS.eq(AccountInvitationStatus.PENDING.name))
+			.and(ACCOUNT_INVITATION.EXPIRES_AT.lessThan(now.toUtcLocalDateTime()))
+			.fetch()
+			.map { it.toDomain() }
 
 	private fun resolveInternalUserSeq(internalUserId: InternalUserId): Long =
 		dsl

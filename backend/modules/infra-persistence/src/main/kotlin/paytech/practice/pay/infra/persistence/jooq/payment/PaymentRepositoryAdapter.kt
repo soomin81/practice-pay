@@ -20,6 +20,7 @@ import paytech.practice.pay.domain.shared.TokenAmount
 import paytech.practice.pay.domain.shared.WalletAddress
 import paytech.practice.pay.infra.persistence.jooq.toUtcInstant
 import paytech.practice.pay.infra.persistence.jooq.toUtcLocalDateTime
+import java.time.Instant
 
 /**
  * jOOQ로 [PaymentRepository] Port를 구현한다.
@@ -102,6 +103,15 @@ class PaymentRepositoryAdapter(
 					.from(EXCHANGE_ORDER)
 					.where(EXCHANGE_ORDER.PAYMENT_SEQ.eq(PAYMENT.PAYMENT_SEQ)),
 			).fetch()
+			.map { it.toDomain() }
+
+	/** 만료 Sweep용 — `CREATED`/`READY`이고 `expires_at < now`인 Payment(Port의 KDoc 참고). */
+	override fun findExpirable(now: Instant): List<Payment> =
+		dsl
+			.selectFrom(PAYMENT)
+			.where(PAYMENT.PAYMENT_STATUS.`in`(PaymentStatus.CREATED.name, PaymentStatus.READY.name))
+			.and(PAYMENT.EXPIRES_AT.lessThan(now.toUtcLocalDateTime()))
+			.fetch()
 			.map { it.toDomain() }
 
 	private fun resolveMerchantSeq(merchantId: MerchantId): Long =

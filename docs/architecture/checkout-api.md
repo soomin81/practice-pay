@@ -284,8 +284,10 @@ successUrl로 이동
   `BlockchainTransaction`까지 걸쳐 있어서 Aggregate 복원으로는 맞지 않는다.
 - **`confirmationCount`는 `BlockchainTransaction`에서 읽는다.** 결제당 `PAYMENT` 거래는
   스키마상 최대 한 건이라(`uk_blockchain_payment_type`) 타입으로 정확히 집는다.
-- 남은 gap: 만료된 세션을 `EXPIRED`로 전이시키는 Sweep Worker가 없어서, 만료 판단은
-  상태가 아니라 `expiresAt` 시각 비교로 한다.
+- 만료된 세션·결제는 `apps:batch`의 만료 Sweep Worker(`expireCheckoutsJob`)가 주기적으로
+  `EXPIRED`로 전이시킨다(Payment와 딸린 CheckoutSession을 한 트랜잭션에서 함께). 다만 그
+  Worker가 60초마다 도는 폴링이라, 조회는 여전히 상태만 믿지 않고 `expiresAt` 시각 비교도
+  병행한다(폴링 사이 창에서 아직 `EXPIRED`가 반영 안 됐을 수 있다).
 
 ## 8. 아직 정하지 않은 것
 

@@ -1,7 +1,9 @@
 package paytech.practice.pay.application.port.outbound
 
 import paytech.practice.pay.domain.identity.AccountInvitation
+import paytech.practice.pay.domain.identity.AccountInvitationId
 import paytech.practice.pay.domain.identity.MerchantUserId
+import java.time.Instant
 
 /**
  * [AccountInvitation] Aggregate를 저장·복원하는 Command Repository Outbound Port다.
@@ -31,4 +33,17 @@ interface AccountInvitationRepository {
 	 * 그래서 구현체는 둘 이상이 있어도 터지지 않게 **가장 최근 것 하나**를 돌려준다.
 	 */
 	fun findPendingByMerchantUserId(merchantUserId: MerchantUserId): AccountInvitation?
+
+	/** `account_invitation_id`로 AccountInvitation을 찾는다. 없으면 `null`이다. */
+	fun findById(accountInvitationId: AccountInvitationId): AccountInvitation?
+
+	/**
+	 * **만료 시각이 지난 `PENDING` 초대**를 전부 찾는다 — 만료 Sweep Worker(`apps:batch`)가
+	 * 폴링 대상을 뽑을 때 쓴다. `invitation_status = PENDING`이고 `expires_at < now`인
+	 * 것만 돌려준다([AccountInvitation.expire]가 `PENDING`에서만 허용된다).
+	 *
+	 * 후보를 뽑은 뒤 실제 전이 직전에 Use Case가 [findById]로 다시 읽어 상태를
+	 * 재검증하므로(그 사이 수락됐을 수 있다), 이 조회 결과가 살짝 낡아도 안전하다.
+	 */
+	fun findExpirablePending(now: Instant): List<AccountInvitation>
 }
