@@ -42,6 +42,7 @@ class AdminLoginController(
 				AuthenticateInternalUserCommand(
 					loginId = LoginId(request.loginId),
 					password = request.password,
+					clientIp = httpRequest.remoteAddr,
 				),
 			)
 

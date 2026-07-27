@@ -5,11 +5,15 @@ import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.verify
+import paytech.practice.pay.application.port.outbound.InternalLoginAuditRepository
 import paytech.practice.pay.application.port.outbound.InternalUserRepository
 import paytech.practice.pay.application.port.outbound.PasswordEncoder
 import paytech.practice.pay.domain.identity.AccountStatus
 import paytech.practice.pay.domain.identity.Email
+import paytech.practice.pay.domain.identity.InternalLoginAudit
+import paytech.practice.pay.domain.identity.InternalLoginOutcome
 import paytech.practice.pay.domain.identity.InternalUser
 import paytech.practice.pay.domain.identity.InternalUserId
 import paytech.practice.pay.domain.identity.InternalUserRole
@@ -38,10 +42,13 @@ private fun activeUser(): InternalUser =
 private fun newUseCase(
 	internalUserRepository: InternalUserRepository,
 	passwordEncoder: PasswordEncoder = mockk { every { matches(CORRECT_PASSWORD, STORED_HASH) } returns true },
+	auditRepository: InternalLoginAuditRepository = mockk(relaxed = true),
 ): AuthenticateInternalUserUseCase =
 	AuthenticateInternalUserUseCase(
 		internalUserRepository = internalUserRepository,
 		passwordEncoder = passwordEncoder,
+		internalLoginAuditRepository = auditRepository,
+		idGenerator = mockk { every { newId() } returns "audit-token" },
 		clock = FIXED_CLOCK,
 	)
 
@@ -142,5 +149,54 @@ class AuthenticateInternalUserUseCaseTest :
 			shouldThrow<InvalidCredentialsException> {
 				newUseCase(repository).execute(AuthenticateInternalUserCommand(LOGIN_ID, CORRECT_PASSWORD))
 			}
+		}
+
+		test("a successful login records a SUCCESS audit entry with the client IP") {
+			val repository = mockk<InternalUserRepository>(relaxed = true)
+			every { repository.findByLoginId(LOGIN_ID) } returns activeUser()
+			val auditRepository = mockk<InternalLoginAuditRepository>(relaxed = true)
+			val captured = slot<InternalLoginAudit>()
+
+			newUseCase(repository, auditRepository = auditRepository)
+				.execute(AuthenticateInternalUserCommand(LOGIN_ID, CORRECT_PASSWORD, clientIp = "203.0.113.7"))
+
+			verify(exactly = 1) { auditRepository.append(capture(captured)) }
+			captured.captured.outcome shouldBe InternalLoginOutcome.SUCCESS
+			captured.captured.internalUserId shouldBe InternalUserId("iu_test_001")
+			captured.captured.clientIp shouldBe "203.0.113.7"
+		}
+
+		test("an unknown loginId records an INVALID_CREDENTIALS audit entry with a null user") {
+			val repository = mockk<InternalUserRepository>()
+			every { repository.findByLoginId(any()) } returns null
+			val auditRepository = mockk<InternalLoginAuditRepository>(relaxed = true)
+			val captured = slot<InternalLoginAudit>()
+
+			shouldThrow<InvalidCredentialsException> {
+				newUseCase(repository, auditRepository = auditRepository)
+					.execute(AuthenticateInternalUserCommand(LOGIN_ID, CORRECT_PASSWORD))
+			}
+
+			verify(exactly = 1) { auditRepository.append(capture(captured)) }
+			captured.captured.outcome shouldBe InternalLoginOutcome.INVALID_CREDENTIALS
+			captured.captured.internalUserId shouldBe null
+			captured.captured.attemptedLoginId shouldBe LOGIN_ID
+		}
+
+		test("a still-locked account records a LOCKED audit entry") {
+			val repository = mockk<InternalUserRepository>(relaxed = true)
+			val user = activeUser()
+			repeat(5) { user.recordFailedLogin(NOW.minusSeconds(120)) }
+			user.lock(NOW.plusSeconds(600), NOW.minusSeconds(60))
+			every { repository.findByLoginId(LOGIN_ID) } returns user
+			val auditRepository = mockk<InternalLoginAuditRepository>(relaxed = true)
+			val captured = slot<InternalLoginAudit>()
+
+			shouldThrow<AccountLockedException> {
+				newUseCase(repository, mockk(), auditRepository).execute(AuthenticateInternalUserCommand(LOGIN_ID, CORRECT_PASSWORD))
+			}
+
+			verify(exactly = 1) { auditRepository.append(capture(captured)) }
+			captured.captured.outcome shouldBe InternalLoginOutcome.LOCKED
 		}
 	})

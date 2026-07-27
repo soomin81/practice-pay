@@ -10,7 +10,7 @@
 |---|---|---|---|
 | `payment/` | **고객**(Hosted Checkout) | `api-payment` `:8081`의 `/checkout/**` | **구현 중** |
 | `merchant/` | 가맹점 운영자 | `api-merchant` `:8083`의 `/merchant/**` | **구현 중**(API Key 관리 + 팀 계정·초대) |
-| `admin/` | PG 내부 운영자 | `api-admin` `:8082`의 `/admin/**` | **구현 중**(로그인 → 가맹점 목록·등록·상세(사용자 관리) + 내부 직원 명부·발급·계정 관리) |
+| `admin/` | PG 내부 운영자 | `api-admin` `:8082`의 `/admin/**` | **구현 중**(로그인 → 가맹점 목록·등록·상세(사용자 관리) + 내부 직원 명부·발급·계정 관리 + 로그인 감사) |
 
 **워크스페이스(pnpm/npm workspaces)를 쓰지 않는다 — 각 앱이 독립 프로젝트다.** 셋이 호출하는 API도 타입도 인증 방식도 전부 달라서 지금 공유할 것이 실질적으로 없다. 진짜 공유될 만한 UI 컴포넌트는 **두 번째 앱을 만들 때 무엇이 겹치는지 드러난 뒤** `frontend/packages/`로 뽑는다. 이 판단은 백엔드의 "지금 실제로 하는 일에만 맞춘다 — 나중에 할 일까지 미리 넣지 않는다"와 같은 원칙이다.
 
@@ -293,6 +293,15 @@ npm run gen:api        # api-admin의 openapi3.yaml → src/api/schema.d.ts
   SUPER_ADMIN은 Bootstrap으로만 만든다는 규정 때문이다. **도메인(`InternalUser.invite`)도
   같은 제약을 `require`로 갖는다**(merchant의 `OWNER` 승격과 같은 방식) — 화면의 선택지
   제한은 UX일 뿐이고 실제 방어선은 서버다(직접 호출하면 400).
+
+### admin 5차 — 로그인 감사 로그
+
+`/login-audit`(SUPER_ADMIN 전용 라우트·내비, `canManageInternalUsers` 재사용)에서 내부 운영자
+로그인 시도를 최신순으로 본다 — 성공·실패·잠김 배지, 로그인 아이디, 이름, 클라이언트 IP.
+**없는 계정을 노린 시도**는 `userName`이 `null`이라 "알 수 없는 계정"으로 구분해 보여준다
+(존재하지 않는 계정 probing을 눈에 띄게). 조회 전용 페이지라 액션·폼이 없다 —
+`InternalUsersPage`와 같은 로딩/오류/목록 분기 구조다. 백엔드 계약은
+`docs/architecture/admin-console-api.md` 4절.
 
 ### admin 4차 — 가맹점 상세와 그 가맹점 사용자 계정 관리
 

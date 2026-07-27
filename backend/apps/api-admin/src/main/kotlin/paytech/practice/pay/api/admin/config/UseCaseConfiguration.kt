@@ -10,11 +10,14 @@ import paytech.practice.pay.application.identity.AuthenticateInternalUserUseCase
 import paytech.practice.pay.application.identity.ChangeInternalUserRoleUseCase
 import paytech.practice.pay.application.identity.ChangeInternalUserStatusUseCase
 import paytech.practice.pay.application.identity.IssueInternalUserUseCase
+import paytech.practice.pay.application.identity.ListInternalLoginAuditUseCase
 import paytech.practice.pay.application.identity.ListInternalUsersUseCase
 import paytech.practice.pay.application.identity.RegisterMerchantUseCase
 import paytech.practice.pay.application.merchant.ListMerchantsUseCase
 import paytech.practice.pay.application.port.outbound.AccountInvitationRepository
 import paytech.practice.pay.application.port.outbound.IdGenerator
+import paytech.practice.pay.application.port.outbound.InternalLoginAuditProjection
+import paytech.practice.pay.application.port.outbound.InternalLoginAuditRepository
 import paytech.practice.pay.application.port.outbound.InternalUserListProjection
 import paytech.practice.pay.application.port.outbound.InternalUserRepository
 import paytech.practice.pay.application.port.outbound.InvitationTokenHasher
@@ -40,13 +43,21 @@ class UseCaseConfiguration {
 	fun authenticateInternalUserUseCase(
 		internalUserRepository: InternalUserRepository,
 		passwordEncoder: PasswordEncoder,
+		internalLoginAuditRepository: InternalLoginAuditRepository,
+		idGenerator: IdGenerator,
 		clock: Clock,
 	): AuthenticateInternalUserUseCase =
 		AuthenticateInternalUserUseCase(
 			internalUserRepository = internalUserRepository,
 			passwordEncoder = passwordEncoder,
+			internalLoginAuditRepository = internalLoginAuditRepository,
+			idGenerator = idGenerator,
 			clock = clock,
 		)
+
+	@Bean
+	fun listInternalLoginAuditUseCase(internalLoginAuditProjection: InternalLoginAuditProjection): ListInternalLoginAuditUseCase =
+		ListInternalLoginAuditUseCase(internalLoginAuditProjection)
 
 	@Bean
 	fun issueInternalUserUseCase(

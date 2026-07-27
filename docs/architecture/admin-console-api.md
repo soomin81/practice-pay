@@ -47,6 +47,7 @@ PG 내부 운영자용 콘솔(브라우저 SPA, `frontend/admin`)이 호출하�
 | `GET /admin/merchants` | **내부 운영자 전원**(VIEWER 포함) | — | 200 목록 | 401 |
 | `POST /admin/merchants` | SUPER_ADMIN/OPERATOR | 필요 | 201 가맹점 + OWNER 초대 Token(1회) | 400 검증, 401, 403, 409 중복 |
 | `GET /admin/internal-users` | **SUPER_ADMIN만** | — | 200 명부 | 401, 403 |
+| `GET /admin/login-audit` | **SUPER_ADMIN만** | — | 200 로그인 감사(최신순) | 401, 403 |
 | `POST /admin/internal-users` | **SUPER_ADMIN만** | 필요 | 201 계정 + 초대 Token(1회) | **400 `role=SUPER_ADMIN`**, 400 검증, 401, 403, 409 중복 |
 | `POST /admin/internal-users/{id}/suspend` | **SUPER_ADMIN만** | 필요 | 200 상태(SUSPENDED) | 401, 403(자기 자신), 404, 409(마지막 SUPER_ADMIN·잘못된 전이) |
 | `POST /admin/internal-users/{id}/reactivate` | **SUPER_ADMIN만** | 필요 | 200 상태(ACTIVE) | 401, 403(자기 자신), 404, 409(잘못된 전이) |
@@ -136,5 +137,6 @@ PG 내부 운영자용 콘솔(브라우저 SPA, `frontend/admin`)이 호출하�
 ## 6. 다음 슬라이스로 미룬 것
 
 - 지금까지 이 문서가 미뤄 둔 항목(내부 직원 계정 관리, 내부 운영자의 가맹점 계정 관리,
-  만료 초대 정리 배치)은 전부 구현됐다. 남은 후속 후보는 로그인·API 감사 조회
-  ([identity-access-api-key.md](identity-access-api-key.md)의 9절 후속)다.
+  만료 초대 정리 배치)은 전부 구현됐고, **내부 운영자 로그인 감사 조회**(`GET /admin/login-audit`,
+  SUPER_ADMIN 전용)도 붙었다. 남은 후속 후보는 **가맹점 로그인·API Key 사용 감사**(같은 감사
+  인프라를 확장 — [identity-access-api-key.md](identity-access-api-key.md)의 9절 후속)다.

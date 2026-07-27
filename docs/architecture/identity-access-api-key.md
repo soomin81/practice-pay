@@ -381,7 +381,11 @@ key_prefix
 - 마지막 로그인 일시
 - 마지막 API Key 사용 일시
 
-향후 별도 감사 로그로 확장한다.
+**내부 운영자 로그인은 별도 감사 로그(`internal_login_audit`)로 확장됐다** — 집계 필드
+(`last_login_at`)와 달리 시도 하나하나(성공·실패·잠김, 없는 loginId 시도 포함)를 클라이언트
+IP와 함께 append-only로 남긴다. `AuthenticateInternalUserUseCase`가 기록하고
+`GET /admin/login-audit`(SUPER_ADMIN 전용)로 조회한다. 가맹점 로그인·API Key 사용 감사는 같은
+인프라를 확장하는 후속이다.
 
 ## 9. MVP와 후속 범위
 
@@ -400,6 +404,7 @@ MVP 포함:
 - API Key 폐기
 - `PAYMENT_CREATE`, `PAYMENT_READ` Scope
 - API Key 기반 결제 API 인증
+- 내부 운영자 로그인 감사 로그 기록·조회(8절, `GET /admin/login-audit`)
 
 후속:
 
@@ -412,4 +417,4 @@ MVP 포함:
 - Key 자동 Rotation
 - 계정 승인 워크플로
 - 세분화된 RBAC
-- 로그인·API 감사 조회
+- 가맹점 로그인·API Key 사용 감사 조회(내부 운영자 로그인 감사는 MVP에 포함됨 — 8절)

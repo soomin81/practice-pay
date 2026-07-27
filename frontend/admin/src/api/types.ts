@@ -37,6 +37,11 @@ export type ChangeInternalUserRoleResponse = JsonResponse<'admin-change-internal
 
 export type ListMerchantUsersResponse = JsonResponse<'admin-list-merchant-users', 200>
 export type MerchantUserSummary = ListMerchantUsersResponse['merchantUsers'][number]
+
+export type ListLoginAuditResponse = JsonResponse<'admin-login-audit', 200>
+export type LoginAuditEntry = ListLoginAuditResponse['entries'][number]
+/** 로그인 감사 결과. 백엔드 `InternalLoginOutcome`과 대응한다. */
+export type LoginOutcome = 'SUCCESS' | 'INVALID_CREDENTIALS' | 'LOCKED'
 export type ChangeMerchantUserStatusResponse = JsonResponse<'admin-change-merchant-user-status', 200>
 export type ChangeMerchantUserRoleResponse = JsonResponse<'admin-change-merchant-user-role', 200>
 

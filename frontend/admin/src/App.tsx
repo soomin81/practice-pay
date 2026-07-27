@@ -8,6 +8,7 @@ import { ConsoleShell } from '@/console/ConsoleShell'
 import { MerchantsPage } from '@/console/MerchantsPage'
 import { MerchantDetailPage } from '@/console/MerchantDetailPage'
 import { InternalUsersPage } from '@/console/InternalUsersPage'
+import { LoginAuditPage } from '@/console/LoginAuditPage'
 import { AcceptInvitationPage } from '@/invitation/AcceptInvitationPage'
 import { Button } from '@/components/ui/button'
 
@@ -58,6 +59,9 @@ function ConsoleRoutes() {
 				{/* 내부 직원 관리는 SUPER_ADMIN 전용 — 서버도 403이므로 라우트 자체를 막는다. */}
 				{canManageInternalUsers(String(me.role)) && (
 					<Route path="/internal-users" element={<InternalUsersPage />} />
+				)}
+				{canManageInternalUsers(String(me.role)) && (
+					<Route path="/login-audit" element={<LoginAuditPage />} />
 				)}
 				<Route path="*" element={<Navigate to="/" replace />} />
 			</Routes>

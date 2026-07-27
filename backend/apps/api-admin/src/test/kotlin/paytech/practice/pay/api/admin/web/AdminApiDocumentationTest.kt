@@ -41,6 +41,8 @@ import paytech.practice.pay.application.identity.ChangeMerchantUserRoleResult
 import paytech.practice.pay.application.identity.ChangeMerchantUserStatusResult
 import paytech.practice.pay.application.identity.IssueInternalUserResult
 import paytech.practice.pay.application.identity.IssueInternalUserUseCase
+import paytech.practice.pay.application.identity.ListInternalLoginAuditResult
+import paytech.practice.pay.application.identity.ListInternalLoginAuditUseCase
 import paytech.practice.pay.application.identity.ListInternalUsersResult
 import paytech.practice.pay.application.identity.ListInternalUsersUseCase
 import paytech.practice.pay.application.identity.ListMerchantUsersResult
@@ -48,11 +50,14 @@ import paytech.practice.pay.application.identity.RegisterMerchantResult
 import paytech.practice.pay.application.identity.RegisterMerchantUseCase
 import paytech.practice.pay.application.merchant.ListMerchantsResult
 import paytech.practice.pay.application.merchant.ListMerchantsUseCase
+import paytech.practice.pay.application.port.outbound.InternalLoginAuditEntry
 import paytech.practice.pay.application.port.outbound.InternalUserSummary
 import paytech.practice.pay.application.port.outbound.MerchantSummary
 import paytech.practice.pay.application.port.outbound.MerchantUserSummary
 import paytech.practice.pay.domain.identity.AccountStatus
 import paytech.practice.pay.domain.identity.Email
+import paytech.practice.pay.domain.identity.InternalLoginAuditId
+import paytech.practice.pay.domain.identity.InternalLoginOutcome
 import paytech.practice.pay.domain.identity.InternalUserId
 import paytech.practice.pay.domain.identity.InternalUserRole
 import paytech.practice.pay.domain.identity.LoginId
@@ -119,6 +124,7 @@ private fun adminResource(
 		MerchantController::class,
 		InternalUserController::class,
 		AdminMerchantUserController::class,
+		LoginAuditController::class,
 		AcceptAccountInvitationController::class,
 	],
 )
@@ -163,6 +169,9 @@ class AdminApiDocumentationTest : FunSpec() {
 
 	@MockkBean
 	lateinit var adminChangeMerchantUserRoleUseCase: AdminChangeMerchantUserRoleUseCase
+
+	@MockkBean
+	lateinit var listInternalLoginAuditUseCase: ListInternalLoginAuditUseCase
 
 	init {
 		extensions(SpringExtension)
@@ -692,6 +701,49 @@ class AdminApiDocumentationTest : FunSpec() {
 						.content(objectMapper.writeValueAsString(ChangeMerchantUserRoleRequest(role = "VIEWER"))),
 				).andExpect(status().isOk)
 				.andDo(document("admin-change-merchant-user-role", snippet))
+		}
+		test("document GET login audit") {
+			every { listInternalLoginAuditUseCase.execute(any()) } returns
+				ListInternalLoginAuditResult(
+					entries =
+						listOf(
+							InternalLoginAuditEntry(
+								auditId = InternalLoginAuditId("ila_001"),
+								internalUserId = InternalUserId("iu_op01"),
+								attemptedLoginId = "operator01",
+								userName = "테스트 운영자",
+								outcome = InternalLoginOutcome.SUCCESS,
+								clientIp = "203.0.113.7",
+								occurredAt = NOW,
+							),
+						),
+				)
+
+			val snippet =
+				adminResource(
+					summary = "로그인 감사 로그 조회",
+					description =
+						"**SUPER_ADMIN만** 조회할 수 있다 — 실패 시도·클라이언트 IP·누가 로그인했는지가 담겨 내부 직원 " +
+							"명부와 같은 민감도다. 최근 시도를 최신순으로 돌려준다(성공·실패·잠금). 없는 로그인 아이디로의 " +
+							"시도는 internalUserId·userName이 null이고 attemptedLoginId만 남는다.",
+					responseSchema = "ListLoginAuditResponse",
+					responseFields =
+						listOf(
+							fieldWithPath("entries").description("로그인 감사 기록 배열(최신순)"),
+							fieldWithPath("entries[].auditId").description("감사 기록 식별자"),
+							fieldWithPath("entries[].internalUserId").description("시도가 가리킨 계정 식별자. 없는 계정이면 null.").optional(),
+							fieldWithPath("entries[].attemptedLoginId").description("시도에 쓰인 로그인 아이디"),
+							fieldWithPath("entries[].userName").description("계정 이름. 없는 계정이면 null.").optional(),
+							fieldWithPath("entries[].outcome").description("SUCCESS | INVALID_CREDENTIALS | LOCKED"),
+							fieldWithPath("entries[].clientIp").description("요청 원격 주소. 없으면 null.").optional(),
+							fieldWithPath("entries[].occurredAt").description("시도 시각(UTC)"),
+						),
+				)
+
+			mockMvc
+				.perform(get("/admin/login-audit").with(authenticatedAs(SUPER_ADMIN)))
+				.andExpect(status().isOk)
+				.andDo(document("admin-login-audit", snippet))
 		}
 	}
 }

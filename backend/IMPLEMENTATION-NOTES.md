@@ -398,3 +398,16 @@
 - **새 포트 조회는 Projection이 아니라 Command Repository에 뒀다** — `findPendingExchangeSettlement()`와 같은 도메인 규칙 보조 조회다(`PaymentRepository.findExpirable`, `AccountInvitationRepository.findExpirablePending`+`findById`). 상태·시각 조건의 jOOQ select이고, 어댑터 통합 테스트가 "PENDING+만료만/CREATED·READY+만료만 잡힌다"를 고정한다.
 - **폴링 60초** — 만료 정리는 결제 흐름을 진행시키는 Confirm/Webhook/매도(10초)와 달리 급하지 않다. 다른 Worker와 다른 유일한 상수라 Scheduler KDoc에 근거를 남겼다.
 - **실물 검증(권장)은 아직 안 했다** — 로컬 MySQL에 `expires_at`이 과거인 `PENDING` 초대·`CREATED` 결제를 넣고 `apps:batch:bootRun` → 한 폴링 뒤 각각 `EXPIRED`가 되고 이미 `ACCEPTED`/`PROCESSING`인 것은 안 건드리는지 확인하는 것이 핵심이다. 배치 폴링·트랜잭션 경계는 유닛/통합 테스트가 못 잡는 층이다.
+
+## 내부 운영자 로그인 감사 로그(`internal_login_audit`, `GET /admin/login-audit`)
+
+로그인 이력이 집계 필드(`last_login_at` 등) 스냅샷으로만 남던 것을, 시도 하나하나를 남기는 append-only 감사 로그로 확장했다(`docs/architecture/identity-access-api-key.md` 8·9절). 내부 운영자 로그인에 한정한 첫 감사 인프라이고, 가맹점 로그인·API Key 사용 감사는 이 인프라를 확장하는 후속으로 미뤘다(사용자와 범위 확정).
+
+- **감사 이벤트를 도메인 불변 스냅샷으로 모델링했다**(`InternalLoginAudit`, 공개 생성자 `data class`) — `PaymentQuote`와 같은 취급이다(상태 전이 없는 append-only). 로깅 관심사를 도메인에 두는 게 과할 수도 있지만, 이 저장소가 `OutboxEvent`까지 도메인으로 모델링할 만큼 DDD 일관성을 지켜 와서 그 결에 맞췄다. Command 측 포트 `InternalLoginAuditRepository.append`와 읽기 측 `InternalLoginAuditProjection`으로 CQRS를 나눴다.
+- **기록은 `AuthenticateInternalUserUseCase`가 모든 종료 지점에서** 한다 — 성공/없는 loginId/잠김/비활성/비밀번호 불일치 직전마다 `append`. 별도 Use Case가 아니라 outbound 포트 직접 호출이라 `ApplicationPurityTest`("Use Case는 다른 Use Case를 호출하지 않는다")를 지킨다.
+- **실패도, 없는 계정도 남긴다.** 없는 `loginId` 시도는 `internal_user_seq`가 NULL(FK nullable)이고 `attempted_login_id`만 남긴다 — 존재하지 않는 계정 probing을 감사에서 볼 수 있다. 결과는 `SUCCESS`/`INVALID_CREDENTIALS`/`LOCKED` 셋으로, Use Case가 **클라이언트에는** 뭉개는 실패 사유를 감사에는 잠김만 구분해 남긴다.
+- **감사 write는 로그인 성공 저장과 트랜잭션으로 묶지 않는다** — 단일 DB 전제라 append가 실패하면 로그인도 실패하는 것을 감수한다(감사 누락을 조용히 삼키지 않는다). Use Case KDoc에 근거를 남겼다.
+- **클라이언트 IP는 `AdminLoginController`가 `HttpServletRequest.remoteAddr`로** 채워 Command로 넘긴다(Command에 `clientIp: String? = null` 기본값 — 기존 호출·테스트 안 깨짐). 프록시 뒤 실제 IP(`X-Forwarded-For`)는 다루지 않는다(9절 "로그인 IP 정책"과 함께 후속).
+- **조회는 전역 최근 목록**(`GET /admin/login-audit`, `occurred_at DESC` 최대 200건) — 계정별 상세 페이지가 없어 그걸 새로 만들기보다 "최근 로그인/실패"를 한 화면에 보여주는 쪽이 보안 모니터링에 맞다. **SUPER_ADMIN 전용**이라 `SecurityConfig`에 `authorize("/admin/login-audit", hasRole("SUPER_ADMIN"))`(GET 전용, 정확 경로)를 더했다. Projection은 `internal_user`를 LEFT JOIN해 `user_name`을 붙이되, 없는 계정 시도는 JOIN이 안 맞아 `null`로 나온다.
+- **새 테이블이라 Flyway V6 적용 후 `:db-core:jooqCodegen`을 먼저 돌려야 어댑터가 컴파일된다** — 이 순서를 어기면 생성 클래스가 없어 컴파일 실패한다(새 테이블 슬라이스의 고정 함정).
+- **실물 검증(권장)은 아직 안 했다** — `api-admin:bootRun`으로 틀린 비밀번호·성공·없는 loginId 로그인을 한 뒤 `GET /admin/login-audit`에 세 건이 결과·IP와 함께 최신순으로 보이고 VIEWER/OPERATOR는 403인지 확인하는 것이 핵심이다(Security 필터·오류 디스패치는 `@WebMvcTest`가 못 잡는 층).
