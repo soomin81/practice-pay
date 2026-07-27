@@ -11,6 +11,7 @@ import type {
 	IssueInternalUserResponse,
 	ListInternalUsersResponse,
 	ListLoginAuditResponse,
+	ListMerchantLoginAuditResponse,
 	ListMerchantUsersResponse,
 	ListMerchantsResponse,
 	MerchantUserRole,
@@ -146,6 +147,9 @@ export const adminApi = {
 
 	/** 로그인 감사 로그(최근 시도, 최신순). SUPER_ADMIN 전용 — 서버도 403으로 막는다. */
 	listLoginAudit: () => request<ListLoginAuditResponse>('/admin/login-audit'),
+
+	/** 가맹점 로그인 감사 로그(전 가맹점, 최신순). SUPER_ADMIN/OPERATOR 전용 — 서버도 403으로 막는다. */
+	listMerchantLoginAudit: () => request<ListMerchantLoginAuditResponse>('/admin/merchant-login-audit'),
 
 	issueInternalUser: (body: IssueInternalUserRequest) =>
 		request<IssueInternalUserResponse>('/admin/internal-users', { method: 'POST', body: JSON.stringify(body) }),

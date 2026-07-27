@@ -5,7 +5,9 @@ import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.verify
+import paytech.practice.pay.application.port.outbound.MerchantLoginAuditRepository
 import paytech.practice.pay.application.port.outbound.MerchantRepository
 import paytech.practice.pay.application.port.outbound.MerchantUserRepository
 import paytech.practice.pay.application.port.outbound.PasswordEncoder
@@ -13,6 +15,8 @@ import paytech.practice.pay.domain.identity.AccountStatus
 import paytech.practice.pay.domain.identity.Email
 import paytech.practice.pay.domain.identity.InternalUserId
 import paytech.practice.pay.domain.identity.LoginId
+import paytech.practice.pay.domain.identity.MerchantLoginAudit
+import paytech.practice.pay.domain.identity.MerchantLoginOutcome
 import paytech.practice.pay.domain.identity.MerchantUser
 import paytech.practice.pay.domain.identity.MerchantUserId
 import paytech.practice.pay.domain.identity.MerchantUserRole
@@ -57,11 +61,14 @@ private fun newUseCase(
 	merchantRepository: MerchantRepository,
 	merchantUserRepository: MerchantUserRepository,
 	passwordEncoder: PasswordEncoder = mockk { every { matches(CORRECT_PASSWORD, STORED_HASH) } returns true },
+	auditRepository: MerchantLoginAuditRepository = mockk(relaxed = true),
 ): AuthenticateMerchantUserUseCase =
 	AuthenticateMerchantUserUseCase(
 		merchantRepository = merchantRepository,
 		merchantUserRepository = merchantUserRepository,
 		passwordEncoder = passwordEncoder,
+		merchantLoginAuditRepository = auditRepository,
+		idGenerator = mockk { every { newId() } returns "audit-token" },
 		clock = FIXED_CLOCK,
 	)
 
@@ -148,5 +155,55 @@ class AuthenticateMerchantUserUseCaseTest :
 			}
 
 			verify(exactly = 0) { passwordEncoder.matches(any(), any()) }
+		}
+
+		test("a successful login records a SUCCESS audit entry with merchant, user and client IP") {
+			val merchantRepository = mockk<MerchantRepository> { every { findByCode(MERCHANT_CODE) } returns testMerchant() }
+			val merchantUserRepository = mockk<MerchantUserRepository>(relaxed = true)
+			every { merchantUserRepository.findByMerchantIdAndLoginId(MERCHANT_ID, LOGIN_ID) } returns activeUser()
+			val auditRepository = mockk<MerchantLoginAuditRepository>(relaxed = true)
+			val captured = slot<MerchantLoginAudit>()
+
+			newUseCase(merchantRepository, merchantUserRepository, auditRepository = auditRepository)
+				.execute(AuthenticateMerchantUserCommand(MERCHANT_CODE, LOGIN_ID, CORRECT_PASSWORD, clientIp = "203.0.113.7"))
+
+			verify(exactly = 1) { auditRepository.append(capture(captured)) }
+			captured.captured.outcome shouldBe MerchantLoginOutcome.SUCCESS
+			captured.captured.merchantId shouldBe MERCHANT_ID
+			captured.captured.merchantUserId shouldBe MerchantUserId("mu_test_001")
+			captured.captured.clientIp shouldBe "203.0.113.7"
+		}
+
+		test("an unknown merchantCode records INVALID_CREDENTIALS with a null merchant") {
+			val merchantRepository = mockk<MerchantRepository> { every { findByCode(MERCHANT_CODE) } returns null }
+			val merchantUserRepository = mockk<MerchantUserRepository>()
+			val auditRepository = mockk<MerchantLoginAuditRepository>(relaxed = true)
+			val captured = slot<MerchantLoginAudit>()
+
+			shouldThrow<InvalidCredentialsException> {
+				newUseCase(merchantRepository, merchantUserRepository, auditRepository = auditRepository).execute(command())
+			}
+
+			verify(exactly = 1) { auditRepository.append(capture(captured)) }
+			captured.captured.outcome shouldBe MerchantLoginOutcome.INVALID_CREDENTIALS
+			captured.captured.merchantId shouldBe null
+			captured.captured.merchantUserId shouldBe null
+			captured.captured.attemptedMerchantCode shouldBe MERCHANT_CODE.value
+		}
+
+		test("an unknown loginId records with the merchant set but a null user") {
+			val merchantRepository = mockk<MerchantRepository> { every { findByCode(MERCHANT_CODE) } returns testMerchant() }
+			val merchantUserRepository =
+				mockk<MerchantUserRepository> { every { findByMerchantIdAndLoginId(MERCHANT_ID, LOGIN_ID) } returns null }
+			val auditRepository = mockk<MerchantLoginAuditRepository>(relaxed = true)
+			val captured = slot<MerchantLoginAudit>()
+
+			shouldThrow<InvalidCredentialsException> {
+				newUseCase(merchantRepository, merchantUserRepository, auditRepository = auditRepository).execute(command())
+			}
+
+			verify(exactly = 1) { auditRepository.append(capture(captured)) }
+			captured.captured.merchantId shouldBe MERCHANT_ID
+			captured.captured.merchantUserId shouldBe null
 		}
 	})

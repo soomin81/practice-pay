@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
 import { useLogout } from '@/auth/useAuth'
-import { canManageInternalUsers, type MeResponse } from '@/api/types'
+import { canManageInternalUsers, canManageMerchantAccounts, type MeResponse } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 
@@ -30,6 +30,10 @@ export function ConsoleShell({ me, children }: { me: MeResponse; children: React
 							<ConsoleNavLink to="/internal-users">내부 직원</ConsoleNavLink>
 							<ConsoleNavLink to="/login-audit">로그인 감사</ConsoleNavLink>
 						</>
+					)}
+					{/* 가맹점 로그인 감사는 SUPER_ADMIN/OPERATOR가 본다(가맹점 업무 담당). */}
+					{canManageMerchantAccounts(String(me.role)) && (
+						<ConsoleNavLink to="/merchant-login-audit">가맹점 로그인</ConsoleNavLink>
 					)}
 				</nav>
 			</header>

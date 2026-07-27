@@ -94,6 +94,9 @@ class SecurityConfig {
 				// 로그인 감사 로그도 SUPER_ADMIN 전용 — 실패 시도·IP·누가 로그인했는지가 담겨
 				// 내부 직원 명부와 같은 민감도다. GET만 있어 정확 경로 규칙으로 충분하다.
 				authorize("/admin/login-audit", hasRole("SUPER_ADMIN"))
+				// 가맹점 로그인 감사는 SUPER_ADMIN/OPERATOR — OPERATOR도 가맹점 업무·계정 관리를
+				// 맡으므로 내부 로그인 감사(SUPER_ADMIN 전용)와 달리 포함한다(GET 전용, 정확 경로).
+				authorize("/admin/merchant-login-audit", hasAnyRole("SUPER_ADMIN", "OPERATOR"))
 				// 가맹점 관련 POST(등록 + 가맹점 사용자 관리)를 SUPER_ADMIN/OPERATOR로 좁힌다.
 				// HttpMethod.POST로만 좁혀 GET은 인증된 내부 사용자 전원(VIEWER 포함)에게 열려
 				// 있다 — 가맹점 목록·가맹점 사용자 명부 조회가 VIEWER의 조회 업무다. 와일드카드는

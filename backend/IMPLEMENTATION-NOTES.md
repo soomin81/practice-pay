@@ -411,3 +411,14 @@
 - **조회는 전역 최근 목록**(`GET /admin/login-audit`, `occurred_at DESC` 최대 200건) — 계정별 상세 페이지가 없어 그걸 새로 만들기보다 "최근 로그인/실패"를 한 화면에 보여주는 쪽이 보안 모니터링에 맞다. **SUPER_ADMIN 전용**이라 `SecurityConfig`에 `authorize("/admin/login-audit", hasRole("SUPER_ADMIN"))`(GET 전용, 정확 경로)를 더했다. Projection은 `internal_user`를 LEFT JOIN해 `user_name`을 붙이되, 없는 계정 시도는 JOIN이 안 맞아 `null`로 나온다.
 - **새 테이블이라 Flyway V6 적용 후 `:db-core:jooqCodegen`을 먼저 돌려야 어댑터가 컴파일된다** — 이 순서를 어기면 생성 클래스가 없어 컴파일 실패한다(새 테이블 슬라이스의 고정 함정).
 - **실물 검증(권장)은 아직 안 했다** — `api-admin:bootRun`으로 틀린 비밀번호·성공·없는 loginId 로그인을 한 뒤 `GET /admin/login-audit`에 세 건이 결과·IP와 함께 최신순으로 보이고 VIEWER/OPERATOR는 403인지 확인하는 것이 핵심이다(Security 필터·오류 디스패치는 `@WebMvcTest`가 못 잡는 층).
+
+## 가맹점 로그인 감사 로그(`merchant_login_audit`) — 기록은 api-merchant, 조회는 api-admin
+
+직전 `internal_login_audit`을 가맹점 관리자 로그인으로 확장했다. 대부분 그 슬라이스의 직접 미러라 여기는 갈리는 지점만 남긴다.
+
+- **기록 앱과 조회 앱이 다르다 — 감사 인프라를 두 앱에 나눈 첫 사례다.** 로그인 Use Case(`AuthenticateMerchantUserUseCase`)가 있는 **api-merchant**가 `MerchantLoginAuditRepository.append`로 기록하고, 내부 운영자가 **전 가맹점**을 감독하는 **api-admin**이 `MerchantLoginAuditProjection`으로 조회한다. 두 앱 모두 `infra.persistence.jooq`를 컴포넌트 스캔하므로 어댑터(@Repository)는 양쪽에 다 잡히지만, Composition Root(`UseCaseConfiguration`)에서는 각 앱이 자기가 쓰는 포트만 배선한다(api-merchant는 append, api-admin은 projection+list use case). 조회 위치를 가맹점 콘솔이 아니라 admin으로 정한 것은 사용자와 확정했다(전 가맹점 지원·보안 감독).
+- **merchantCode 테넌시가 얽힌다.** `AuthenticateMerchantUserUseCase`는 merchantCode로 가맹점을 먼저 찾으므로, 없는 merchantCode 시도는 `merchantId=null`(+`merchantUserId=null`), 가맹점은 찾았지만 loginId가 없으면 `merchantId`만 있고 `merchantUserId=null`이다. 시도한 merchantCode 원문과 nullable merchantId/merchantUserId를 함께 남긴다. Projection은 `merchant`·`merchant_user`를 둘 다 LEFT JOIN해 가맹점 이름·사용자 이름을 붙이되 없는 쪽은 null이다.
+- **`attemptedMerchantCode`를 `MerchantCode` VO가 아니라 `String`으로 뒀다 — ArchUnit이 잡았다.** 처음엔 도메인 `MerchantLoginAudit`에 `attemptedMerchantCode: MerchantCode`로 뒀는데 `DomainPurityTest`("애그리게이트는 다른 애그리게이트를 `*Id`로만 참조한다")가 실패했다 — `MerchantCode`는 `Merchant` 애그리게이트의 VO다(`MerchantId`는 `*Id`라 허용, `LoginId`는 `domain.identity`의 공유 VO라 허용). 감사는 원문 시도값을 남기는 것이라 String이 의미상으로도 맞다. **다른 애그리게이트의 비-Id VO를 도메인 감사 기록에 넣지 않는다** — 원문 문자열로 담는다.
+- **`MerchantLoginOutcome`은 `InternalLoginOutcome`과 값이 같지만 공유하지 않고 병렬로 뒀다** — 내부/가맹점이 의도적으로 나뉜 별개 자격증명 영역(ADR-006)이라 각자 타입을 갖게 했다(한쪽 변경이 새지 않게). 인가는 내부 로그인 감사(SUPER_ADMIN 전용)와 달리 **SUPER_ADMIN/OPERATOR**다 — OPERATOR가 "가맹점·결제·운영 업무"·가맹점 계정 관리를 맡기 때문. 프론트 게이트도 그래서 `canManageMerchantAccounts`(SUPER_ADMIN||OPERATOR)로 다르다.
+- **새 테이블이라 Flyway V7 적용 + `:db-core:jooqCodegen`이 어댑터 컴파일보다 먼저**(V6과 같은 순서).
+- **실물 검증(권장)은 아직 안 했다** — 두 앱이 같은 DB를 봐야 한다: api-merchant `bootRun`으로 틀린 비밀번호·성공·없는 merchantCode 로그인 → api-admin `bootRun`의 `GET /admin/merchant-login-audit`에 세 건이 가맹점·결과·IP와 함께 보이고 VIEWER 403·OPERATOR 200인지 확인.

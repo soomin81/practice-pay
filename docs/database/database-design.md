@@ -30,6 +30,7 @@
 13. `merchant_api_key`
 14. `merchant_api_key_scope`
 15. `internal_login_audit`
+16. `merchant_login_audit`
 
 ## 주요 Unique
 
@@ -49,11 +50,12 @@
 - AccountInvitation: `token_hash`
 - MerchantApiKey: `key_prefix`
 - InternalLoginAudit: `internal_login_audit_id`
+- MerchantLoginAudit: `merchant_login_audit_id`
 
 ## 주요 인덱스
 
 - 결제 만료: `payment_status + expires_at`
-- 로그인 감사 조회: `internal_login_audit.occurred_at`(최신순 최근 목록)
+- 로그인 감사 조회: `internal_login_audit.occurred_at`·`merchant_login_audit.occurred_at`(최신순 최근 목록)
 - Confirm Worker: `transaction_status + updated_at`
 - 정산 배치 확장: `receivable_status + eligible_date + merchant_seq`
 - Webhook 재시도: `delivery_status + next_retry_at`
@@ -123,6 +125,17 @@ append-only 로그다(전이·수정 없음). `internal_user_seq`는 FK지만 **
 `login_id`로의 로그인 시도는 대응 계정이 없어 NULL로 남기고 `attempted_login_id`만 기록한다.
 `login_outcome`은 `SUCCESS`/`INVALID_CREDENTIALS`/`LOCKED` CHECK로 제한한다. `client_ip`는 요청
 원격 주소(프록시 뒤 실제 IP는 MVP 범위 밖).
+
+### MerchantLoginAudit
+
+```text
+merchant_login_audit_id (공개 ID, UNIQUE)
+```
+
+`InternalLoginAudit`의 가맹점판이다. 가맹점 로그인은 merchant_code로 가맹점을 먼저 확정하므로,
+`merchant_seq`(없는 merchantCode 시도면 NULL)와 `merchant_user_seq`(없는 loginId 시도면 NULL)
+둘 다 FK이자 NULL 허용이고, `attempted_merchant_code`/`attempted_login_id`에 시도 원문을 남긴다.
+기록은 api-merchant가, 조회는 api-admin(전 가맹점)이 한다.
 
 ## 계정 생성 트랜잭션
 

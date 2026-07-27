@@ -45,6 +45,8 @@ import paytech.practice.pay.application.identity.ListInternalLoginAuditResult
 import paytech.practice.pay.application.identity.ListInternalLoginAuditUseCase
 import paytech.practice.pay.application.identity.ListInternalUsersResult
 import paytech.practice.pay.application.identity.ListInternalUsersUseCase
+import paytech.practice.pay.application.identity.ListMerchantLoginAuditResult
+import paytech.practice.pay.application.identity.ListMerchantLoginAuditUseCase
 import paytech.practice.pay.application.identity.ListMerchantUsersResult
 import paytech.practice.pay.application.identity.RegisterMerchantResult
 import paytech.practice.pay.application.identity.RegisterMerchantUseCase
@@ -52,6 +54,7 @@ import paytech.practice.pay.application.merchant.ListMerchantsResult
 import paytech.practice.pay.application.merchant.ListMerchantsUseCase
 import paytech.practice.pay.application.port.outbound.InternalLoginAuditEntry
 import paytech.practice.pay.application.port.outbound.InternalUserSummary
+import paytech.practice.pay.application.port.outbound.MerchantLoginAuditEntry
 import paytech.practice.pay.application.port.outbound.MerchantSummary
 import paytech.practice.pay.application.port.outbound.MerchantUserSummary
 import paytech.practice.pay.domain.identity.AccountStatus
@@ -61,6 +64,8 @@ import paytech.practice.pay.domain.identity.InternalLoginOutcome
 import paytech.practice.pay.domain.identity.InternalUserId
 import paytech.practice.pay.domain.identity.InternalUserRole
 import paytech.practice.pay.domain.identity.LoginId
+import paytech.practice.pay.domain.identity.MerchantLoginAuditId
+import paytech.practice.pay.domain.identity.MerchantLoginOutcome
 import paytech.practice.pay.domain.identity.MerchantUserId
 import paytech.practice.pay.domain.identity.MerchantUserRole
 import paytech.practice.pay.domain.merchant.MerchantCode
@@ -125,6 +130,7 @@ private fun adminResource(
 		InternalUserController::class,
 		AdminMerchantUserController::class,
 		LoginAuditController::class,
+		MerchantLoginAuditController::class,
 		AcceptAccountInvitationController::class,
 	],
 )
@@ -172,6 +178,9 @@ class AdminApiDocumentationTest : FunSpec() {
 
 	@MockkBean
 	lateinit var listInternalLoginAuditUseCase: ListInternalLoginAuditUseCase
+
+	@MockkBean
+	lateinit var listMerchantLoginAuditUseCase: ListMerchantLoginAuditUseCase
 
 	init {
 		extensions(SpringExtension)
@@ -744,6 +753,54 @@ class AdminApiDocumentationTest : FunSpec() {
 				.perform(get("/admin/login-audit").with(authenticatedAs(SUPER_ADMIN)))
 				.andExpect(status().isOk)
 				.andDo(document("admin-login-audit", snippet))
+		}
+		test("document GET merchant login audit") {
+			every { listMerchantLoginAuditUseCase.execute(any()) } returns
+				ListMerchantLoginAuditResult(
+					entries =
+						listOf(
+							MerchantLoginAuditEntry(
+								auditId = MerchantLoginAuditId("mla_001"),
+								merchantId = MerchantId("mrc_001"),
+								merchantName = "테스트 가맹점",
+								attemptedMerchantCode = "test-merchant",
+								attemptedLoginId = "owner01",
+								userName = "오너",
+								outcome = MerchantLoginOutcome.SUCCESS,
+								clientIp = "203.0.113.7",
+								occurredAt = NOW,
+							),
+						),
+				)
+
+			val snippet =
+				adminResource(
+					summary = "가맹점 로그인 감사 로그 조회",
+					description =
+						"**SUPER_ADMIN/OPERATOR**가 조회할 수 있다 — 내부 직원 로그인 감사(SUPER_ADMIN 전용)와 달리 " +
+							"OPERATOR도 가맹점 업무를 맡아 포함한다. 전 가맹점의 로그인 시도(성공·실패·잠김)를 최신순으로 " +
+							"돌려준다. 기록은 api-merchant가 하고 조회는 이 콘솔이 한다. 없는 merchantCode 시도는 " +
+							"merchantId·merchantName이 null이고, 없는 loginId 시도는 userName이 null이다.",
+					responseSchema = "ListMerchantLoginAuditResponse",
+					responseFields =
+						listOf(
+							fieldWithPath("entries").description("가맹점 로그인 감사 기록 배열(최신순)"),
+							fieldWithPath("entries[].auditId").description("감사 기록 식별자"),
+							fieldWithPath("entries[].merchantId").description("시도가 가리킨 가맹점 식별자. 없는 가맹점이면 null.").optional(),
+							fieldWithPath("entries[].merchantName").description("가맹점 이름. 없는 가맹점이면 null.").optional(),
+							fieldWithPath("entries[].attemptedMerchantCode").description("시도에 쓰인 가맹점 코드"),
+							fieldWithPath("entries[].attemptedLoginId").description("시도에 쓰인 로그인 아이디"),
+							fieldWithPath("entries[].userName").description("계정 이름. 없는 계정이면 null.").optional(),
+							fieldWithPath("entries[].outcome").description("SUCCESS | INVALID_CREDENTIALS | LOCKED"),
+							fieldWithPath("entries[].clientIp").description("요청 원격 주소. 없으면 null.").optional(),
+							fieldWithPath("entries[].occurredAt").description("시도 시각(UTC)"),
+						),
+				)
+
+			mockMvc
+				.perform(get("/admin/merchant-login-audit").with(authenticatedAs(OPERATOR)))
+				.andExpect(status().isOk)
+				.andDo(document("admin-merchant-login-audit", snippet))
 		}
 	}
 }

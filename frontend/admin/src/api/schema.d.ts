@@ -108,6 +108,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/merchant-login-audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 가맹점 로그인 감사 로그 조회
+         * @description **SUPER_ADMIN/OPERATOR**가 조회할 수 있다 — 내부 직원 로그인 감사(SUPER_ADMIN 전용)와 달리 OPERATOR도 가맹점 업무를 맡아 포함한다. 전 가맹점의 로그인 시도(성공·실패·잠김)를 최신순으로 돌려준다. 기록은 api-merchant가 하고 조회는 이 콘솔이 한다. 없는 merchantCode 시도는 merchantId·merchantName이 null이고, 없는 loginId 시도는 userName이 null이다.
+         */
+        get: operations["admin-merchant-login-audit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/merchants": {
         parameters: {
             query?: never;
@@ -289,6 +309,30 @@ export interface components {
             /** @description 내부 운영자 식별자 */
             internalUserId: string;
         };
+        /** ListMerchantLoginAuditResponse */
+        ListMerchantLoginAuditResponse: {
+            /** @description 가맹점 로그인 감사 기록 배열(최신순) */
+            entries: {
+                /** @description 감사 기록 식별자 */
+                auditId: string;
+                /** @description 시도 시각(UTC) */
+                occurredAt: string;
+                /** @description 시도가 가리킨 가맹점 식별자. 없는 가맹점이면 null. */
+                merchantId?: string | null;
+                /** @description 요청 원격 주소. 없으면 null. */
+                clientIp?: string | null;
+                /** @description 시도에 쓰인 로그인 아이디 */
+                attemptedLoginId: string;
+                /** @description 계정 이름. 없는 계정이면 null. */
+                userName?: string | null;
+                /** @description SUCCESS | INVALID_CREDENTIALS | LOCKED */
+                outcome: string;
+                /** @description 시도에 쓰인 가맹점 코드 */
+                attemptedMerchantCode: string;
+                /** @description 가맹점 이름. 없는 가맹점이면 null. */
+                merchantName?: string | null;
+            }[];
+        };
         /** ChangeMerchantUserRoleRequest */
         ChangeMerchantUserRoleRequest: {
             /** @description 변경할 역할(ADMIN | VIEWER) */
@@ -342,7 +386,7 @@ export interface components {
             /** @description 가맹점 이름 */
             merchantName: string;
         };
-        "admin-merchants-mrc_001-users-mu_001-suspend-33084672": Record<string, never>;
+        "admin-logout-33084672": Record<string, never>;
         /** ListLoginAuditResponse */
         ListLoginAuditResponse: {
             /** @description 로그인 감사 기록 배열(최신순) */
@@ -594,7 +638,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["admin-merchants-mrc_001-users-mu_001-suspend-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["admin-logout-33084672"];
             };
         };
         responses: {
@@ -623,6 +667,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminMeResponse"];
+                };
+            };
+        };
+    };
+    "admin-merchant-login-audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 200 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListMerchantLoginAuditResponse"];
                 };
             };
         };
@@ -728,7 +792,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["admin-merchants-mrc_001-users-mu_001-suspend-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["admin-logout-33084672"];
             };
         };
         responses: {
@@ -796,7 +860,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["admin-merchants-mrc_001-users-mu_001-suspend-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["admin-logout-33084672"];
             };
         };
         responses: {

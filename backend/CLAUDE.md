@@ -34,6 +34,10 @@ apps/
                      ListInternalLoginAuditUseCase(GET /admin/login-audit, SUPER_ADMIN 전용 —
                      로그인 시도 감사 로그. AuthenticateInternalUserUseCase가 성공·실패·잠김을
                      internal_login_audit에 기록한다),
+                     ListMerchantLoginAuditUseCase(GET /admin/merchant-login-audit,
+                     SUPER_ADMIN/OPERATOR — 전 가맹점 로그인 감사. 기록은 api-merchant의
+                     AuthenticateMerchantUserUseCase가 merchant_login_audit에 하고, 조회만 이
+                     앱이 한다),
                      ChangeInternalUserStatusUseCase/ChangeInternalUserRoleUseCase
                      (POST /admin/internal-users/{id}/suspend|reactivate|terminate|role,
                      SUPER_ADMIN 전용 — "최소 하나의 활성 SUPER_ADMIN을 유지한다" 불변식,
@@ -54,7 +58,9 @@ apps/
                      (계약 문서 docs/architecture/admin-console-api.md).
   api-merchant/      실제 Gradle 서브프로젝트, 독립 배포 가능한 Spring Boot 앱 — webmvc + jooq + security,
                      modules:application + modules:infra-persistence에 의존한다. AuthenticateMerchantUserUseCase
-                     (POST /merchant/login), AcceptAccountInvitationUseCase(POST /merchant/account-invitations/accept,
+                     (POST /merchant/login — 로그인 성공·실패·잠김을 merchant_login_audit에
+                     기록한다. 조회는 api-admin이 한다),
+                     AcceptAccountInvitationUseCase(POST /merchant/account-invitations/accept,
                      비인증, api-admin과 같은 공용 Use Case를 재사용), InviteMerchantSubAccountUseCase
                      (POST /merchant/merchant-users, OWNER/ADMIN), ListMerchantUsersUseCase
                      (GET /merchant/merchant-users, OWNER/ADMIN — 팀 명부),
@@ -456,7 +462,7 @@ gradlew.bat :db-core:build                                 # jooqCodegen이 먼�
     ```
 
     되돌리려면 `flyway_schema_history` 테이블을 지우면 된다. DB를 새로 만들어도 되지만(`docker compose down -v`) 시드를 다시 심어야 한다.
-- **버전 번호가 V1/V3/V5/V6으로 V2/V4 자리가 비어 있는 건 정상이다.** 원래 V2/V4였던 개발용 시드를 `db/seed/`로 옮기면서 생긴 자리다(아래 "시드 데이터" 참고). 이미 적용된 이력을 깨뜨리지 않으려고 남은 파일의 번호는 그대로 뒀다 — Flyway는 버전이 연속이 아니어도 정상 동작한다. **V6은 `internal_login_audit`(내부 운영자 로그인 감사 로그)을 추가한다** — 새 테이블을 만드는 마이그레이션이라 적용 후 `:db-core:jooqCodegen`을 다시 돌려야 어댑터가 그 테이블 클래스를 참조할 수 있다.
+- **버전 번호가 V1/V3/V5/V6/V7로 V2/V4 자리가 비어 있는 건 정상이다.** 원래 V2/V4였던 개발용 시드를 `db/seed/`로 옮기면서 생긴 자리다(아래 "시드 데이터" 참고). 이미 적용된 이력을 깨뜨리지 않으려고 남은 파일의 번호는 그대로 뒀다 — Flyway는 버전이 연속이 아니어도 정상 동작한다. **V6은 `internal_login_audit`, V7은 `merchant_login_audit`(각각 내부·가맹점 로그인 감사 로그)을 추가한다** — 새 테이블을 만드는 마이그레이션이라 적용 후 `:db-core:jooqCodegen`을 다시 돌려야 어댑터가 그 테이블 클래스를 참조할 수 있다.
 
 ### 시드 데이터(`db/seed/`) — 운영에 적용하지 않는다
 

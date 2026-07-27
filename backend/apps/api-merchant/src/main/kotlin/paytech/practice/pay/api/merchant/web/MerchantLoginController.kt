@@ -47,6 +47,7 @@ class MerchantLoginController(
 					merchantCode = MerchantCode(request.merchantCode),
 					loginId = LoginId(request.loginId),
 					password = request.password,
+					clientIp = httpRequest.remoteAddr,
 				),
 			)
 

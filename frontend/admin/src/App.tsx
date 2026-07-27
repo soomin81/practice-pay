@@ -2,13 +2,14 @@ import type { ReactNode } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { useMe } from '@/auth/useAuth'
 import { AdminApiError } from '@/api/client'
-import { canManageInternalUsers } from '@/api/types'
+import { canManageInternalUsers, canManageMerchantAccounts } from '@/api/types'
 import { LoginPage } from '@/console/LoginPage'
 import { ConsoleShell } from '@/console/ConsoleShell'
 import { MerchantsPage } from '@/console/MerchantsPage'
 import { MerchantDetailPage } from '@/console/MerchantDetailPage'
 import { InternalUsersPage } from '@/console/InternalUsersPage'
 import { LoginAuditPage } from '@/console/LoginAuditPage'
+import { MerchantLoginAuditPage } from '@/console/MerchantLoginAuditPage'
 import { AcceptInvitationPage } from '@/invitation/AcceptInvitationPage'
 import { Button } from '@/components/ui/button'
 
@@ -62,6 +63,9 @@ function ConsoleRoutes() {
 				)}
 				{canManageInternalUsers(String(me.role)) && (
 					<Route path="/login-audit" element={<LoginAuditPage />} />
+				)}
+				{canManageMerchantAccounts(String(me.role)) && (
+					<Route path="/merchant-login-audit" element={<MerchantLoginAuditPage />} />
 				)}
 				<Route path="*" element={<Navigate to="/" replace />} />
 			</Routes>

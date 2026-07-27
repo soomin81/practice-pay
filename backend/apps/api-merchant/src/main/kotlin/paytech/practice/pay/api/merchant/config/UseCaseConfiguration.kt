@@ -20,6 +20,7 @@ import paytech.practice.pay.application.port.outbound.InternalUserRepository
 import paytech.practice.pay.application.port.outbound.InvitationTokenHasher
 import paytech.practice.pay.application.port.outbound.MerchantApiKeyListProjection
 import paytech.practice.pay.application.port.outbound.MerchantApiKeyRepository
+import paytech.practice.pay.application.port.outbound.MerchantLoginAuditRepository
 import paytech.practice.pay.application.port.outbound.MerchantRepository
 import paytech.practice.pay.application.port.outbound.MerchantUserListProjection
 import paytech.practice.pay.application.port.outbound.MerchantUserRepository
@@ -42,12 +43,16 @@ class UseCaseConfiguration {
 		merchantRepository: MerchantRepository,
 		merchantUserRepository: MerchantUserRepository,
 		passwordEncoder: PasswordEncoder,
+		merchantLoginAuditRepository: MerchantLoginAuditRepository,
+		idGenerator: IdGenerator,
 		clock: Clock,
 	): AuthenticateMerchantUserUseCase =
 		AuthenticateMerchantUserUseCase(
 			merchantRepository = merchantRepository,
 			merchantUserRepository = merchantUserRepository,
 			passwordEncoder = passwordEncoder,
+			merchantLoginAuditRepository = merchantLoginAuditRepository,
+			idGenerator = idGenerator,
 			clock = clock,
 		)
 

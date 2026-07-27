@@ -12,6 +12,7 @@ import paytech.practice.pay.application.identity.ChangeInternalUserStatusUseCase
 import paytech.practice.pay.application.identity.IssueInternalUserUseCase
 import paytech.practice.pay.application.identity.ListInternalLoginAuditUseCase
 import paytech.practice.pay.application.identity.ListInternalUsersUseCase
+import paytech.practice.pay.application.identity.ListMerchantLoginAuditUseCase
 import paytech.practice.pay.application.identity.RegisterMerchantUseCase
 import paytech.practice.pay.application.merchant.ListMerchantsUseCase
 import paytech.practice.pay.application.port.outbound.AccountInvitationRepository
@@ -22,6 +23,7 @@ import paytech.practice.pay.application.port.outbound.InternalUserListProjection
 import paytech.practice.pay.application.port.outbound.InternalUserRepository
 import paytech.practice.pay.application.port.outbound.InvitationTokenHasher
 import paytech.practice.pay.application.port.outbound.MerchantListProjection
+import paytech.practice.pay.application.port.outbound.MerchantLoginAuditProjection
 import paytech.practice.pay.application.port.outbound.MerchantRepository
 import paytech.practice.pay.application.port.outbound.MerchantUserListProjection
 import paytech.practice.pay.application.port.outbound.MerchantUserRepository
@@ -58,6 +60,10 @@ class UseCaseConfiguration {
 	@Bean
 	fun listInternalLoginAuditUseCase(internalLoginAuditProjection: InternalLoginAuditProjection): ListInternalLoginAuditUseCase =
 		ListInternalLoginAuditUseCase(internalLoginAuditProjection)
+
+	@Bean
+	fun listMerchantLoginAuditUseCase(merchantLoginAuditProjection: MerchantLoginAuditProjection): ListMerchantLoginAuditUseCase =
+		ListMerchantLoginAuditUseCase(merchantLoginAuditProjection)
 
 	@Bean
 	fun issueInternalUserUseCase(
