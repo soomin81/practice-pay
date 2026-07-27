@@ -3,9 +3,9 @@ package paytech.practice.pay.infra.persistence.jooq.quote
 import org.jooq.DSLContext
 import org.springframework.stereotype.Repository
 import paytech.practice.pay.application.port.outbound.PaymentQuoteRepository
-import paytech.practice.pay.dbcore.jooq.tables.Payment.Companion.PAYMENT
 import paytech.practice.pay.dbcore.jooq.tables.PaymentQuote.Companion.PAYMENT_QUOTE
 import paytech.practice.pay.domain.quote.PaymentQuote
+import paytech.practice.pay.infra.persistence.jooq.paymentSeq
 import paytech.practice.pay.infra.persistence.jooq.toUtcLocalDateTime
 
 /**
@@ -27,7 +27,7 @@ class PaymentQuoteRepositoryAdapter(
 			.newRecord(PAYMENT_QUOTE)
 			.apply {
 				paymentQuoteId = quote.id.value
-				paymentSeq = resolvePaymentSeq(quote.paymentId.value)
+				paymentSeq = dsl.paymentSeq(quote.paymentId)
 				marketProviderCode = quote.marketProviderCode
 				baseAssetCode = quote.baseAsset.code
 				quoteCurrency = "KRW"
@@ -41,12 +41,4 @@ class PaymentQuoteRepositoryAdapter(
 				createdAt = quote.createdAt.toUtcLocalDateTime()
 			}.insert()
 	}
-
-	private fun resolvePaymentSeq(paymentId: String): Long =
-		dsl
-			.select(PAYMENT.PAYMENT_SEQ)
-			.from(PAYMENT)
-			.where(PAYMENT.PAYMENT_ID.eq(paymentId))
-			.fetchOne(PAYMENT.PAYMENT_SEQ)
-			?: error("Payment($paymentId)를 찾을 수 없습니다.")
 }

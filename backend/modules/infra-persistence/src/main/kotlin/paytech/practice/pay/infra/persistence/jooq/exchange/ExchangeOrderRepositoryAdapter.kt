@@ -4,7 +4,6 @@ import org.jooq.DSLContext
 import org.springframework.stereotype.Repository
 import paytech.practice.pay.application.port.outbound.ExchangeOrderRepository
 import paytech.practice.pay.dbcore.jooq.tables.ExchangeOrder.Companion.EXCHANGE_ORDER
-import paytech.practice.pay.dbcore.jooq.tables.Payment.Companion.PAYMENT
 import paytech.practice.pay.dbcore.jooq.tables.records.ExchangeOrderRecord
 import paytech.practice.pay.domain.exchange.ClientOrderId
 import paytech.practice.pay.domain.exchange.ExchangeOrder
@@ -16,6 +15,7 @@ import paytech.practice.pay.domain.shared.Asset
 import paytech.practice.pay.domain.shared.ExchangeRate
 import paytech.practice.pay.domain.shared.Money
 import paytech.practice.pay.domain.shared.TokenAmount
+import paytech.practice.pay.infra.persistence.jooq.paymentSeq
 import paytech.practice.pay.infra.persistence.jooq.toUtcInstant
 import paytech.practice.pay.infra.persistence.jooq.toUtcLocalDateTime
 
@@ -78,21 +78,13 @@ class ExchangeOrderRepositoryAdapter(
 	override fun findByPaymentId(paymentId: PaymentId): ExchangeOrder? =
 		dsl
 			.selectFrom(EXCHANGE_ORDER)
-			.where(EXCHANGE_ORDER.PAYMENT_SEQ.eq(resolvePaymentSeq(paymentId)))
+			.where(EXCHANGE_ORDER.PAYMENT_SEQ.eq(dsl.paymentSeq(paymentId)))
 			.fetchOne()
 			?.toDomain(paymentId)
 
-	private fun resolvePaymentSeq(paymentId: PaymentId): Long =
-		dsl
-			.select(PAYMENT.PAYMENT_SEQ)
-			.from(PAYMENT)
-			.where(PAYMENT.PAYMENT_ID.eq(paymentId.value))
-			.fetchOne(PAYMENT.PAYMENT_SEQ)
-			?: error("Payment(${paymentId.value})를 찾을 수 없습니다.")
-
 	private fun ExchangeOrderRecord.fillFrom(exchangeOrder: ExchangeOrder) {
 		exchangeOrderId = exchangeOrder.id.value
-		paymentSeq = resolvePaymentSeq(exchangeOrder.paymentId)
+		paymentSeq = dsl.paymentSeq(exchangeOrder.paymentId)
 		exchangeProviderCode = exchangeOrder.exchangeProviderCode
 		clientOrderId = exchangeOrder.clientOrderId.value
 		providerOrderId = exchangeOrder.providerOrderId

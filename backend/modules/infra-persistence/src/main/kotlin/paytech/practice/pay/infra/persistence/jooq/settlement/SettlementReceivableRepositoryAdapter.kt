@@ -3,19 +3,19 @@ package paytech.practice.pay.infra.persistence.jooq.settlement
 import org.jooq.DSLContext
 import org.springframework.stereotype.Repository
 import paytech.practice.pay.application.port.outbound.SettlementReceivableRepository
-import paytech.practice.pay.dbcore.jooq.tables.ExchangeOrder.Companion.EXCHANGE_ORDER
-import paytech.practice.pay.dbcore.jooq.tables.Merchant.Companion.MERCHANT
-import paytech.practice.pay.dbcore.jooq.tables.Payment.Companion.PAYMENT
 import paytech.practice.pay.dbcore.jooq.tables.SettlementReceivable.Companion.SETTLEMENT_RECEIVABLE
 import paytech.practice.pay.dbcore.jooq.tables.records.SettlementReceivableRecord
-import paytech.practice.pay.domain.exchange.ExchangeOrderId
-import paytech.practice.pay.domain.merchant.MerchantId
 import paytech.practice.pay.domain.payment.PaymentId
 import paytech.practice.pay.domain.settlement.SettlementReceivable
 import paytech.practice.pay.domain.settlement.SettlementReceivableId
 import paytech.practice.pay.domain.settlement.SettlementReceivableStatus
 import paytech.practice.pay.domain.shared.Money
 import paytech.practice.pay.domain.shared.SignedMoney
+import paytech.practice.pay.infra.persistence.jooq.exchangeOrderId
+import paytech.practice.pay.infra.persistence.jooq.exchangeOrderSeq
+import paytech.practice.pay.infra.persistence.jooq.merchantId
+import paytech.practice.pay.infra.persistence.jooq.merchantSeq
+import paytech.practice.pay.infra.persistence.jooq.paymentSeq
 import paytech.practice.pay.infra.persistence.jooq.toUtcInstant
 import paytech.practice.pay.infra.persistence.jooq.toUtcLocalDateTime
 
@@ -47,7 +47,7 @@ class SettlementReceivableRepositoryAdapter(
 		} else {
 			dsl
 				.update(SETTLEMENT_RECEIVABLE)
-				.set(SETTLEMENT_RECEIVABLE.EXCHANGE_ORDER_SEQ, settlementReceivable.exchangeOrderId?.let { resolveExchangeOrderSeq(it) })
+				.set(SETTLEMENT_RECEIVABLE.EXCHANGE_ORDER_SEQ, settlementReceivable.exchangeOrderId?.let { dsl.exchangeOrderSeq(it) })
 				.set(SETTLEMENT_RECEIVABLE.EXCHANGE_RECEIVED_AMOUNT, settlementReceivable.exchangeReceivedAmount?.amount)
 				.set(SETTLEMENT_RECEIVABLE.EXCHANGE_PROFIT_LOSS_AMOUNT, settlementReceivable.exchangeProfitLossAmount?.amount)
 				.set(SETTLEMENT_RECEIVABLE.RECEIVABLE_STATUS, settlementReceivable.status.name)
@@ -69,57 +69,15 @@ class SettlementReceivableRepositoryAdapter(
 	override fun findByPaymentId(paymentId: PaymentId): SettlementReceivable? =
 		dsl
 			.selectFrom(SETTLEMENT_RECEIVABLE)
-			.where(SETTLEMENT_RECEIVABLE.PAYMENT_SEQ.eq(resolvePaymentSeq(paymentId)))
+			.where(SETTLEMENT_RECEIVABLE.PAYMENT_SEQ.eq(dsl.paymentSeq(paymentId)))
 			.fetchOne()
 			?.toDomain(paymentId)
 
-	private fun resolvePaymentSeq(paymentId: PaymentId): Long =
-		dsl
-			.select(PAYMENT.PAYMENT_SEQ)
-			.from(PAYMENT)
-			.where(PAYMENT.PAYMENT_ID.eq(paymentId.value))
-			.fetchOne(PAYMENT.PAYMENT_SEQ)
-			?: error("Payment(${paymentId.value})를 찾을 수 없습니다.")
-
-	private fun resolveMerchantSeq(merchantId: MerchantId): Long =
-		dsl
-			.select(MERCHANT.MERCHANT_SEQ)
-			.from(MERCHANT)
-			.where(MERCHANT.MERCHANT_ID.eq(merchantId.value))
-			.fetchOne(MERCHANT.MERCHANT_SEQ)
-			?: error("Merchant(${merchantId.value})를 찾을 수 없습니다.")
-
-	private fun resolveMerchantId(merchantSeq: Long): MerchantId =
-		dsl
-			.select(MERCHANT.MERCHANT_ID)
-			.from(MERCHANT)
-			.where(MERCHANT.MERCHANT_SEQ.eq(merchantSeq))
-			.fetchOne(MERCHANT.MERCHANT_ID)
-			?.let { MerchantId(it) }
-			?: error("Merchant(seq=$merchantSeq)를 찾을 수 없습니다.")
-
-	private fun resolveExchangeOrderSeq(exchangeOrderId: ExchangeOrderId): Long =
-		dsl
-			.select(EXCHANGE_ORDER.EXCHANGE_ORDER_SEQ)
-			.from(EXCHANGE_ORDER)
-			.where(EXCHANGE_ORDER.EXCHANGE_ORDER_ID.eq(exchangeOrderId.value))
-			.fetchOne(EXCHANGE_ORDER.EXCHANGE_ORDER_SEQ)
-			?: error("ExchangeOrder(${exchangeOrderId.value})를 찾을 수 없습니다.")
-
-	private fun resolveExchangeOrderId(exchangeOrderSeq: Long): ExchangeOrderId =
-		dsl
-			.select(EXCHANGE_ORDER.EXCHANGE_ORDER_ID)
-			.from(EXCHANGE_ORDER)
-			.where(EXCHANGE_ORDER.EXCHANGE_ORDER_SEQ.eq(exchangeOrderSeq))
-			.fetchOne(EXCHANGE_ORDER.EXCHANGE_ORDER_ID)
-			?.let { ExchangeOrderId(it) }
-			?: error("ExchangeOrder(seq=$exchangeOrderSeq)를 찾을 수 없습니다.")
-
 	private fun SettlementReceivableRecord.fillFrom(settlementReceivable: SettlementReceivable) {
 		settlementReceivableId = settlementReceivable.id.value
-		paymentSeq = resolvePaymentSeq(settlementReceivable.paymentId)
-		merchantSeq = resolveMerchantSeq(settlementReceivable.merchantId)
-		exchangeOrderSeq = settlementReceivable.exchangeOrderId?.let { resolveExchangeOrderSeq(it) }
+		paymentSeq = dsl.paymentSeq(settlementReceivable.paymentId)
+		merchantSeq = dsl.merchantSeq(settlementReceivable.merchantId)
+		exchangeOrderSeq = settlementReceivable.exchangeOrderId?.let { dsl.exchangeOrderSeq(it) }
 		settlementCurrency = "KRW"
 		grossAmount = settlementReceivable.grossAmount.amount
 		feeRate = settlementReceivable.feeRate
@@ -139,7 +97,7 @@ class SettlementReceivableRepositoryAdapter(
 		SettlementReceivable.reconstitute(
 			id = SettlementReceivableId(settlementReceivableId!!),
 			paymentId = paymentId,
-			merchantId = resolveMerchantId(merchantSeq!!),
+			merchantId = dsl.merchantId(merchantSeq!!),
 			grossAmount = Money(grossAmount!!),
 			feeRate = feeRate!!,
 			feeAmount = Money(feeAmount!!),
@@ -147,7 +105,7 @@ class SettlementReceivableRepositoryAdapter(
 			netAmount = Money(netAmount!!),
 			eligibleDate = eligibleDate!!,
 			createdAt = createdAt!!.toUtcInstant(),
-			exchangeOrderId = exchangeOrderSeq?.let { resolveExchangeOrderId(it) },
+			exchangeOrderId = exchangeOrderSeq?.let { dsl.exchangeOrderId(it) },
 			exchangeReceivedAmount = exchangeReceivedAmount?.let { Money(it) },
 			exchangeProfitLossAmount = exchangeProfitLossAmount?.let { SignedMoney(it) },
 			status = SettlementReceivableStatus.valueOf(receivableStatus!!),

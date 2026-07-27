@@ -11,6 +11,8 @@ import paytech.practice.pay.domain.identity.InternalUser
 import paytech.practice.pay.domain.identity.InternalUserId
 import paytech.practice.pay.domain.identity.InternalUserRole
 import paytech.practice.pay.domain.identity.LoginId
+import paytech.practice.pay.infra.persistence.jooq.internalUserId
+import paytech.practice.pay.infra.persistence.jooq.internalUserSeq
 import paytech.practice.pay.infra.persistence.jooq.toUtcInstant
 import paytech.practice.pay.infra.persistence.jooq.toUtcLocalDateTime
 
@@ -101,23 +103,6 @@ class InternalUserRepositoryAdapter(
 				.and(INTERNAL_USER.USER_STATUS.eq(AccountStatus.ACTIVE.name)),
 		)
 
-	private fun resolveInternalUserSeq(internalUserId: InternalUserId): Long =
-		dsl
-			.select(INTERNAL_USER.INTERNAL_USER_SEQ)
-			.from(INTERNAL_USER)
-			.where(INTERNAL_USER.INTERNAL_USER_ID.eq(internalUserId.value))
-			.fetchOne(INTERNAL_USER.INTERNAL_USER_SEQ)
-			?: error("InternalUser(${internalUserId.value})를 찾을 수 없습니다.")
-
-	private fun resolveInternalUserId(internalUserSeq: Long): InternalUserId =
-		dsl
-			.select(INTERNAL_USER.INTERNAL_USER_ID)
-			.from(INTERNAL_USER)
-			.where(INTERNAL_USER.INTERNAL_USER_SEQ.eq(internalUserSeq))
-			.fetchOne(INTERNAL_USER.INTERNAL_USER_ID)
-			?.let { InternalUserId(it) }
-			?: error("InternalUser(seq=$internalUserSeq)를 찾을 수 없습니다.")
-
 	private fun InternalUserRecord.fillFrom(internalUser: InternalUser) {
 		internalUserId = internalUser.id.value
 		loginId = internalUser.loginId.value
@@ -133,7 +118,7 @@ class InternalUserRepositoryAdapter(
 		invitedAt = internalUser.invitedAt?.toUtcLocalDateTime()
 		activatedAt = internalUser.activatedAt?.toUtcLocalDateTime()
 		terminatedAt = internalUser.terminatedAt?.toUtcLocalDateTime()
-		createdByInternalUserSeq = internalUser.createdByInternalUserId?.let { resolveInternalUserSeq(it) }
+		createdByInternalUserSeq = internalUser.createdByInternalUserId?.let { dsl.internalUserSeq(it) }
 		createdAt = internalUser.createdAt.toUtcLocalDateTime()
 		updatedAt = internalUser.updatedAt.toUtcLocalDateTime()
 	}
@@ -145,7 +130,7 @@ class InternalUserRepositoryAdapter(
 			email = Email(email!!),
 			userName = userName!!,
 			role = InternalUserRole.valueOf(roleCode!!),
-			createdByInternalUserId = createdByInternalUserSeq?.let { resolveInternalUserId(it) },
+			createdByInternalUserId = createdByInternalUserSeq?.let { dsl.internalUserId(it) },
 			createdAt = createdAt!!.toUtcInstant(),
 			status = AccountStatus.valueOf(userStatus!!),
 			passwordHash = passwordHash,

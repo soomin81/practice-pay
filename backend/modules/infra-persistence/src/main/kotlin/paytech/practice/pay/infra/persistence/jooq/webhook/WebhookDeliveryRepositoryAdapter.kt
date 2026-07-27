@@ -4,7 +4,6 @@ import org.jooq.DSLContext
 import org.jooq.JSON
 import org.springframework.stereotype.Repository
 import paytech.practice.pay.application.port.outbound.WebhookDeliveryRepository
-import paytech.practice.pay.dbcore.jooq.tables.Merchant.Companion.MERCHANT
 import paytech.practice.pay.dbcore.jooq.tables.WebhookDelivery.Companion.WEBHOOK_DELIVERY
 import paytech.practice.pay.dbcore.jooq.tables.records.WebhookDeliveryRecord
 import paytech.practice.pay.domain.merchant.MerchantId
@@ -13,6 +12,7 @@ import paytech.practice.pay.domain.shared.HttpUrl
 import paytech.practice.pay.domain.webhook.WebhookDelivery
 import paytech.practice.pay.domain.webhook.WebhookDeliveryId
 import paytech.practice.pay.domain.webhook.WebhookDeliveryStatus
+import paytech.practice.pay.infra.persistence.jooq.merchantSeq
 import paytech.practice.pay.infra.persistence.jooq.toUtcInstant
 import paytech.practice.pay.infra.persistence.jooq.toUtcLocalDateTime
 
@@ -71,21 +71,13 @@ class WebhookDeliveryRepositoryAdapter(
 		dsl
 			.selectFrom(WEBHOOK_DELIVERY)
 			.where(WEBHOOK_DELIVERY.EVENT_ID.eq(eventId.value))
-			.and(WEBHOOK_DELIVERY.MERCHANT_SEQ.eq(resolveMerchantSeq(merchantId)))
+			.and(WEBHOOK_DELIVERY.MERCHANT_SEQ.eq(dsl.merchantSeq(merchantId)))
 			.fetchOne()
 			?.toDomain(merchantId)
 
-	private fun resolveMerchantSeq(merchantId: MerchantId): Long =
-		dsl
-			.select(MERCHANT.MERCHANT_SEQ)
-			.from(MERCHANT)
-			.where(MERCHANT.MERCHANT_ID.eq(merchantId.value))
-			.fetchOne(MERCHANT.MERCHANT_SEQ)
-			?: error("Merchant(${merchantId.value})를 찾을 수 없습니다.")
-
 	private fun WebhookDeliveryRecord.fillFrom(webhookDelivery: WebhookDelivery) {
 		webhookDeliveryId = webhookDelivery.id.value
-		merchantSeq = resolveMerchantSeq(webhookDelivery.merchantId)
+		merchantSeq = dsl.merchantSeq(webhookDelivery.merchantId)
 		eventId = webhookDelivery.eventId.value
 		eventType = webhookDelivery.eventType
 		aggregateType = webhookDelivery.aggregateType

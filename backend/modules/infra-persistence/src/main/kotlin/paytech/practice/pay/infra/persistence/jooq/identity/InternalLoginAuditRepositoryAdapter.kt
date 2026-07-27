@@ -4,9 +4,8 @@ import org.jooq.DSLContext
 import org.springframework.stereotype.Repository
 import paytech.practice.pay.application.port.outbound.InternalLoginAuditRepository
 import paytech.practice.pay.dbcore.jooq.tables.InternalLoginAudit.Companion.INTERNAL_LOGIN_AUDIT
-import paytech.practice.pay.dbcore.jooq.tables.InternalUser.Companion.INTERNAL_USER
 import paytech.practice.pay.domain.identity.InternalLoginAudit
-import paytech.practice.pay.domain.identity.InternalUserId
+import paytech.practice.pay.infra.persistence.jooq.internalUserSeq
 import paytech.practice.pay.infra.persistence.jooq.toUtcLocalDateTime
 
 /**
@@ -25,7 +24,7 @@ class InternalLoginAuditRepositoryAdapter(
 			.newRecord(INTERNAL_LOGIN_AUDIT)
 			.apply {
 				internalLoginAuditId = audit.id.value
-				internalUserSeq = audit.internalUserId?.let { resolveInternalUserSeq(it) }
+				internalUserSeq = audit.internalUserId?.let { dsl.internalUserSeq(it) }
 				attemptedLoginId = audit.attemptedLoginId.value
 				loginOutcome = audit.outcome.name
 				clientIp = audit.clientIp
@@ -33,12 +32,4 @@ class InternalLoginAuditRepositoryAdapter(
 				createdAt = audit.occurredAt.toUtcLocalDateTime()
 			}.insert()
 	}
-
-	private fun resolveInternalUserSeq(internalUserId: InternalUserId): Long =
-		dsl
-			.select(INTERNAL_USER.INTERNAL_USER_SEQ)
-			.from(INTERNAL_USER)
-			.where(INTERNAL_USER.INTERNAL_USER_ID.eq(internalUserId.value))
-			.fetchOne(INTERNAL_USER.INTERNAL_USER_SEQ)
-			?: error("InternalUser(${internalUserId.value})를 찾을 수 없습니다.")
 }

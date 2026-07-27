@@ -4,7 +4,6 @@ import org.jooq.DSLContext
 import org.springframework.stereotype.Repository
 import paytech.practice.pay.application.port.outbound.BlockchainTransactionRepository
 import paytech.practice.pay.dbcore.jooq.tables.BlockchainTransaction.Companion.BLOCKCHAIN_TRANSACTION
-import paytech.practice.pay.dbcore.jooq.tables.Payment.Companion.PAYMENT
 import paytech.practice.pay.dbcore.jooq.tables.records.BlockchainTransactionRecord
 import paytech.practice.pay.domain.blockchain.BlockchainTransaction
 import paytech.practice.pay.domain.blockchain.BlockchainTransactionId
@@ -13,11 +12,12 @@ import paytech.practice.pay.domain.blockchain.ChainId
 import paytech.practice.pay.domain.blockchain.ContractAddress
 import paytech.practice.pay.domain.blockchain.TransactionHash
 import paytech.practice.pay.domain.blockchain.TransactionType
-import paytech.practice.pay.domain.payment.PaymentId
 import paytech.practice.pay.domain.shared.Asset
 import paytech.practice.pay.domain.shared.BlockchainNetwork
 import paytech.practice.pay.domain.shared.TokenAmount
 import paytech.practice.pay.domain.shared.WalletAddress
+import paytech.practice.pay.infra.persistence.jooq.paymentId
+import paytech.practice.pay.infra.persistence.jooq.paymentSeq
 import paytech.practice.pay.infra.persistence.jooq.toUtcInstant
 import paytech.practice.pay.infra.persistence.jooq.toUtcLocalDateTime
 
@@ -96,26 +96,9 @@ class BlockchainTransactionRepositoryAdapter(
 			.fetch()
 			.map { it.toDomain() }
 
-	private fun resolvePaymentSeq(paymentId: PaymentId): Long =
-		dsl
-			.select(PAYMENT.PAYMENT_SEQ)
-			.from(PAYMENT)
-			.where(PAYMENT.PAYMENT_ID.eq(paymentId.value))
-			.fetchOne(PAYMENT.PAYMENT_SEQ)
-			?: error("Payment(${paymentId.value})를 찾을 수 없습니다.")
-
-	private fun resolvePaymentId(paymentSeq: Long): PaymentId =
-		dsl
-			.select(PAYMENT.PAYMENT_ID)
-			.from(PAYMENT)
-			.where(PAYMENT.PAYMENT_SEQ.eq(paymentSeq))
-			.fetchOne(PAYMENT.PAYMENT_ID)
-			?.let { PaymentId(it) }
-			?: error("Payment(seq=$paymentSeq)를 찾을 수 없습니다.")
-
 	private fun BlockchainTransactionRecord.fillFrom(blockchainTransaction: BlockchainTransaction) {
 		blockchainTransactionId = blockchainTransaction.id.value
-		paymentSeq = resolvePaymentSeq(blockchainTransaction.paymentId)
+		paymentSeq = dsl.paymentSeq(blockchainTransaction.paymentId)
 		transactionType = blockchainTransaction.transactionType.name
 		networkCode = blockchainTransaction.network.code
 		chainId = blockchainTransaction.chainId.value
@@ -141,7 +124,7 @@ class BlockchainTransactionRepositoryAdapter(
 	private fun BlockchainTransactionRecord.toDomain(): BlockchainTransaction =
 		BlockchainTransaction.reconstitute(
 			id = BlockchainTransactionId(blockchainTransactionId!!),
-			paymentId = resolvePaymentId(paymentSeq!!),
+			paymentId = dsl.paymentId(paymentSeq!!),
 			transactionType = TransactionType.valueOf(transactionType!!),
 			network = BlockchainNetwork(networkCode!!),
 			chainId = ChainId(chainId!!),

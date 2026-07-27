@@ -4,7 +4,6 @@ import org.jooq.DSLContext
 import org.springframework.stereotype.Repository
 import paytech.practice.pay.application.port.outbound.PaymentRepository
 import paytech.practice.pay.dbcore.jooq.tables.ExchangeOrder.Companion.EXCHANGE_ORDER
-import paytech.practice.pay.dbcore.jooq.tables.Merchant.Companion.MERCHANT
 import paytech.practice.pay.dbcore.jooq.tables.Payment.Companion.PAYMENT
 import paytech.practice.pay.dbcore.jooq.tables.records.PaymentRecord
 import paytech.practice.pay.domain.merchant.MerchantId
@@ -18,6 +17,8 @@ import paytech.practice.pay.domain.shared.BlockchainNetwork
 import paytech.practice.pay.domain.shared.Money
 import paytech.practice.pay.domain.shared.TokenAmount
 import paytech.practice.pay.domain.shared.WalletAddress
+import paytech.practice.pay.infra.persistence.jooq.merchantId
+import paytech.practice.pay.infra.persistence.jooq.merchantSeq
 import paytech.practice.pay.infra.persistence.jooq.toUtcInstant
 import paytech.practice.pay.infra.persistence.jooq.toUtcLocalDateTime
 import java.time.Instant
@@ -89,7 +90,7 @@ class PaymentRepositoryAdapter(
 		dsl
 			.selectFrom(PAYMENT)
 			.where(PAYMENT.MERCHANT_ORDER_ID.eq(merchantOrderId.value))
-			.and(PAYMENT.MERCHANT_SEQ.eq(resolveMerchantSeq(merchantId)))
+			.and(PAYMENT.MERCHANT_SEQ.eq(dsl.merchantSeq(merchantId)))
 			.fetchOne()
 			?.toDomain()
 
@@ -114,17 +115,9 @@ class PaymentRepositoryAdapter(
 			.fetch()
 			.map { it.toDomain() }
 
-	private fun resolveMerchantSeq(merchantId: MerchantId): Long =
-		dsl
-			.select(MERCHANT.MERCHANT_SEQ)
-			.from(MERCHANT)
-			.where(MERCHANT.MERCHANT_ID.eq(merchantId.value))
-			.fetchOne(MERCHANT.MERCHANT_SEQ)
-			?: error("Merchant(${merchantId.value})를 찾을 수 없습니다.")
-
 	private fun PaymentRecord.fillFrom(payment: Payment) {
 		paymentId = payment.id.value
-		merchantSeq = resolveMerchantSeq(payment.merchantId)
+		merchantSeq = dsl.merchantSeq(payment.merchantId)
 		merchantOrderId = payment.merchantOrderId.value
 		orderName = payment.orderName
 		orderCurrency = "KRW"
@@ -147,7 +140,7 @@ class PaymentRepositoryAdapter(
 	private fun PaymentRecord.toDomain(): Payment =
 		Payment.reconstitute(
 			id = PaymentId(paymentId!!),
-			merchantId = resolveMerchantId(merchantSeq!!),
+			merchantId = dsl.merchantId(merchantSeq!!),
 			merchantOrderId = MerchantOrderId(merchantOrderId!!),
 			orderName = orderName!!,
 			orderAmount = Money(orderAmount!!),
@@ -165,13 +158,4 @@ class PaymentRepositoryAdapter(
 			paidAt = paidAt?.toUtcInstant(),
 			updatedAt = updatedAt!!.toUtcInstant(),
 		)
-
-	private fun resolveMerchantId(merchantSeq: Long): MerchantId =
-		dsl
-			.select(MERCHANT.MERCHANT_ID)
-			.from(MERCHANT)
-			.where(MERCHANT.MERCHANT_SEQ.eq(merchantSeq))
-			.fetchOne(MERCHANT.MERCHANT_ID)
-			?.let { MerchantId(it) }
-			?: error("Merchant(seq=$merchantSeq)를 찾을 수 없습니다.")
 }

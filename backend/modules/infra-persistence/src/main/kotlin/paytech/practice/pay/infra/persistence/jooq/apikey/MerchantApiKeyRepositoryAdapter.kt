@@ -3,10 +3,8 @@ package paytech.practice.pay.infra.persistence.jooq.apikey
 import org.jooq.DSLContext
 import org.springframework.stereotype.Repository
 import paytech.practice.pay.application.port.outbound.MerchantApiKeyRepository
-import paytech.practice.pay.dbcore.jooq.tables.Merchant.Companion.MERCHANT
 import paytech.practice.pay.dbcore.jooq.tables.MerchantApiKey.Companion.MERCHANT_API_KEY
 import paytech.practice.pay.dbcore.jooq.tables.MerchantApiKeyScope.Companion.MERCHANT_API_KEY_SCOPE
-import paytech.practice.pay.dbcore.jooq.tables.MerchantUser.Companion.MERCHANT_USER
 import paytech.practice.pay.dbcore.jooq.tables.records.MerchantApiKeyRecord
 import paytech.practice.pay.domain.apikey.ApiEnvironment
 import paytech.practice.pay.domain.apikey.ApiKeyPrefix
@@ -14,8 +12,10 @@ import paytech.practice.pay.domain.apikey.ApiKeyScope
 import paytech.practice.pay.domain.apikey.ApiKeyStatus
 import paytech.practice.pay.domain.apikey.MerchantApiKey
 import paytech.practice.pay.domain.apikey.MerchantApiKeyId
-import paytech.practice.pay.domain.identity.MerchantUserId
-import paytech.practice.pay.domain.merchant.MerchantId
+import paytech.practice.pay.infra.persistence.jooq.merchantId
+import paytech.practice.pay.infra.persistence.jooq.merchantSeq
+import paytech.practice.pay.infra.persistence.jooq.merchantUserId
+import paytech.practice.pay.infra.persistence.jooq.merchantUserSeq
 import paytech.practice.pay.infra.persistence.jooq.toUtcInstant
 import paytech.practice.pay.infra.persistence.jooq.toUtcLocalDateTime
 
@@ -67,7 +67,7 @@ class MerchantApiKeyRepositoryAdapter(
 				.set(MERCHANT_API_KEY.LAST_USED_AT, merchantApiKey.lastUsedAt?.toUtcLocalDateTime())
 				.set(
 					MERCHANT_API_KEY.REVOKED_BY_MERCHANT_USER_SEQ,
-					merchantApiKey.revokedByMerchantUserId?.let { resolveMerchantUserSeq(it) },
+					merchantApiKey.revokedByMerchantUserId?.let { dsl.merchantUserSeq(it) },
 				).set(MERCHANT_API_KEY.REVOKED_AT, merchantApiKey.revokedAt?.toUtcLocalDateTime())
 				.set(MERCHANT_API_KEY.UPDATED_AT, merchantApiKey.updatedAt.toUtcLocalDateTime())
 				.set(MERCHANT_API_KEY.VERSION, (existing.version ?: 0L) + 1)
@@ -97,40 +97,6 @@ class MerchantApiKeyRepositoryAdapter(
 			.fetchOne()
 			?.toDomain()
 
-	private fun resolveMerchantSeq(merchantId: MerchantId): Long =
-		dsl
-			.select(MERCHANT.MERCHANT_SEQ)
-			.from(MERCHANT)
-			.where(MERCHANT.MERCHANT_ID.eq(merchantId.value))
-			.fetchOne(MERCHANT.MERCHANT_SEQ)
-			?: error("Merchant(${merchantId.value})를 찾을 수 없습니다.")
-
-	private fun resolveMerchantId(merchantSeq: Long): MerchantId =
-		dsl
-			.select(MERCHANT.MERCHANT_ID)
-			.from(MERCHANT)
-			.where(MERCHANT.MERCHANT_SEQ.eq(merchantSeq))
-			.fetchOne(MERCHANT.MERCHANT_ID)
-			?.let { MerchantId(it) }
-			?: error("Merchant(seq=$merchantSeq)를 찾을 수 없습니다.")
-
-	private fun resolveMerchantUserSeq(merchantUserId: MerchantUserId): Long =
-		dsl
-			.select(MERCHANT_USER.MERCHANT_USER_SEQ)
-			.from(MERCHANT_USER)
-			.where(MERCHANT_USER.MERCHANT_USER_ID.eq(merchantUserId.value))
-			.fetchOne(MERCHANT_USER.MERCHANT_USER_SEQ)
-			?: error("MerchantUser(${merchantUserId.value})를 찾을 수 없습니다.")
-
-	private fun resolveMerchantUserId(merchantUserSeq: Long): MerchantUserId =
-		dsl
-			.select(MERCHANT_USER.MERCHANT_USER_ID)
-			.from(MERCHANT_USER)
-			.where(MERCHANT_USER.MERCHANT_USER_SEQ.eq(merchantUserSeq))
-			.fetchOne(MERCHANT_USER.MERCHANT_USER_ID)
-			?.let { MerchantUserId(it) }
-			?: error("MerchantUser(seq=$merchantUserSeq)를 찾을 수 없습니다.")
-
 	private fun findScopes(merchantApiKeySeq: Long): Set<ApiKeyScope> =
 		dsl
 			.select(MERCHANT_API_KEY_SCOPE.SCOPE_CODE)
@@ -143,7 +109,7 @@ class MerchantApiKeyRepositoryAdapter(
 
 	private fun MerchantApiKeyRecord.fillFrom(merchantApiKey: MerchantApiKey) {
 		merchantApiKeyId = merchantApiKey.id.value
-		merchantSeq = resolveMerchantSeq(merchantApiKey.merchantId)
+		merchantSeq = dsl.merchantSeq(merchantApiKey.merchantId)
 		keyName = merchantApiKey.keyName
 		apiEnvironment = merchantApiKey.environment.name
 		keyPrefix = merchantApiKey.keyPrefix.value
@@ -152,8 +118,8 @@ class MerchantApiKeyRepositoryAdapter(
 		apiKeyStatus = merchantApiKey.status.name
 		expiresAt = merchantApiKey.expiresAt?.toUtcLocalDateTime()
 		lastUsedAt = merchantApiKey.lastUsedAt?.toUtcLocalDateTime()
-		createdByMerchantUserSeq = resolveMerchantUserSeq(merchantApiKey.createdByMerchantUserId)
-		revokedByMerchantUserSeq = merchantApiKey.revokedByMerchantUserId?.let { resolveMerchantUserSeq(it) }
+		createdByMerchantUserSeq = dsl.merchantUserSeq(merchantApiKey.createdByMerchantUserId)
+		revokedByMerchantUserSeq = merchantApiKey.revokedByMerchantUserId?.let { dsl.merchantUserSeq(it) }
 		revokedAt = merchantApiKey.revokedAt?.toUtcLocalDateTime()
 		createdAt = merchantApiKey.createdAt.toUtcLocalDateTime()
 		updatedAt = merchantApiKey.updatedAt.toUtcLocalDateTime()
@@ -162,19 +128,19 @@ class MerchantApiKeyRepositoryAdapter(
 	private fun MerchantApiKeyRecord.toDomain(): MerchantApiKey =
 		MerchantApiKey.reconstitute(
 			id = MerchantApiKeyId(merchantApiKeyId!!),
-			merchantId = resolveMerchantId(merchantSeq!!),
+			merchantId = dsl.merchantId(merchantSeq!!),
 			keyName = keyName!!,
 			environment = ApiEnvironment.valueOf(apiEnvironment!!),
 			keyPrefix = ApiKeyPrefix(keyPrefix!!),
 			secretHash = secretHash!!,
 			hashAlgorithm = hashAlgorithm!!,
 			scopes = findScopes(merchantApiKeySeq!!),
-			createdByMerchantUserId = resolveMerchantUserId(createdByMerchantUserSeq!!),
+			createdByMerchantUserId = dsl.merchantUserId(createdByMerchantUserSeq!!),
 			createdAt = createdAt!!.toUtcInstant(),
 			status = ApiKeyStatus.valueOf(apiKeyStatus!!),
 			expiresAt = expiresAt?.toUtcInstant(),
 			lastUsedAt = lastUsedAt?.toUtcInstant(),
-			revokedByMerchantUserId = revokedByMerchantUserSeq?.let { resolveMerchantUserId(it) },
+			revokedByMerchantUserId = revokedByMerchantUserSeq?.let { dsl.merchantUserId(it) },
 			revokedAt = revokedAt?.toUtcInstant(),
 			updatedAt = updatedAt!!.toUtcInstant(),
 		)

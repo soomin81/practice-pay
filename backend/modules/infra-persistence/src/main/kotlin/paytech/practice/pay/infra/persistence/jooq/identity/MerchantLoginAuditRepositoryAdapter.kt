@@ -3,12 +3,10 @@ package paytech.practice.pay.infra.persistence.jooq.identity
 import org.jooq.DSLContext
 import org.springframework.stereotype.Repository
 import paytech.practice.pay.application.port.outbound.MerchantLoginAuditRepository
-import paytech.practice.pay.dbcore.jooq.tables.Merchant.Companion.MERCHANT
 import paytech.practice.pay.dbcore.jooq.tables.MerchantLoginAudit.Companion.MERCHANT_LOGIN_AUDIT
-import paytech.practice.pay.dbcore.jooq.tables.MerchantUser.Companion.MERCHANT_USER
 import paytech.practice.pay.domain.identity.MerchantLoginAudit
-import paytech.practice.pay.domain.identity.MerchantUserId
-import paytech.practice.pay.domain.merchant.MerchantId
+import paytech.practice.pay.infra.persistence.jooq.merchantSeq
+import paytech.practice.pay.infra.persistence.jooq.merchantUserSeq
 import paytech.practice.pay.infra.persistence.jooq.toUtcLocalDateTime
 
 /**
@@ -26,8 +24,8 @@ class MerchantLoginAuditRepositoryAdapter(
 			.newRecord(MERCHANT_LOGIN_AUDIT)
 			.apply {
 				merchantLoginAuditId = audit.id.value
-				merchantSeq = audit.merchantId?.let { resolveMerchantSeq(it) }
-				merchantUserSeq = audit.merchantUserId?.let { resolveMerchantUserSeq(it) }
+				merchantSeq = audit.merchantId?.let { dsl.merchantSeq(it) }
+				merchantUserSeq = audit.merchantUserId?.let { dsl.merchantUserSeq(it) }
 				attemptedMerchantCode = audit.attemptedMerchantCode
 				attemptedLoginId = audit.attemptedLoginId.value
 				loginOutcome = audit.outcome.name
@@ -36,20 +34,4 @@ class MerchantLoginAuditRepositoryAdapter(
 				createdAt = audit.occurredAt.toUtcLocalDateTime()
 			}.insert()
 	}
-
-	private fun resolveMerchantSeq(merchantId: MerchantId): Long =
-		dsl
-			.select(MERCHANT.MERCHANT_SEQ)
-			.from(MERCHANT)
-			.where(MERCHANT.MERCHANT_ID.eq(merchantId.value))
-			.fetchOne(MERCHANT.MERCHANT_SEQ)
-			?: error("Merchant(${merchantId.value})를 찾을 수 없습니다.")
-
-	private fun resolveMerchantUserSeq(merchantUserId: MerchantUserId): Long =
-		dsl
-			.select(MERCHANT_USER.MERCHANT_USER_SEQ)
-			.from(MERCHANT_USER)
-			.where(MERCHANT_USER.MERCHANT_USER_ID.eq(merchantUserId.value))
-			.fetchOne(MERCHANT_USER.MERCHANT_USER_SEQ)
-			?: error("MerchantUser(${merchantUserId.value})를 찾을 수 없습니다.")
 }

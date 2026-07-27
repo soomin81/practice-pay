@@ -4,7 +4,6 @@ import org.jooq.DSLContext
 import org.springframework.stereotype.Repository
 import paytech.practice.pay.application.port.outbound.CheckoutSessionRepository
 import paytech.practice.pay.dbcore.jooq.tables.CheckoutSession.Companion.CHECKOUT_SESSION
-import paytech.practice.pay.dbcore.jooq.tables.Payment.Companion.PAYMENT
 import paytech.practice.pay.dbcore.jooq.tables.records.CheckoutSessionRecord
 import paytech.practice.pay.domain.checkout.CheckoutSession
 import paytech.practice.pay.domain.checkout.CheckoutSessionId
@@ -12,6 +11,8 @@ import paytech.practice.pay.domain.checkout.CheckoutSessionStatus
 import paytech.practice.pay.domain.payment.PaymentId
 import paytech.practice.pay.domain.shared.HttpUrl
 import paytech.practice.pay.domain.shared.WalletAddress
+import paytech.practice.pay.infra.persistence.jooq.paymentId
+import paytech.practice.pay.infra.persistence.jooq.paymentSeq
 import paytech.practice.pay.infra.persistence.jooq.toUtcInstant
 import paytech.practice.pay.infra.persistence.jooq.toUtcLocalDateTime
 
@@ -68,35 +69,18 @@ class CheckoutSessionRepositoryAdapter(
 			.selectFrom(CHECKOUT_SESSION)
 			.where(CHECKOUT_SESSION.CHECKOUT_SESSION_ID.eq(checkoutSessionId.value))
 			.fetchOne()
-			?.let { it.toDomain(resolvePaymentId(it.paymentSeq!!)) }
+			?.let { it.toDomain(dsl.paymentId(it.paymentSeq!!)) }
 
 	override fun findByPaymentId(paymentId: PaymentId): CheckoutSession? =
 		dsl
 			.selectFrom(CHECKOUT_SESSION)
-			.where(CHECKOUT_SESSION.PAYMENT_SEQ.eq(resolvePaymentSeq(paymentId.value)))
+			.where(CHECKOUT_SESSION.PAYMENT_SEQ.eq(dsl.paymentSeq(paymentId)))
 			.fetchOne()
 			?.toDomain(paymentId)
 
-	private fun resolvePaymentSeq(paymentId: String): Long =
-		dsl
-			.select(PAYMENT.PAYMENT_SEQ)
-			.from(PAYMENT)
-			.where(PAYMENT.PAYMENT_ID.eq(paymentId))
-			.fetchOne(PAYMENT.PAYMENT_SEQ)
-			?: error("Payment($paymentId)를 찾을 수 없습니다.")
-
-	private fun resolvePaymentId(paymentSeq: Long): PaymentId =
-		dsl
-			.select(PAYMENT.PAYMENT_ID)
-			.from(PAYMENT)
-			.where(PAYMENT.PAYMENT_SEQ.eq(paymentSeq))
-			.fetchOne(PAYMENT.PAYMENT_ID)
-			?.let { PaymentId(it) }
-			?: error("Payment(seq=$paymentSeq)를 찾을 수 없습니다.")
-
 	private fun CheckoutSessionRecord.fillFrom(checkoutSession: CheckoutSession) {
 		checkoutSessionId = checkoutSession.id.value
-		paymentSeq = resolvePaymentSeq(checkoutSession.paymentId.value)
+		paymentSeq = dsl.paymentSeq(checkoutSession.paymentId)
 		checkoutStatus = checkoutSession.status.name
 		successUrl = checkoutSession.successUrl.value
 		cancelUrl = checkoutSession.cancelUrl?.value

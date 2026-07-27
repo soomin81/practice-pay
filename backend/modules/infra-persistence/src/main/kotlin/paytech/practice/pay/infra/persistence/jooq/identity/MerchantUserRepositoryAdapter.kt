@@ -3,18 +3,22 @@ package paytech.practice.pay.infra.persistence.jooq.identity
 import org.jooq.DSLContext
 import org.springframework.stereotype.Repository
 import paytech.practice.pay.application.port.outbound.MerchantUserRepository
-import paytech.practice.pay.dbcore.jooq.tables.InternalUser.Companion.INTERNAL_USER
 import paytech.practice.pay.dbcore.jooq.tables.Merchant.Companion.MERCHANT
 import paytech.practice.pay.dbcore.jooq.tables.MerchantUser.Companion.MERCHANT_USER
 import paytech.practice.pay.dbcore.jooq.tables.records.MerchantUserRecord
 import paytech.practice.pay.domain.identity.AccountStatus
 import paytech.practice.pay.domain.identity.Email
-import paytech.practice.pay.domain.identity.InternalUserId
 import paytech.practice.pay.domain.identity.LoginId
 import paytech.practice.pay.domain.identity.MerchantUser
 import paytech.practice.pay.domain.identity.MerchantUserId
 import paytech.practice.pay.domain.identity.MerchantUserRole
 import paytech.practice.pay.domain.merchant.MerchantId
+import paytech.practice.pay.infra.persistence.jooq.internalUserId
+import paytech.practice.pay.infra.persistence.jooq.internalUserSeq
+import paytech.practice.pay.infra.persistence.jooq.merchantId
+import paytech.practice.pay.infra.persistence.jooq.merchantSeq
+import paytech.practice.pay.infra.persistence.jooq.merchantUserId
+import paytech.practice.pay.infra.persistence.jooq.merchantUserSeq
 import paytech.practice.pay.infra.persistence.jooq.toUtcInstant
 import paytech.practice.pay.infra.persistence.jooq.toUtcLocalDateTime
 
@@ -78,7 +82,7 @@ class MerchantUserRepositoryAdapter(
 	): MerchantUser? =
 		dsl
 			.selectFrom(MERCHANT_USER)
-			.where(MERCHANT_USER.MERCHANT_SEQ.eq(resolveMerchantSeq(merchantId)))
+			.where(MERCHANT_USER.MERCHANT_SEQ.eq(dsl.merchantSeq(merchantId)))
 			.and(MERCHANT_USER.LOGIN_ID.eq(loginId.value))
 			.fetchOne()
 			?.toDomain(merchantId)
@@ -89,7 +93,7 @@ class MerchantUserRepositoryAdapter(
 	): MerchantUser? =
 		dsl
 			.selectFrom(MERCHANT_USER)
-			.where(MERCHANT_USER.MERCHANT_SEQ.eq(resolveMerchantSeq(merchantId)))
+			.where(MERCHANT_USER.MERCHANT_SEQ.eq(dsl.merchantSeq(merchantId)))
 			.and(MERCHANT_USER.EMAIL.eq(email.value))
 			.fetchOne()
 			?.toDomain(merchantId)
@@ -99,7 +103,7 @@ class MerchantUserRepositoryAdapter(
 			.selectFrom(MERCHANT_USER)
 			.where(MERCHANT_USER.MERCHANT_USER_ID.eq(merchantUserId.value))
 			.fetchOne()
-			?.let { it.toDomain(resolveMerchantId(it.merchantSeq!!)) }
+			?.let { it.toDomain(dsl.merchantId(it.merchantSeq!!)) }
 
 	/**
 	 * "최소 하나의 활성 OWNER를 유지한다" 불변식용 집계다(Port의 KDoc 참고).
@@ -123,60 +127,9 @@ class MerchantUserRepositoryAdapter(
 		)
 	}
 
-	private fun resolveMerchantSeq(merchantId: MerchantId): Long =
-		dsl
-			.select(MERCHANT.MERCHANT_SEQ)
-			.from(MERCHANT)
-			.where(MERCHANT.MERCHANT_ID.eq(merchantId.value))
-			.fetchOne(MERCHANT.MERCHANT_SEQ)
-			?: error("Merchant(${merchantId.value})를 찾을 수 없습니다.")
-
-	private fun resolveMerchantId(merchantSeq: Long): MerchantId =
-		dsl
-			.select(MERCHANT.MERCHANT_ID)
-			.from(MERCHANT)
-			.where(MERCHANT.MERCHANT_SEQ.eq(merchantSeq))
-			.fetchOne(MERCHANT.MERCHANT_ID)
-			?.let { MerchantId(it) }
-			?: error("Merchant(seq=$merchantSeq)를 찾을 수 없습니다.")
-
-	private fun resolveInternalUserSeq(internalUserId: InternalUserId): Long =
-		dsl
-			.select(INTERNAL_USER.INTERNAL_USER_SEQ)
-			.from(INTERNAL_USER)
-			.where(INTERNAL_USER.INTERNAL_USER_ID.eq(internalUserId.value))
-			.fetchOne(INTERNAL_USER.INTERNAL_USER_SEQ)
-			?: error("InternalUser(${internalUserId.value})를 찾을 수 없습니다.")
-
-	private fun resolveInternalUserId(internalUserSeq: Long): InternalUserId =
-		dsl
-			.select(INTERNAL_USER.INTERNAL_USER_ID)
-			.from(INTERNAL_USER)
-			.where(INTERNAL_USER.INTERNAL_USER_SEQ.eq(internalUserSeq))
-			.fetchOne(INTERNAL_USER.INTERNAL_USER_ID)
-			?.let { InternalUserId(it) }
-			?: error("InternalUser(seq=$internalUserSeq)를 찾을 수 없습니다.")
-
-	private fun resolveMerchantUserSeq(merchantUserId: MerchantUserId): Long =
-		dsl
-			.select(MERCHANT_USER.MERCHANT_USER_SEQ)
-			.from(MERCHANT_USER)
-			.where(MERCHANT_USER.MERCHANT_USER_ID.eq(merchantUserId.value))
-			.fetchOne(MERCHANT_USER.MERCHANT_USER_SEQ)
-			?: error("MerchantUser(${merchantUserId.value})를 찾을 수 없습니다.")
-
-	private fun resolveMerchantUserId(merchantUserSeq: Long): MerchantUserId =
-		dsl
-			.select(MERCHANT_USER.MERCHANT_USER_ID)
-			.from(MERCHANT_USER)
-			.where(MERCHANT_USER.MERCHANT_USER_SEQ.eq(merchantUserSeq))
-			.fetchOne(MERCHANT_USER.MERCHANT_USER_ID)
-			?.let { MerchantUserId(it) }
-			?: error("MerchantUser(seq=$merchantUserSeq)를 찾을 수 없습니다.")
-
 	private fun MerchantUserRecord.fillFrom(merchantUser: MerchantUser) {
 		merchantUserId = merchantUser.id.value
-		merchantSeq = resolveMerchantSeq(merchantUser.merchantId)
+		merchantSeq = dsl.merchantSeq(merchantUser.merchantId)
 		loginId = merchantUser.loginId.value
 		email = merchantUser.email.value
 		userName = merchantUser.userName
@@ -190,8 +143,8 @@ class MerchantUserRepositoryAdapter(
 		invitedAt = merchantUser.invitedAt?.toUtcLocalDateTime()
 		activatedAt = merchantUser.activatedAt?.toUtcLocalDateTime()
 		terminatedAt = merchantUser.terminatedAt?.toUtcLocalDateTime()
-		invitedByInternalUserSeq = merchantUser.invitedByInternalUserId?.let { resolveInternalUserSeq(it) }
-		invitedByMerchantUserSeq = merchantUser.invitedByMerchantUserId?.let { resolveMerchantUserSeq(it) }
+		invitedByInternalUserSeq = merchantUser.invitedByInternalUserId?.let { dsl.internalUserSeq(it) }
+		invitedByMerchantUserSeq = merchantUser.invitedByMerchantUserId?.let { dsl.merchantUserSeq(it) }
 		createdAt = merchantUser.createdAt.toUtcLocalDateTime()
 		updatedAt = merchantUser.updatedAt.toUtcLocalDateTime()
 	}
@@ -204,8 +157,8 @@ class MerchantUserRepositoryAdapter(
 			email = Email(email!!),
 			userName = userName!!,
 			role = MerchantUserRole.valueOf(roleCode!!),
-			invitedByInternalUserId = invitedByInternalUserSeq?.let { resolveInternalUserId(it) },
-			invitedByMerchantUserId = invitedByMerchantUserSeq?.let { resolveMerchantUserId(it) },
+			invitedByInternalUserId = invitedByInternalUserSeq?.let { dsl.internalUserId(it) },
+			invitedByMerchantUserId = invitedByMerchantUserSeq?.let { dsl.merchantUserId(it) },
 			createdAt = createdAt!!.toUtcInstant(),
 			status = AccountStatus.valueOf(userStatus!!),
 			passwordHash = passwordHash,
