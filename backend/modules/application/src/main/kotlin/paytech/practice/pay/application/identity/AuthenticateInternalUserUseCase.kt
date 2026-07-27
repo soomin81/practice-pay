@@ -7,8 +7,8 @@ import paytech.practice.pay.application.port.outbound.PasswordEncoder
 import paytech.practice.pay.domain.identity.AccountStatus
 import paytech.practice.pay.domain.identity.InternalLoginAudit
 import paytech.practice.pay.domain.identity.InternalLoginAuditId
-import paytech.practice.pay.domain.identity.InternalLoginOutcome
 import paytech.practice.pay.domain.identity.InternalUser
+import paytech.practice.pay.domain.identity.LoginOutcome
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
@@ -42,31 +42,31 @@ class AuthenticateInternalUserUseCase(
 
 		val internalUser = internalUserRepository.findByLoginId(command.loginId)
 		if (internalUser == null) {
-			recordAudit(InternalLoginOutcome.INVALID_CREDENTIALS, null, command, now)
+			recordAudit(LoginOutcome.INVALID_CREDENTIALS, null, command, now)
 			throw InvalidCredentialsException()
 		}
 
 		unlockIfLockExpired(internalUser, now)
 
 		if (internalUser.status == AccountStatus.LOCKED) {
-			recordAudit(InternalLoginOutcome.LOCKED, internalUser, command, now)
+			recordAudit(LoginOutcome.LOCKED, internalUser, command, now)
 			throw AccountLockedException(requireNotNull(internalUser.lockedUntil))
 		}
 		if (internalUser.status != AccountStatus.ACTIVE) {
-			recordAudit(InternalLoginOutcome.INVALID_CREDENTIALS, internalUser, command, now)
+			recordAudit(LoginOutcome.INVALID_CREDENTIALS, internalUser, command, now)
 			throw InvalidCredentialsException()
 		}
 
 		val passwordHash = internalUser.passwordHash
 		if (passwordHash == null || !passwordEncoder.matches(command.password, passwordHash)) {
 			recordFailureAndMaybeLock(internalUser, now)
-			recordAudit(InternalLoginOutcome.INVALID_CREDENTIALS, internalUser, command, now)
+			recordAudit(LoginOutcome.INVALID_CREDENTIALS, internalUser, command, now)
 			throw InvalidCredentialsException()
 		}
 
 		internalUser.recordSuccessfulLogin(now)
 		internalUserRepository.save(internalUser)
-		recordAudit(InternalLoginOutcome.SUCCESS, internalUser, command, now)
+		recordAudit(LoginOutcome.SUCCESS, internalUser, command, now)
 
 		return AuthenticateInternalUserResult(
 			internalUserId = internalUser.id,
@@ -78,7 +78,7 @@ class AuthenticateInternalUserUseCase(
 
 	/** 로그인 시도 하나를 감사 로그에 남긴다. 계정을 찾지 못한 시도는 [internalUser]가 `null`이다. */
 	private fun recordAudit(
-		outcome: InternalLoginOutcome,
+		outcome: LoginOutcome,
 		internalUser: InternalUser?,
 		command: AuthenticateInternalUserCommand,
 		occurredAt: Instant,

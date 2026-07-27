@@ -40,7 +40,7 @@ export type MerchantUserSummary = ListMerchantUsersResponse['merchantUsers'][num
 
 export type ListLoginAuditResponse = JsonResponse<'admin-login-audit', 200>
 export type LoginAuditEntry = ListLoginAuditResponse['entries'][number]
-/** 로그인 감사 결과. 백엔드 `InternalLoginOutcome`/`MerchantLoginOutcome`과 대응한다. */
+/** 로그인 감사 결과. 백엔드 `LoginOutcome`(내부·가맹점 공유)과 대응한다. */
 export type LoginOutcome = 'SUCCESS' | 'INVALID_CREDENTIALS' | 'LOCKED'
 
 export type ListMerchantLoginAuditResponse = JsonResponse<'admin-merchant-login-audit', 200>

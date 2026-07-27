@@ -1,8 +1,8 @@
 package paytech.practice.pay.application.port.outbound
 
 import paytech.practice.pay.domain.identity.InternalLoginAuditId
-import paytech.practice.pay.domain.identity.InternalLoginOutcome
 import paytech.practice.pay.domain.identity.InternalUserId
+import paytech.practice.pay.domain.identity.LoginOutcome
 import java.time.Instant
 
 /**
@@ -26,7 +26,7 @@ data class InternalLoginAuditEntry(
 	val internalUserId: InternalUserId?,
 	val attemptedLoginId: String,
 	val userName: String?,
-	val outcome: InternalLoginOutcome,
+	val outcome: LoginOutcome,
 	val clientIp: String?,
 	val occurredAt: Instant,
 )

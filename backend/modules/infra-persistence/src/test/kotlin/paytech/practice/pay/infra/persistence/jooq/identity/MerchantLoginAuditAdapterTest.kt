@@ -7,9 +7,9 @@ import paytech.practice.pay.domain.identity.Email
 import paytech.practice.pay.domain.identity.InternalUser
 import paytech.practice.pay.domain.identity.InternalUserId
 import paytech.practice.pay.domain.identity.LoginId
+import paytech.practice.pay.domain.identity.LoginOutcome
 import paytech.practice.pay.domain.identity.MerchantLoginAudit
 import paytech.practice.pay.domain.identity.MerchantLoginAuditId
-import paytech.practice.pay.domain.identity.MerchantLoginOutcome
 import paytech.practice.pay.domain.identity.MerchantUser
 import paytech.practice.pay.domain.identity.MerchantUserId
 import paytech.practice.pay.domain.merchant.MerchantId
@@ -67,7 +67,7 @@ class MerchantLoginAuditAdapterTest :
 					merchantUserId = owner.id,
 					attemptedMerchantCode = "code-${uniqueSuffix()}",
 					attemptedLoginId = owner.loginId,
-					outcome = MerchantLoginOutcome.SUCCESS,
+					outcome = LoginOutcome.SUCCESS,
 					clientIp = "203.0.113.7",
 					occurredAt = NOW,
 				),
@@ -78,7 +78,7 @@ class MerchantLoginAuditAdapterTest :
 			entry.merchantId shouldBe merchantId
 			entry.merchantName shouldBe "테스트 가맹점"
 			entry.userName shouldBe "테스트 오너"
-			entry.outcome shouldBe MerchantLoginOutcome.SUCCESS
+			entry.outcome shouldBe LoginOutcome.SUCCESS
 			entry.clientIp shouldBe "203.0.113.7"
 		}
 
@@ -92,7 +92,7 @@ class MerchantLoginAuditAdapterTest :
 					merchantUserId = null,
 					attemptedMerchantCode = attemptedCode,
 					attemptedLoginId = LoginId("ghost-${uniqueSuffix()}"),
-					outcome = MerchantLoginOutcome.INVALID_CREDENTIALS,
+					outcome = LoginOutcome.INVALID_CREDENTIALS,
 					clientIp = null,
 					occurredAt = NOW,
 				),
@@ -133,7 +133,7 @@ private fun audit(
 		merchantUserId = owner.id,
 		attemptedMerchantCode = "code-${uniqueSuffix()}",
 		attemptedLoginId = owner.loginId,
-		outcome = MerchantLoginOutcome.SUCCESS,
+		outcome = LoginOutcome.SUCCESS,
 		clientIp = null,
 		occurredAt = occurredAt,
 	)

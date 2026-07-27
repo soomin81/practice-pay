@@ -23,8 +23,8 @@ import paytech.practice.pay.application.port.outbound.MerchantLoginAuditEntry
 import paytech.practice.pay.domain.identity.InternalUserId
 import paytech.practice.pay.domain.identity.InternalUserRole
 import paytech.practice.pay.domain.identity.LoginId
+import paytech.practice.pay.domain.identity.LoginOutcome
 import paytech.practice.pay.domain.identity.MerchantLoginAuditId
-import paytech.practice.pay.domain.identity.MerchantLoginOutcome
 import paytech.practice.pay.domain.merchant.MerchantId
 import java.time.Instant
 
@@ -61,7 +61,7 @@ class MerchantLoginAuditControllerTest : FunSpec() {
 								attemptedMerchantCode = "test-merchant",
 								attemptedLoginId = "owner01",
 								userName = "오너",
-								outcome = MerchantLoginOutcome.SUCCESS,
+								outcome = LoginOutcome.SUCCESS,
 								clientIp = "203.0.113.7",
 								occurredAt = Instant.parse("2026-07-19T00:00:00Z"),
 							),
@@ -72,7 +72,7 @@ class MerchantLoginAuditControllerTest : FunSpec() {
 								attemptedMerchantCode = "ghost",
 								attemptedLoginId = "ghost",
 								userName = null,
-								outcome = MerchantLoginOutcome.INVALID_CREDENTIALS,
+								outcome = LoginOutcome.INVALID_CREDENTIALS,
 								clientIp = null,
 								occurredAt = Instant.parse("2026-07-19T00:01:00Z"),
 							),

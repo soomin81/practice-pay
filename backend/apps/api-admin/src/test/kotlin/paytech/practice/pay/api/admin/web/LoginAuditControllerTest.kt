@@ -21,10 +21,10 @@ import paytech.practice.pay.application.identity.ListInternalLoginAuditResult
 import paytech.practice.pay.application.identity.ListInternalLoginAuditUseCase
 import paytech.practice.pay.application.port.outbound.InternalLoginAuditEntry
 import paytech.practice.pay.domain.identity.InternalLoginAuditId
-import paytech.practice.pay.domain.identity.InternalLoginOutcome
 import paytech.practice.pay.domain.identity.InternalUserId
 import paytech.practice.pay.domain.identity.InternalUserRole
 import paytech.practice.pay.domain.identity.LoginId
+import paytech.practice.pay.domain.identity.LoginOutcome
 import java.time.Instant
 
 private val SUPER_ADMIN = InternalUserPrincipal(InternalUserId("iu_sa01"), LoginId("super-admin"), InternalUserRole.SUPER_ADMIN)
@@ -57,7 +57,7 @@ class LoginAuditControllerTest : FunSpec() {
 								internalUserId = InternalUserId("iu_001"),
 								attemptedLoginId = "admin01",
 								userName = "관리자",
-								outcome = InternalLoginOutcome.SUCCESS,
+								outcome = LoginOutcome.SUCCESS,
 								clientIp = "203.0.113.7",
 								occurredAt = Instant.parse("2026-07-19T00:00:00Z"),
 							),
@@ -66,7 +66,7 @@ class LoginAuditControllerTest : FunSpec() {
 								internalUserId = null,
 								attemptedLoginId = "ghost",
 								userName = null,
-								outcome = InternalLoginOutcome.INVALID_CREDENTIALS,
+								outcome = LoginOutcome.INVALID_CREDENTIALS,
 								clientIp = null,
 								occurredAt = Instant.parse("2026-07-19T00:01:00Z"),
 							),

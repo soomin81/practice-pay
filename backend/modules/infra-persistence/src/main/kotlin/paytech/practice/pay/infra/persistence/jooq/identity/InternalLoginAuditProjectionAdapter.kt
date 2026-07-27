@@ -7,8 +7,8 @@ import paytech.practice.pay.application.port.outbound.InternalLoginAuditProjecti
 import paytech.practice.pay.dbcore.jooq.tables.InternalLoginAudit.Companion.INTERNAL_LOGIN_AUDIT
 import paytech.practice.pay.dbcore.jooq.tables.InternalUser.Companion.INTERNAL_USER
 import paytech.practice.pay.domain.identity.InternalLoginAuditId
-import paytech.practice.pay.domain.identity.InternalLoginOutcome
 import paytech.practice.pay.domain.identity.InternalUserId
+import paytech.practice.pay.domain.identity.LoginOutcome
 import paytech.practice.pay.infra.persistence.jooq.toUtcInstant
 
 /**
@@ -43,7 +43,7 @@ class InternalLoginAuditProjectionAdapter(
 					internalUserId = record.get(INTERNAL_USER.INTERNAL_USER_ID)?.let { InternalUserId(it) },
 					attemptedLoginId = record.get(INTERNAL_LOGIN_AUDIT.ATTEMPTED_LOGIN_ID)!!,
 					userName = record.get(INTERNAL_USER.USER_NAME),
-					outcome = InternalLoginOutcome.valueOf(record.get(INTERNAL_LOGIN_AUDIT.LOGIN_OUTCOME)!!),
+					outcome = LoginOutcome.valueOf(record.get(INTERNAL_LOGIN_AUDIT.LOGIN_OUTCOME)!!),
 					clientIp = record.get(INTERNAL_LOGIN_AUDIT.CLIENT_IP),
 					occurredAt = record.get(INTERNAL_LOGIN_AUDIT.OCCURRED_AT)!!.toUtcInstant(),
 				)

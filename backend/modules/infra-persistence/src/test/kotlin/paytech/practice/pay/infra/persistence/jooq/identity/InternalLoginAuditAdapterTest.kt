@@ -6,10 +6,10 @@ import io.kotest.matchers.shouldBe
 import paytech.practice.pay.domain.identity.Email
 import paytech.practice.pay.domain.identity.InternalLoginAudit
 import paytech.practice.pay.domain.identity.InternalLoginAuditId
-import paytech.practice.pay.domain.identity.InternalLoginOutcome
 import paytech.practice.pay.domain.identity.InternalUser
 import paytech.practice.pay.domain.identity.InternalUserId
 import paytech.practice.pay.domain.identity.LoginId
+import paytech.practice.pay.domain.identity.LoginOutcome
 import paytech.practice.pay.infra.persistence.jooq.PersistenceTestSupport
 import paytech.practice.pay.infra.persistence.jooq.uniqueSuffix
 import java.time.Instant
@@ -43,7 +43,7 @@ class InternalLoginAuditAdapterTest :
 					id = auditId,
 					internalUserId = user.id,
 					attemptedLoginId = user.loginId,
-					outcome = InternalLoginOutcome.SUCCESS,
+					outcome = LoginOutcome.SUCCESS,
 					clientIp = "203.0.113.7",
 					occurredAt = NOW,
 				),
@@ -53,7 +53,7 @@ class InternalLoginAuditAdapterTest :
 
 			entry.internalUserId shouldBe user.id
 			entry.userName shouldBe "테스트 관리자"
-			entry.outcome shouldBe InternalLoginOutcome.SUCCESS
+			entry.outcome shouldBe LoginOutcome.SUCCESS
 			entry.clientIp shouldBe "203.0.113.7"
 		}
 
@@ -65,7 +65,7 @@ class InternalLoginAuditAdapterTest :
 					id = auditId,
 					internalUserId = null,
 					attemptedLoginId = attempted,
-					outcome = InternalLoginOutcome.INVALID_CREDENTIALS,
+					outcome = LoginOutcome.INVALID_CREDENTIALS,
 					clientIp = null,
 					occurredAt = NOW,
 				),
@@ -105,7 +105,7 @@ private fun audit(
 		id = id,
 		internalUserId = userId,
 		attemptedLoginId = loginId,
-		outcome = InternalLoginOutcome.SUCCESS,
+		outcome = LoginOutcome.SUCCESS,
 		clientIp = null,
 		occurredAt = occurredAt,
 	)

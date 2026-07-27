@@ -15,8 +15,8 @@ import paytech.practice.pay.domain.identity.AccountStatus
 import paytech.practice.pay.domain.identity.Email
 import paytech.practice.pay.domain.identity.InternalUserId
 import paytech.practice.pay.domain.identity.LoginId
+import paytech.practice.pay.domain.identity.LoginOutcome
 import paytech.practice.pay.domain.identity.MerchantLoginAudit
-import paytech.practice.pay.domain.identity.MerchantLoginOutcome
 import paytech.practice.pay.domain.identity.MerchantUser
 import paytech.practice.pay.domain.identity.MerchantUserId
 import paytech.practice.pay.domain.identity.MerchantUserRole
@@ -168,7 +168,7 @@ class AuthenticateMerchantUserUseCaseTest :
 				.execute(AuthenticateMerchantUserCommand(MERCHANT_CODE, LOGIN_ID, CORRECT_PASSWORD, clientIp = "203.0.113.7"))
 
 			verify(exactly = 1) { auditRepository.append(capture(captured)) }
-			captured.captured.outcome shouldBe MerchantLoginOutcome.SUCCESS
+			captured.captured.outcome shouldBe LoginOutcome.SUCCESS
 			captured.captured.merchantId shouldBe MERCHANT_ID
 			captured.captured.merchantUserId shouldBe MerchantUserId("mu_test_001")
 			captured.captured.clientIp shouldBe "203.0.113.7"
@@ -185,7 +185,7 @@ class AuthenticateMerchantUserUseCaseTest :
 			}
 
 			verify(exactly = 1) { auditRepository.append(capture(captured)) }
-			captured.captured.outcome shouldBe MerchantLoginOutcome.INVALID_CREDENTIALS
+			captured.captured.outcome shouldBe LoginOutcome.INVALID_CREDENTIALS
 			captured.captured.merchantId shouldBe null
 			captured.captured.merchantUserId shouldBe null
 			captured.captured.attemptedMerchantCode shouldBe MERCHANT_CODE.value

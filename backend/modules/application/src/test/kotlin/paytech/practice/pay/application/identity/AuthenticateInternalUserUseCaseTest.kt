@@ -13,11 +13,11 @@ import paytech.practice.pay.application.port.outbound.PasswordEncoder
 import paytech.practice.pay.domain.identity.AccountStatus
 import paytech.practice.pay.domain.identity.Email
 import paytech.practice.pay.domain.identity.InternalLoginAudit
-import paytech.practice.pay.domain.identity.InternalLoginOutcome
 import paytech.practice.pay.domain.identity.InternalUser
 import paytech.practice.pay.domain.identity.InternalUserId
 import paytech.practice.pay.domain.identity.InternalUserRole
 import paytech.practice.pay.domain.identity.LoginId
+import paytech.practice.pay.domain.identity.LoginOutcome
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
@@ -161,7 +161,7 @@ class AuthenticateInternalUserUseCaseTest :
 				.execute(AuthenticateInternalUserCommand(LOGIN_ID, CORRECT_PASSWORD, clientIp = "203.0.113.7"))
 
 			verify(exactly = 1) { auditRepository.append(capture(captured)) }
-			captured.captured.outcome shouldBe InternalLoginOutcome.SUCCESS
+			captured.captured.outcome shouldBe LoginOutcome.SUCCESS
 			captured.captured.internalUserId shouldBe InternalUserId("iu_test_001")
 			captured.captured.clientIp shouldBe "203.0.113.7"
 		}
@@ -178,7 +178,7 @@ class AuthenticateInternalUserUseCaseTest :
 			}
 
 			verify(exactly = 1) { auditRepository.append(capture(captured)) }
-			captured.captured.outcome shouldBe InternalLoginOutcome.INVALID_CREDENTIALS
+			captured.captured.outcome shouldBe LoginOutcome.INVALID_CREDENTIALS
 			captured.captured.internalUserId shouldBe null
 			captured.captured.attemptedLoginId shouldBe LOGIN_ID
 		}
@@ -197,6 +197,6 @@ class AuthenticateInternalUserUseCaseTest :
 			}
 
 			verify(exactly = 1) { auditRepository.append(capture(captured)) }
-			captured.captured.outcome shouldBe InternalLoginOutcome.LOCKED
+			captured.captured.outcome shouldBe LoginOutcome.LOCKED
 		}
 	})

@@ -19,7 +19,7 @@ data class InternalLoginAudit(
 	val id: InternalLoginAuditId,
 	val internalUserId: InternalUserId?,
 	val attemptedLoginId: LoginId,
-	val outcome: InternalLoginOutcome,
+	val outcome: LoginOutcome,
 	val clientIp: String?,
 	val occurredAt: Instant,
 )

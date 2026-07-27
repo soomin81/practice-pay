@@ -1,7 +1,7 @@
 package paytech.practice.pay.application.port.outbound
 
+import paytech.practice.pay.domain.identity.LoginOutcome
 import paytech.practice.pay.domain.identity.MerchantLoginAuditId
-import paytech.practice.pay.domain.identity.MerchantLoginOutcome
 import paytech.practice.pay.domain.merchant.MerchantId
 import java.time.Instant
 
@@ -29,7 +29,7 @@ data class MerchantLoginAuditEntry(
 	val attemptedMerchantCode: String,
 	val attemptedLoginId: String,
 	val userName: String?,
-	val outcome: MerchantLoginOutcome,
+	val outcome: LoginOutcome,
 	val clientIp: String?,
 	val occurredAt: Instant,
 )

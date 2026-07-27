@@ -60,12 +60,11 @@ import paytech.practice.pay.application.port.outbound.MerchantUserSummary
 import paytech.practice.pay.domain.identity.AccountStatus
 import paytech.practice.pay.domain.identity.Email
 import paytech.practice.pay.domain.identity.InternalLoginAuditId
-import paytech.practice.pay.domain.identity.InternalLoginOutcome
 import paytech.practice.pay.domain.identity.InternalUserId
 import paytech.practice.pay.domain.identity.InternalUserRole
 import paytech.practice.pay.domain.identity.LoginId
+import paytech.practice.pay.domain.identity.LoginOutcome
 import paytech.practice.pay.domain.identity.MerchantLoginAuditId
-import paytech.practice.pay.domain.identity.MerchantLoginOutcome
 import paytech.practice.pay.domain.identity.MerchantUserId
 import paytech.practice.pay.domain.identity.MerchantUserRole
 import paytech.practice.pay.domain.merchant.MerchantCode
@@ -721,7 +720,7 @@ class AdminApiDocumentationTest : FunSpec() {
 								internalUserId = InternalUserId("iu_op01"),
 								attemptedLoginId = "operator01",
 								userName = "테스트 운영자",
-								outcome = InternalLoginOutcome.SUCCESS,
+								outcome = LoginOutcome.SUCCESS,
 								clientIp = "203.0.113.7",
 								occurredAt = NOW,
 							),
@@ -766,7 +765,7 @@ class AdminApiDocumentationTest : FunSpec() {
 								attemptedMerchantCode = "test-merchant",
 								attemptedLoginId = "owner01",
 								userName = "오너",
-								outcome = MerchantLoginOutcome.SUCCESS,
+								outcome = LoginOutcome.SUCCESS,
 								clientIp = "203.0.113.7",
 								occurredAt = NOW,
 							),

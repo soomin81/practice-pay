@@ -6,9 +6,9 @@ import paytech.practice.pay.application.port.outbound.MerchantRepository
 import paytech.practice.pay.application.port.outbound.MerchantUserRepository
 import paytech.practice.pay.application.port.outbound.PasswordEncoder
 import paytech.practice.pay.domain.identity.AccountStatus
+import paytech.practice.pay.domain.identity.LoginOutcome
 import paytech.practice.pay.domain.identity.MerchantLoginAudit
 import paytech.practice.pay.domain.identity.MerchantLoginAuditId
-import paytech.practice.pay.domain.identity.MerchantLoginOutcome
 import paytech.practice.pay.domain.identity.MerchantUser
 import paytech.practice.pay.domain.merchant.MerchantId
 import java.time.Clock
@@ -44,37 +44,37 @@ class AuthenticateMerchantUserUseCase(
 
 		val merchant = merchantRepository.findByCode(command.merchantCode)
 		if (merchant == null) {
-			recordAudit(MerchantLoginOutcome.INVALID_CREDENTIALS, null, null, command, now)
+			recordAudit(LoginOutcome.INVALID_CREDENTIALS, null, null, command, now)
 			throw InvalidCredentialsException()
 		}
 
 		val merchantUser = merchantUserRepository.findByMerchantIdAndLoginId(merchant.id, command.loginId)
 		if (merchantUser == null) {
-			recordAudit(MerchantLoginOutcome.INVALID_CREDENTIALS, merchant.id, null, command, now)
+			recordAudit(LoginOutcome.INVALID_CREDENTIALS, merchant.id, null, command, now)
 			throw InvalidCredentialsException()
 		}
 
 		unlockIfLockExpired(merchantUser, now)
 
 		if (merchantUser.status == AccountStatus.LOCKED) {
-			recordAudit(MerchantLoginOutcome.LOCKED, merchant.id, merchantUser, command, now)
+			recordAudit(LoginOutcome.LOCKED, merchant.id, merchantUser, command, now)
 			throw AccountLockedException(requireNotNull(merchantUser.lockedUntil))
 		}
 		if (merchantUser.status != AccountStatus.ACTIVE) {
-			recordAudit(MerchantLoginOutcome.INVALID_CREDENTIALS, merchant.id, merchantUser, command, now)
+			recordAudit(LoginOutcome.INVALID_CREDENTIALS, merchant.id, merchantUser, command, now)
 			throw InvalidCredentialsException()
 		}
 
 		val passwordHash = merchantUser.passwordHash
 		if (passwordHash == null || !passwordEncoder.matches(command.password, passwordHash)) {
 			recordFailureAndMaybeLock(merchantUser, now)
-			recordAudit(MerchantLoginOutcome.INVALID_CREDENTIALS, merchant.id, merchantUser, command, now)
+			recordAudit(LoginOutcome.INVALID_CREDENTIALS, merchant.id, merchantUser, command, now)
 			throw InvalidCredentialsException()
 		}
 
 		merchantUser.recordSuccessfulLogin(now)
 		merchantUserRepository.save(merchantUser)
-		recordAudit(MerchantLoginOutcome.SUCCESS, merchant.id, merchantUser, command, now)
+		recordAudit(LoginOutcome.SUCCESS, merchant.id, merchantUser, command, now)
 
 		return AuthenticateMerchantUserResult(
 			merchantUserId = merchantUser.id,
@@ -91,7 +91,7 @@ class AuthenticateMerchantUserUseCase(
 	 * 묶지 않는다(단일 DB 전제의 MVP 단순화 — [AuthenticateInternalUserUseCase]와 같은 규율).
 	 */
 	private fun recordAudit(
-		outcome: MerchantLoginOutcome,
+		outcome: LoginOutcome,
 		merchantId: MerchantId?,
 		merchantUser: MerchantUser?,
 		command: AuthenticateMerchantUserCommand,

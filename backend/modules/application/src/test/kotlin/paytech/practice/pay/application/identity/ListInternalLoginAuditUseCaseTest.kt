@@ -8,8 +8,8 @@ import io.mockk.verify
 import paytech.practice.pay.application.port.outbound.InternalLoginAuditEntry
 import paytech.practice.pay.application.port.outbound.InternalLoginAuditProjection
 import paytech.practice.pay.domain.identity.InternalLoginAuditId
-import paytech.practice.pay.domain.identity.InternalLoginOutcome
 import paytech.practice.pay.domain.identity.InternalUserId
+import paytech.practice.pay.domain.identity.LoginOutcome
 import java.time.Instant
 
 class ListInternalLoginAuditUseCaseTest :
@@ -22,7 +22,7 @@ class ListInternalLoginAuditUseCaseTest :
 					internalUserId = InternalUserId("iu_001"),
 					attemptedLoginId = "admin01",
 					userName = "관리자",
-					outcome = InternalLoginOutcome.SUCCESS,
+					outcome = LoginOutcome.SUCCESS,
 					clientIp = "203.0.113.7",
 					occurredAt = Instant.parse("2026-07-19T00:00:00Z"),
 				)

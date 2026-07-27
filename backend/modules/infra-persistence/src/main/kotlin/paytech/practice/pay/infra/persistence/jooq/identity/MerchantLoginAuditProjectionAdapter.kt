@@ -7,8 +7,8 @@ import paytech.practice.pay.application.port.outbound.MerchantLoginAuditProjecti
 import paytech.practice.pay.dbcore.jooq.tables.Merchant.Companion.MERCHANT
 import paytech.practice.pay.dbcore.jooq.tables.MerchantLoginAudit.Companion.MERCHANT_LOGIN_AUDIT
 import paytech.practice.pay.dbcore.jooq.tables.MerchantUser.Companion.MERCHANT_USER
+import paytech.practice.pay.domain.identity.LoginOutcome
 import paytech.practice.pay.domain.identity.MerchantLoginAuditId
-import paytech.practice.pay.domain.identity.MerchantLoginOutcome
 import paytech.practice.pay.domain.merchant.MerchantId
 import paytech.practice.pay.infra.persistence.jooq.toUtcInstant
 
@@ -52,7 +52,7 @@ class MerchantLoginAuditProjectionAdapter(
 					attemptedMerchantCode = record.get(MERCHANT_LOGIN_AUDIT.ATTEMPTED_MERCHANT_CODE)!!,
 					attemptedLoginId = record.get(MERCHANT_LOGIN_AUDIT.ATTEMPTED_LOGIN_ID)!!,
 					userName = record.get(MERCHANT_USER.USER_NAME),
-					outcome = MerchantLoginOutcome.valueOf(record.get(MERCHANT_LOGIN_AUDIT.LOGIN_OUTCOME)!!),
+					outcome = LoginOutcome.valueOf(record.get(MERCHANT_LOGIN_AUDIT.LOGIN_OUTCOME)!!),
 					clientIp = record.get(MERCHANT_LOGIN_AUDIT.CLIENT_IP),
 					occurredAt = record.get(MERCHANT_LOGIN_AUDIT.OCCURRED_AT)!!.toUtcInstant(),
 				)

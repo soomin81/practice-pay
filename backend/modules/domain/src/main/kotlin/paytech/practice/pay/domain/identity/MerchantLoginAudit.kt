@@ -23,7 +23,7 @@ data class MerchantLoginAudit(
 	val merchantUserId: MerchantUserId?,
 	val attemptedMerchantCode: String,
 	val attemptedLoginId: LoginId,
-	val outcome: MerchantLoginOutcome,
+	val outcome: LoginOutcome,
 	val clientIp: String?,
 	val occurredAt: Instant,
 )
