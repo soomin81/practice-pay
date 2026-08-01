@@ -59,6 +59,9 @@ import paytech.practice.pay.application.payment.ListPaymentsResult
 import paytech.practice.pay.application.port.outbound.MerchantApiKeySummary
 import paytech.practice.pay.application.port.outbound.MerchantUserSummary
 import paytech.practice.pay.application.port.outbound.PaymentListEntry
+import paytech.practice.pay.application.port.outbound.SettlementReceivableListEntry
+import paytech.practice.pay.application.settlement.ListMerchantSettlementReceivablesUseCase
+import paytech.practice.pay.application.settlement.ListSettlementReceivablesResult
 import paytech.practice.pay.domain.apikey.ApiEnvironment
 import paytech.practice.pay.domain.apikey.ApiKeyPrefix
 import paytech.practice.pay.domain.apikey.ApiKeyScope
@@ -74,12 +77,16 @@ import paytech.practice.pay.domain.merchant.MerchantId
 import paytech.practice.pay.domain.payment.MerchantOrderId
 import paytech.practice.pay.domain.payment.PaymentId
 import paytech.practice.pay.domain.payment.PaymentStatus
+import paytech.practice.pay.domain.settlement.SettlementReceivableId
+import paytech.practice.pay.domain.settlement.SettlementReceivableStatus
 import paytech.practice.pay.domain.shared.Asset
 import paytech.practice.pay.domain.shared.BlockchainNetwork
 import paytech.practice.pay.domain.shared.Money
 import paytech.practice.pay.domain.shared.TokenAmount
 import tools.jackson.databind.ObjectMapper
+import java.math.BigDecimal
 import java.time.Instant
+import java.time.LocalDate
 
 private val NOW: Instant = Instant.parse("2026-07-19T00:00:00Z")
 private val OWNER =
@@ -146,6 +153,7 @@ private fun merchantResource(
 		MerchantApiKeyController::class,
 		MerchantSubAccountController::class,
 		MerchantPaymentController::class,
+		MerchantSettlementReceivableController::class,
 		AcceptAccountInvitationController::class,
 	],
 )
@@ -182,6 +190,9 @@ class MerchantApiDocumentationTest : FunSpec() {
 
 	@MockkBean
 	lateinit var exportMerchantPaymentsUseCase: ExportMerchantPaymentsUseCase
+
+	@MockkBean
+	lateinit var listSettlementReceivablesUseCase: ListMerchantSettlementReceivablesUseCase
 
 	@MockkBean
 	lateinit var acceptAccountInvitationUseCase: AcceptAccountInvitationUseCase
@@ -774,6 +785,83 @@ class MerchantApiDocumentationTest : FunSpec() {
 				.perform(get("/merchant/payments").with(authenticatedAs(OWNER)))
 				.andExpect(status().isOk)
 				.andDo(document("merchant-payments", snippet))
+		}
+
+		test("document GET settlement receivables") {
+			every { listSettlementReceivablesUseCase.execute(any(), any()) } returns
+				ListSettlementReceivablesResult(
+					entries =
+						listOf(
+							SettlementReceivableListEntry(
+								settlementReceivableId = SettlementReceivableId("str_9a1c"),
+								merchantId = MerchantId("mrc_test_001"),
+								merchantName = "테스트 가맹점",
+								paymentId = PaymentId("pay_3b81"),
+								merchantOrderId = MerchantOrderId("order-1001"),
+								status = SettlementReceivableStatus.READY,
+								settlementCurrency = "KRW",
+								grossAmount = 20_000,
+								feeRate = BigDecimal("0.015"),
+								feeAmount = 300,
+								adjustmentAmount = 0,
+								netAmount = 19_700,
+								exchangeReceivedAmount = 20_101,
+								exchangeProfitLossAmount = 101,
+								eligibleDate = LocalDate.parse("2026-08-01"),
+								createdAt = NOW,
+							),
+						),
+					totalCount = 1L,
+					totalNetAmount = 19_700L,
+					page = 0,
+					size = 50,
+				)
+
+			val snippet =
+				merchantResource(
+					summary = "정산 채권 조회(자기 가맹점)",
+					description =
+						"**인증된 가맹점 사용자 전원**(VIEWER 포함)이 조회할 수 있다. 조회 범위는 세션의 가맹점으로 " +
+							"서버가 고정하므로 merchantId를 보낼 수 없다. 쿼리 파라미터: status, " +
+							"eligibleFrom/eligibleTo(**정산 예정일 기준 날짜** YYYY-MM-DD), page, size(최대 200). " +
+							"**totalNetAmount는 현재 페이지가 아니라 필터 전체의 정산 예정 금액 합계**다 — " +
+							"\"그래서 얼마를 받나\"가 이 화면의 질문이다. 금액은 KRW 원 단위 정수라 모두 숫자로 준다. " +
+							"응답에 가맹점 열이 없다(언제나 자기 가맹점 하나다).",
+					responseSchema = "ListSettlementReceivablesResponse",
+					responseFields =
+						listOf(
+							fieldWithPath("settlementReceivables").description("정산 채권 배열(정산 예정일 최신순)"),
+							fieldWithPath("settlementReceivables[].settlementReceivableId").description("정산 채권 식별자"),
+							fieldWithPath("settlementReceivables[].paymentId").description("이 채권을 만든 결제"),
+							fieldWithPath("settlementReceivables[].merchantOrderId").description("가맹점이 부여한 주문 식별자"),
+							fieldWithPath("settlementReceivables[].status").description("SettlementReceivableStatus 값(MVP 종착은 READY)"),
+							fieldWithPath("settlementReceivables[].settlementCurrency").description("정산 통화(KRW)"),
+							fieldWithPath("settlementReceivables[].grossAmount").description("정산 기준 금액"),
+							fieldWithPath("settlementReceivables[].feeRate").description("적용 수수료율"),
+							fieldWithPath("settlementReceivables[].feeAmount").description("수수료"),
+							fieldWithPath("settlementReceivables[].adjustmentAmount").description("조정 금액(음수 가능)"),
+							fieldWithPath("settlementReceivables[].netAmount").description("정산 예정 금액 = gross - fee + adjustment"),
+							fieldWithPath("settlementReceivables[].exchangeReceivedAmount")
+								.type(JsonFieldType.NUMBER)
+								.description("환전으로 확보한 KRW. READY 전에는 null.")
+								.optional(),
+							fieldWithPath("settlementReceivables[].exchangeProfitLossAmount")
+								.type(JsonFieldType.NUMBER)
+								.description("확보액과 정산 기준 금액의 차이. 음수 가능, READY 전에는 null.")
+								.optional(),
+							fieldWithPath("settlementReceivables[].eligibleDate").description("정산 예정일(YYYY-MM-DD)"),
+							fieldWithPath("settlementReceivables[].createdAt").description("생성 시각(UTC)"),
+							fieldWithPath("totalCount").description("필터 전체에 걸린 건수"),
+							fieldWithPath("totalNetAmount").description("필터 전체의 정산 예정 금액 합계"),
+							fieldWithPath("page").description("조회한 페이지 번호(0부터)"),
+							fieldWithPath("size").description("실제로 적용된 페이지 크기"),
+						),
+				)
+
+			mockMvc
+				.perform(get("/merchant/settlement-receivables").with(authenticatedAs(OWNER)))
+				.andExpect(status().isOk)
+				.andDo(document("merchant-settlement-receivables", snippet))
 		}
 	}
 }

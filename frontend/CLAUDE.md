@@ -355,6 +355,19 @@ npm run gen:api        # api-admin의 openapi3.yaml → src/api/schema.d.ts
 - 이 페이지 전체가 여전히 SUPER_ADMIN 전용이라(라우트·내비·서버 3중), 관리 액션도 그
   안에서만 노출된다. 계약은 `docs/architecture/admin-console-api.md`의 4절에 있다.
 
+## 정산 채권 화면 — 결제 내역과 다른 두 가지
+
+`admin`·`merchant` 양쪽에 `SettlementPage`/`SettlementTable`/`useSettlementReceivables`가 있다.
+결제 내역과 구조는 같고 **다른 것은 둘뿐이다**:
+
+- **기간 필터가 정산 예정일 기준 날짜다**(`YYYY-MM-DD`). 결제 내역은 생성 시각(ISO 순간)이라
+  종료일을 23:59:59.999로 늘려야 했는데, 정산은 날짜라 그 처리가 필요 없다.
+- **화면 맨 위에 필터 전체의 정산 예정 금액 합계를 크게 보여준다.** 이 화면에서 사람이 가장
+  먼저 묻는 것이 "그래서 얼마를 받나"라 목록만으로는 반쪽이다. 현재 페이지 합이 아니라
+  서버가 준 `totalNetAmount`를 그대로 쓴다.
+
+환전 손익은 `READY` 전에는 `null`이라 **0이 아니라 빈 표식(—)으로 그린다** — 회귀 테스트가 있다.
+
 ## 결제 내역 화면 — 두 콘솔이 거의 같다
 
 `admin`과 `merchant` 양쪽에 같은 모양의 결제 내역 페이지가 있다(`PaymentsPage`,

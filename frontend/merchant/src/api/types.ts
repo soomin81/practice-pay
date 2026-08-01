@@ -97,3 +97,35 @@ export type PaymentListFilters = {
 	page?: number
 	size?: number
 }
+
+export type ListSettlementReceivablesResponse = JsonResponse<'merchant-settlement-receivables', 200>
+export type SettlementReceivableSummary = ListSettlementReceivablesResponse['settlementReceivables'][number]
+
+/** 정산 채권 상태(`docs/domain/state-transitions.md`). MVP의 종착점은 `READY`다. */
+export type SettlementReceivableStatus = 'PENDING' | 'READY' | 'ASSIGNED' | 'SETTLED' | 'HELD' | 'CANCELLED'
+
+/**
+ * 화면 필터의 선택지. `ASSIGNED`/`SETTLED`는 가맹점 단위 집계 정산이 생겨야 의미가 있는
+ * 상태라(ADR-005) MVP에서는 나올 수 없지만, 서버가 돌려줄 수 있는 값이므로 목록에는 둔다.
+ */
+export const SETTLEMENT_RECEIVABLE_STATUSES: readonly SettlementReceivableStatus[] = [
+	'PENDING',
+	'READY',
+	'ASSIGNED',
+	'SETTLED',
+	'HELD',
+	'CANCELLED',
+]
+
+/**
+ * 정산 채권 조회 필터. 기간이 **정산 예정일 기준 날짜**(`YYYY-MM-DD`)라 결제 내역과 다르다 —
+ * 정산에서 묻는 질문이 "언제 정산되나"이고, 날짜라 시간대 경계 문제가 없다.
+ */
+export type SettlementFilters = {
+
+	status?: SettlementReceivableStatus | ''
+	eligibleFrom?: string
+	eligibleTo?: string
+	page?: number
+	size?: number
+}

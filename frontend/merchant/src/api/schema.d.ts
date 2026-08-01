@@ -132,6 +132,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/merchant/settlement-receivables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 정산 채권 조회(자기 가맹점)
+         * @description **인증된 가맹점 사용자 전원**(VIEWER 포함)이 조회할 수 있다. 조회 범위는 세션의 가맹점으로 서버가 고정하므로 merchantId를 보낼 수 없다. 쿼리 파라미터: status, eligibleFrom/eligibleTo(**정산 예정일 기준 날짜** YYYY-MM-DD), page, size(최대 200). **totalNetAmount는 현재 페이지가 아니라 필터 전체의 정산 예정 금액 합계**다 — "그래서 얼마를 받나"가 이 화면의 질문이다. 금액은 KRW 원 단위 정수라 모두 숫자로 준다. 응답에 가맹점 열이 없다(언제나 자기 가맹점 하나다).
+         */
+        get: operations["merchant-settlement-receivables"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/merchant/account-invitations/accept": {
         parameters: {
             query?: never;
@@ -320,15 +340,6 @@ export interface components {
             /** @description 발급 응답에서 받은 초대 Token 원문 */
             invitationToken: string;
         };
-        /** ResendInvitationResponse */
-        ResendInvitationResponse: {
-            /** @description 새 초대의 만료 시각(UTC) */
-            invitationExpiresAt: string;
-            /** @description 대상 가맹점 사용자 식별자 */
-            merchantUserId: string;
-            /** @description 새 초대 Token 원문. 최초 1회만 노출된다. */
-            invitationToken: string;
-        };
         /** ChangeMerchantUserRoleResponse */
         ChangeMerchantUserRoleResponse: {
             /** @description 변경 후 역할 */
@@ -337,6 +348,15 @@ export interface components {
             changedAt: string;
             /** @description 대상 가맹점 사용자 식별자 */
             merchantUserId: string;
+        };
+        /** ResendInvitationResponse */
+        ResendInvitationResponse: {
+            /** @description 새 초대의 만료 시각(UTC) */
+            invitationExpiresAt: string;
+            /** @description 대상 가맹점 사용자 식별자 */
+            merchantUserId: string;
+            /** @description 새 초대 Token 원문. 최초 1회만 노출된다. */
+            invitationToken: string;
         };
         /** InviteMerchantSubAccountRequest */
         InviteMerchantSubAccountRequest: {
@@ -420,6 +440,48 @@ export interface components {
             merchantUserId: string;
             /** @description 변경 후 계정 상태 */
             status: string;
+        };
+        /** ListSettlementReceivablesResponse */
+        ListSettlementReceivablesResponse: {
+            /** @description 실제로 적용된 페이지 크기 */
+            size: number;
+            /** @description 필터 전체의 정산 예정 금액 합계 */
+            totalNetAmount: number;
+            /** @description 조회한 페이지 번호(0부터) */
+            page: number;
+            /** @description 정산 채권 배열(정산 예정일 최신순) */
+            settlementReceivables: {
+                /** @description 정산 예정 금액 = gross - fee + adjustment */
+                netAmount: number;
+                /** @description 확보액과 정산 기준 금액의 차이. 음수 가능, READY 전에는 null. */
+                exchangeProfitLossAmount?: number | null;
+                /** @description 정산 기준 금액 */
+                grossAmount: number;
+                /** @description 가맹점이 부여한 주문 식별자 */
+                merchantOrderId: string;
+                /** @description 적용 수수료율 */
+                feeRate: number;
+                /** @description 생성 시각(UTC) */
+                createdAt: string;
+                /** @description 수수료 */
+                feeAmount: number;
+                /** @description 정산 통화(KRW) */
+                settlementCurrency: string;
+                /** @description 이 채권을 만든 결제 */
+                paymentId: string;
+                /** @description 정산 예정일(YYYY-MM-DD) */
+                eligibleDate: string;
+                /** @description 환전으로 확보한 KRW. READY 전에는 null. */
+                exchangeReceivedAmount?: number | null;
+                /** @description 조정 금액(음수 가능) */
+                adjustmentAmount: number;
+                /** @description 정산 채권 식별자 */
+                settlementReceivableId: string;
+                /** @description SettlementReceivableStatus 값(MVP 종착은 READY) */
+                status: string;
+            }[];
+            /** @description 필터 전체에 걸린 건수 */
+            totalCount: number;
         };
         /** ListMerchantApiKeysResponse */
         ListMerchantApiKeysResponse: {
@@ -707,6 +769,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ListPaymentsResponse"];
+                };
+            };
+        };
+    };
+    "merchant-settlement-receivables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 200 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListSettlementReceivablesResponse"];
                 };
             };
         };

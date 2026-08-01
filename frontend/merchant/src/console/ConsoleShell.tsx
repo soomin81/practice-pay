@@ -36,6 +36,7 @@ export function ConsoleShell({ me, children }: { me: MeResponse; children: React
 				<nav className="mx-auto flex max-w-4xl gap-1 px-6 pb-2">
 					<ConsoleNavLink to="/">API Key</ConsoleNavLink>
 					<ConsoleNavLink to="/payments">결제 내역</ConsoleNavLink>
+					<ConsoleNavLink to="/settlements">정산</ConsoleNavLink>
 					<ConsoleNavLink to="/team">팀 계정</ConsoleNavLink>
 				</nav>
 			</header>

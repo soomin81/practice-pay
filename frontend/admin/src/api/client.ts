@@ -15,6 +15,8 @@ import type {
 	ListMerchantUsersResponse,
 	ListMerchantsResponse,
 	ListPaymentsResponse,
+	ListSettlementReceivablesResponse,
+	SettlementFilters,
 	PaymentListFilters,
 	MerchantUserRole,
 	MerchantUserStatusAction,
@@ -103,6 +105,10 @@ export const adminApi = {
 	exportPayments: (filters: PaymentListFilters = {}) =>
 		download(`/admin/payments/export${paymentQueryString({ ...filters, page: undefined, size: undefined })}`),
 
+	/** 정산 채권(정산 예정일 최신순). 응답의 totalNetAmount는 필터 전체의 합계다. */
+	listSettlementReceivables: (filters: SettlementFilters = {}) =>
+		request<ListSettlementReceivablesResponse>(`/admin/settlement-receivables${settlementQueryString(filters)}`),
+
 	listInternalUsers: () => request<ListInternalUsersResponse>('/admin/internal-users'),
 
 	/** 로그인 감사 로그(최근 시도, 최신순). SUPER_ADMIN 전용 — 서버도 403으로 막는다. */
@@ -167,6 +173,22 @@ export function paymentQueryString(filters: PaymentListFilters): string {
 	if (filters.status) params.set('status', filters.status)
 	if (filters.from) params.set('from', filters.from)
 	if (filters.to) params.set('to', filters.to)
+	if (filters.page !== undefined) params.set('page', String(filters.page))
+	if (filters.size !== undefined) params.set('size', String(filters.size))
+	const query = params.toString()
+	return query ? `?${query}` : ''
+}
+
+/**
+ * 정산 채권 필터를 쿼리스트링으로 만든다. 빈 값은 넣지 않는다(캐시 키가 불필요하게 갈린다).
+ * `page`/`size`는 0도 유효한 값이라 `undefined`만 걸러낸다.
+ */
+export function settlementQueryString(filters: SettlementFilters): string {
+	const params = new URLSearchParams()
+	if (filters.merchantId) params.set('merchantId', filters.merchantId)
+	if (filters.status) params.set('status', filters.status)
+	if (filters.eligibleFrom) params.set('eligibleFrom', filters.eligibleFrom)
+	if (filters.eligibleTo) params.set('eligibleTo', filters.eligibleTo)
 	if (filters.page !== undefined) params.set('page', String(filters.page))
 	if (filters.size !== undefined) params.set('size', String(filters.size))
 	const query = params.toString()

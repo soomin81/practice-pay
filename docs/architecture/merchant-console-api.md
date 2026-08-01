@@ -64,6 +64,7 @@
 | `DELETE /merchant/api-keys/{id}` | OWNER/ADMIN | 필요 | 200 폐기 | 401, 403, 404 없음 |
 | `GET /merchant/payments` | **가맹점 사용자 전원**(VIEWER 포함) | — | 200 결제 내역(자기 가맹점, 최신순) | 400 잘못된 status, 401 |
 | `GET /merchant/payments/export` | **가맹점 사용자 전원**(VIEWER 포함) | — | 200 `.xlsx` 첨부(자기 가맹점) | 400 잘못된 status, 401 |
+| `GET /merchant/settlement-receivables` | **가맹점 사용자 전원**(VIEWER 포함) | — | 200 정산 채권(자기 가맹점, 정산 예정일 최신순) | 400 잘못된 status, 401 |
 | `GET /merchant/merchant-users` | OWNER/ADMIN | — | 200 명부 | 401, 403(VIEWER) |
 | `POST /merchant/merchant-users` | OWNER/ADMIN | 필요 | 201 초대(invitationToken 1회) | 400 검증, 401, 403, 409 중복 |
 | `POST /merchant/account-invitations/accept` | **공개** | **불필요**(2절) | 200 활성화 | 400 유효하지 않거나 만료된 초대 |
@@ -105,6 +106,20 @@
 - 정렬은 생성 시각 최신순 고정이다. **엑셀 다운로드**(`GET /merchant/payments/export`)는 같은
   필터를 쓰고 범위도 같게 서버가 고정한다 — 계약 상세(상한·헤더·파일 이름)는 내부 운영자
   콘솔과 동일해서 [admin-console-api.md](admin-console-api.md)의 4.2에 한 번만 적었다.
+
+### 4.2 정산 채권 조회
+
+**조회 범위는 세션의 가맹점으로 서버가 고정한다** — 결제 목록과 같은 규율이고, 정산은
+민감도가 한 단계 높다(새면 남의 **매출과 수취 예정 금액**이 드러난다).
+
+- 기간은 **정산 예정일 기준 날짜**(`eligibleFrom`/`eligibleTo`, `YYYY-MM-DD`)다 — 결제 목록이
+  생성 시각을 쓰는 것과 다르다.
+- **`totalNetAmount`는 필터 전체의 정산 예정 금액 합계**다("그래서 얼마를 받나"에 답하는 값).
+- 응답에 가맹점 열이 없다(언제나 자기 가맹점 하나다).
+- 금액은 전부 숫자다(KRW 원 단위 정수). `exchangeReceivedAmount`/`exchangeProfitLossAmount`는
+  `READY` 전에는 `null`이다.
+
+필드 상세와 나머지 계약은 [admin-console-api.md](admin-console-api.md)의 4.3에 한 번만 적었다.
 
 ## 5. 초대 링크
 

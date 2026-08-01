@@ -56,6 +56,7 @@ PG 내부 운영자용 콘솔(브라우저 SPA, `frontend/admin`)이 호출하�
 | `POST /admin/internal-users/{id}/role` | **SUPER_ADMIN만** | 필요 | 200 역할 | **400 `role=SUPER_ADMIN`**, 401, 403(자기 자신), 404, 409(마지막 SUPER_ADMIN 강등·종료된 계정) |
 | `GET /admin/payments` | **내부 운영자 전원**(VIEWER 포함) | — | 200 결제 내역(전 가맹점, 최신순) | 400 잘못된 status, 401 |
 | `GET /admin/payments/export` | **내부 운영자 전원**(VIEWER 포함) | — | 200 `.xlsx` 첨부 | 400 잘못된 status, 401 |
+| `GET /admin/settlement-receivables` | **내부 운영자 전원**(VIEWER 포함) | — | 200 정산 채권(전 가맹점, 정산 예정일 최신순) | 400 잘못된 status, 401 |
 | `GET /admin/merchants/{merchantId}/users` | **내부 운영자 전원**(VIEWER 포함) | — | 200 명부 | 401 |
 | `POST /admin/merchants/{merchantId}/users/{id}/suspend` | SUPER_ADMIN/OPERATOR | 필요 | 200 상태(SUSPENDED) | 401, 403, 404, 409(마지막 OWNER·잘못된 전이) |
 | `POST /admin/merchants/{merchantId}/users/{id}/reactivate` | SUPER_ADMIN/OPERATOR | 필요 | 200 상태(ACTIVE) | 401, 403, 404, 409(잘못된 전이) |
@@ -157,6 +158,33 @@ PG 내부 운영자용 콘솔(브라우저 SPA, `frontend/admin`)이 호출하�
 - **이 엔드포인트는 OpenAPI 스펙에 없다.** 응답이 바이너리라 스키마로 적을 것이 없고 실제와
   어긋난 스키마를 만들 위험만 남는다 — 오류 응답·CSRF 계약을 스펙이 아니라 이 문서에 두는
   것과 같은 판단이다.
+
+### 4.3 정산 채권 조회
+
+`GET /admin/settlement-receivables`(가맹점 콘솔은 `GET /merchant/settlement-receivables`).
+결제 건별 정산 예정 금액을 본다 — MVP의 종착점인 `SettlementReceivable`(ADR-005)이 화면에
+드러나는 유일한 자리다.
+
+| 쿼리 파라미터 | 값 | 비고 |
+|---|---|---|
+| `merchantId` | 가맹점 공개 ID | **이 콘솔에만 있다.** 없으면 전 가맹점 |
+| `status` | `SettlementReceivableStatus` | 없는 값이면 `400` |
+| `eligibleFrom` / `eligibleTo` | **날짜**(`YYYY-MM-DD`) | **정산 예정일 기준** |
+| `page` / `size` | 0부터 / 기본 50 | 최대 200 |
+
+- **기간이 결제 목록(4.1)과 다르다.** 결제는 생성 시각(ISO-8601 순간)이지만 정산은
+  **정산 예정일(`eligibleDate`) 기준의 날짜**다 — 정산에서 사람이 묻는 질문이 "언제
+  만들어졌나"가 아니라 "언제 정산되나"라서다. 날짜라 종료일 시각 경계 문제도 없다.
+- **`totalNetAmount`가 이 응답의 핵심이다** — 현재 페이지가 아니라 **필터 전체의 정산 예정
+  금액 합계**다. 이 화면에서 가장 먼저 묻는 것이 "그래서 얼마를 받나"인데 목록만으로는
+  답할 수 없다.
+- **금액은 전부 숫자로 준다**(KRW 원 단위 정수). 토큰 금액을 문자열로 주는 것과 다른데,
+  KRW는 JavaScript `Number`의 안전 정수 범위를 넘지 않기 때문이다.
+- `exchangeReceivedAmount`/`exchangeProfitLossAmount`는 **`READY` 전에는 `null`**이다
+  (환전이 일어나야 채워진다). 화면은 `0`이 아니라 빈 값으로 그려야 한다.
+- **가맹점 콘솔 응답에는 가맹점 열이 없다**(언제나 자기 가맹점 하나다).
+- 정렬은 정산 예정일 최신순 고정이다.
+- **엑셀 다운로드는 아직 없다** — 결제 내역에는 있다(4.2). 필요해지면 같은 방식으로 붙인다.
 
 ## 5. 초대 링크가 **두 종류**다 — 가리키는 콘솔이 다르다
 

@@ -29,7 +29,9 @@ import paytech.practice.pay.application.port.outbound.MerchantUserRepository
 import paytech.practice.pay.application.port.outbound.PasswordEncoder
 import paytech.practice.pay.application.port.outbound.PaymentExportWriter
 import paytech.practice.pay.application.port.outbound.PaymentListProjection
+import paytech.practice.pay.application.port.outbound.SettlementReceivableListProjection
 import paytech.practice.pay.application.port.outbound.TransactionManager
+import paytech.practice.pay.application.settlement.ListMerchantSettlementReceivablesUseCase
 import java.time.Clock
 
 /**
@@ -197,4 +199,9 @@ class UseCaseConfiguration {
 		paymentListProjection: PaymentListProjection,
 		paymentExportWriter: PaymentExportWriter,
 	): ExportMerchantPaymentsUseCase = ExportMerchantPaymentsUseCase(paymentListProjection, paymentExportWriter)
+
+	@Bean
+	fun listMerchantSettlementReceivablesUseCase(
+		settlementReceivableListProjection: SettlementReceivableListProjection,
+	): ListMerchantSettlementReceivablesUseCase = ListMerchantSettlementReceivablesUseCase(settlementReceivableListProjection)
 }

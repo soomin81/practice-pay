@@ -62,6 +62,9 @@ import paytech.practice.pay.application.port.outbound.MerchantLoginAuditEntry
 import paytech.practice.pay.application.port.outbound.MerchantSummary
 import paytech.practice.pay.application.port.outbound.MerchantUserSummary
 import paytech.practice.pay.application.port.outbound.PaymentListEntry
+import paytech.practice.pay.application.port.outbound.SettlementReceivableListEntry
+import paytech.practice.pay.application.settlement.ListSettlementReceivablesResult
+import paytech.practice.pay.application.settlement.ListSettlementReceivablesUseCase
 import paytech.practice.pay.domain.blockchain.TransactionHash
 import paytech.practice.pay.domain.identity.AccountStatus
 import paytech.practice.pay.domain.identity.Email
@@ -79,12 +82,16 @@ import paytech.practice.pay.domain.merchant.MerchantStatus
 import paytech.practice.pay.domain.payment.MerchantOrderId
 import paytech.practice.pay.domain.payment.PaymentId
 import paytech.practice.pay.domain.payment.PaymentStatus
+import paytech.practice.pay.domain.settlement.SettlementReceivableId
+import paytech.practice.pay.domain.settlement.SettlementReceivableStatus
 import paytech.practice.pay.domain.shared.Asset
 import paytech.practice.pay.domain.shared.BlockchainNetwork
 import paytech.practice.pay.domain.shared.Money
 import paytech.practice.pay.domain.shared.TokenAmount
 import tools.jackson.databind.ObjectMapper
+import java.math.BigDecimal
 import java.time.Instant
+import java.time.LocalDate
 
 private val NOW: Instant = Instant.parse("2026-07-19T00:00:00Z")
 private val SUPER_ADMIN =
@@ -146,6 +153,7 @@ private fun adminResource(
 		LoginAuditController::class,
 		MerchantLoginAuditController::class,
 		AdminPaymentController::class,
+		AdminSettlementReceivableController::class,
 		AcceptAccountInvitationController::class,
 	],
 )
@@ -202,6 +210,9 @@ class AdminApiDocumentationTest : FunSpec() {
 
 	@MockkBean
 	lateinit var exportPaymentsUseCase: ExportPaymentsUseCase
+
+	@MockkBean
+	lateinit var listSettlementReceivablesUseCase: ListSettlementReceivablesUseCase
 
 	init {
 		extensions(SpringExtension)
@@ -890,6 +901,85 @@ class AdminApiDocumentationTest : FunSpec() {
 				.perform(get("/admin/payments").with(authenticatedAs(VIEWER)))
 				.andExpect(status().isOk)
 				.andDo(document("admin-payments", snippet))
+		}
+
+		test("document GET settlement receivables") {
+			every { listSettlementReceivablesUseCase.execute(any()) } returns
+				ListSettlementReceivablesResult(
+					entries =
+						listOf(
+							SettlementReceivableListEntry(
+								settlementReceivableId = SettlementReceivableId("str_9a1c"),
+								merchantId = MerchantId("mrc_001"),
+								merchantName = "테스트 가맹점",
+								paymentId = PaymentId("pay_3b81"),
+								merchantOrderId = MerchantOrderId("order-1001"),
+								status = SettlementReceivableStatus.READY,
+								settlementCurrency = "KRW",
+								grossAmount = 20_000,
+								feeRate = BigDecimal("0.015"),
+								feeAmount = 300,
+								adjustmentAmount = 0,
+								netAmount = 19_700,
+								exchangeReceivedAmount = 20_101,
+								exchangeProfitLossAmount = 101,
+								eligibleDate = LocalDate.parse("2026-08-01"),
+								createdAt = NOW,
+							),
+						),
+					totalCount = 1L,
+					totalNetAmount = 19_700L,
+					page = 0,
+					size = 50,
+				)
+
+			val snippet =
+				adminResource(
+					summary = "정산 채권 조회(전 가맹점)",
+					description =
+						"**인증된 내부 사용자 전원**(VIEWER 포함)이 조회할 수 있다. 쿼리 파라미터로 좁힌다: " +
+							"merchantId, status(SettlementReceivableStatus), eligibleFrom/eligibleTo(**정산 예정일 기준 날짜** " +
+							"YYYY-MM-DD — 결제 목록이 생성 시각을 쓰는 것과 다르다), page(0부터), size(최대 200). " +
+							"정렬은 정산 예정일 최신순이다. **totalNetAmount는 현재 페이지가 아니라 필터 전체의 정산 " +
+							"예정 금액 합계**다 — 이 화면의 핵심 숫자라 목록과 함께 준다. 금액은 KRW 원 단위 정수라 " +
+							"모두 숫자로 준다(토큰 금액을 문자열로 주는 것과 다른 점).",
+					responseSchema = "ListSettlementReceivablesResponse",
+					responseFields =
+						listOf(
+							fieldWithPath("settlementReceivables").description("정산 채권 배열(정산 예정일 최신순)"),
+							fieldWithPath("settlementReceivables[].settlementReceivableId").description("정산 채권 식별자"),
+							fieldWithPath("settlementReceivables[].merchantId").description("가맹점 식별자"),
+							fieldWithPath("settlementReceivables[].merchantName").description("가맹점 이름"),
+							fieldWithPath("settlementReceivables[].paymentId").description("이 채권을 만든 결제"),
+							fieldWithPath("settlementReceivables[].merchantOrderId").description("가맹점이 부여한 주문 식별자"),
+							fieldWithPath("settlementReceivables[].status").description("SettlementReceivableStatus 값(MVP 종착은 READY)"),
+							fieldWithPath("settlementReceivables[].settlementCurrency").description("정산 통화(KRW)"),
+							fieldWithPath("settlementReceivables[].grossAmount").description("정산 기준 금액"),
+							fieldWithPath("settlementReceivables[].feeRate").description("적용 수수료율"),
+							fieldWithPath("settlementReceivables[].feeAmount").description("수수료"),
+							fieldWithPath("settlementReceivables[].adjustmentAmount").description("조정 금액(음수 가능)"),
+							fieldWithPath("settlementReceivables[].netAmount").description("정산 예정 금액 = gross - fee + adjustment"),
+							fieldWithPath("settlementReceivables[].exchangeReceivedAmount")
+								.type(JsonFieldType.NUMBER)
+								.description("환전으로 확보한 KRW. READY 전에는 null.")
+								.optional(),
+							fieldWithPath("settlementReceivables[].exchangeProfitLossAmount")
+								.type(JsonFieldType.NUMBER)
+								.description("확보액과 정산 기준 금액의 차이(PG 마진). 음수 가능, READY 전에는 null.")
+								.optional(),
+							fieldWithPath("settlementReceivables[].eligibleDate").description("정산 예정일(YYYY-MM-DD)"),
+							fieldWithPath("settlementReceivables[].createdAt").description("생성 시각(UTC)"),
+							fieldWithPath("totalCount").description("필터 전체에 걸린 건수"),
+							fieldWithPath("totalNetAmount").description("필터 전체의 정산 예정 금액 합계"),
+							fieldWithPath("page").description("조회한 페이지 번호(0부터)"),
+							fieldWithPath("size").description("실제로 적용된 페이지 크기"),
+						),
+				)
+
+			mockMvc
+				.perform(get("/admin/settlement-receivables").with(authenticatedAs(VIEWER)))
+				.andExpect(status().isOk)
+				.andDo(document("admin-settlement-receivables", snippet))
 		}
 	}
 }
