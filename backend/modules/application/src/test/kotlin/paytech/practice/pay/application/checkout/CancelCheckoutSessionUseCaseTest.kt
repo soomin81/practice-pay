@@ -7,6 +7,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import paytech.practice.pay.application.port.outbound.CheckoutSessionRepository
+import paytech.practice.pay.application.port.outbound.TransactionManager
 import paytech.practice.pay.domain.checkout.CheckoutSession
 import paytech.practice.pay.domain.checkout.CheckoutSessionId
 import paytech.practice.pay.domain.checkout.CheckoutSessionStatus
@@ -35,16 +36,24 @@ private fun session(
 		createdAt = NOW.minusSeconds(600),
 	)
 
+/**
+ * `runInTransaction`을 그대로 실행하는 가짜(다른 Use Case 테스트들과 같은 방식).
+ * 같은 패키지의 `ConnectCheckoutWalletUseCaseTest`도 이 가짜를 쓴다.
+ */
+internal class ImmediateTransactionManager : TransactionManager {
+	override fun <T> runInTransaction(block: () -> T): T = block()
+}
+
 class CancelCheckoutSessionUseCaseTest :
 	FunSpec({
 
 		test("a CREATED session is cancelled and saved") {
 			val checkoutSession = session()
 			val repository = mockk<CheckoutSessionRepository>(relaxed = true)
-			every { repository.findById(SESSION_ID) } returns checkoutSession
+			every { repository.findByIdForUpdate(SESSION_ID) } returns checkoutSession
 
 			val result =
-				CancelCheckoutSessionUseCase(repository, fixedClock())
+				CancelCheckoutSessionUseCase(repository, ImmediateTransactionManager(), fixedClock())
 					.execute(CancelCheckoutSessionCommand(SESSION_ID))
 
 			result.checkoutSessionStatus shouldBe CheckoutSessionStatus.CANCELLED
@@ -59,10 +68,10 @@ class CancelCheckoutSessionUseCaseTest :
 					connectWallet(WalletAddress("0x" + "b".repeat(40)), NOW.minusSeconds(200))
 				}
 			val repository = mockk<CheckoutSessionRepository>(relaxed = true)
-			every { repository.findById(SESSION_ID) } returns checkoutSession
+			every { repository.findByIdForUpdate(SESSION_ID) } returns checkoutSession
 
 			val result =
-				CancelCheckoutSessionUseCase(repository, fixedClock())
+				CancelCheckoutSessionUseCase(repository, ImmediateTransactionManager(), fixedClock())
 					.execute(CancelCheckoutSessionCommand(SESSION_ID))
 
 			result.checkoutSessionStatus shouldBe CheckoutSessionStatus.CANCELLED
@@ -76,10 +85,10 @@ class CancelCheckoutSessionUseCaseTest :
 					submitPayment(NOW.minusSeconds(100))
 				}
 			val repository = mockk<CheckoutSessionRepository>(relaxed = true)
-			every { repository.findById(SESSION_ID) } returns checkoutSession
+			every { repository.findByIdForUpdate(SESSION_ID) } returns checkoutSession
 
 			shouldThrow<CheckoutSessionNotCancellableException> {
-				CancelCheckoutSessionUseCase(repository, fixedClock()).execute(CancelCheckoutSessionCommand(SESSION_ID))
+				CancelCheckoutSessionUseCase(repository, ImmediateTransactionManager(), fixedClock()).execute(CancelCheckoutSessionCommand(SESSION_ID))
 			}
 			verify(exactly = 0) { repository.save(any()) }
 		}
@@ -89,30 +98,30 @@ class CancelCheckoutSessionUseCaseTest :
 			// 그래서 status가 아니라 expiresAt으로 판단해야 만료를 잡는다.
 			val checkoutSession = session(expiresAt = NOW.minusSeconds(1))
 			val repository = mockk<CheckoutSessionRepository>(relaxed = true)
-			every { repository.findById(SESSION_ID) } returns checkoutSession
+			every { repository.findByIdForUpdate(SESSION_ID) } returns checkoutSession
 
 			shouldThrow<CheckoutSessionExpiredException> {
-				CancelCheckoutSessionUseCase(repository, fixedClock()).execute(CancelCheckoutSessionCommand(SESSION_ID))
+				CancelCheckoutSessionUseCase(repository, ImmediateTransactionManager(), fixedClock()).execute(CancelCheckoutSessionCommand(SESSION_ID))
 			}
 			verify(exactly = 0) { repository.save(any()) }
 		}
 
 		test("an unknown session throws CheckoutSessionNotFoundException") {
 			val repository = mockk<CheckoutSessionRepository>(relaxed = true)
-			every { repository.findById(SESSION_ID) } returns null
+			every { repository.findByIdForUpdate(SESSION_ID) } returns null
 
 			shouldThrow<CheckoutSessionNotFoundException> {
-				CancelCheckoutSessionUseCase(repository, fixedClock()).execute(CancelCheckoutSessionCommand(SESSION_ID))
+				CancelCheckoutSessionUseCase(repository, ImmediateTransactionManager(), fixedClock()).execute(CancelCheckoutSessionCommand(SESSION_ID))
 			}
 		}
 
 		test("a session with no cancelUrl returns null so the frontend stays put") {
 			val checkoutSession = session(cancelUrl = null)
 			val repository = mockk<CheckoutSessionRepository>(relaxed = true)
-			every { repository.findById(SESSION_ID) } returns checkoutSession
+			every { repository.findByIdForUpdate(SESSION_ID) } returns checkoutSession
 
 			val result =
-				CancelCheckoutSessionUseCase(repository, fixedClock())
+				CancelCheckoutSessionUseCase(repository, ImmediateTransactionManager(), fixedClock())
 					.execute(CancelCheckoutSessionCommand(SESSION_ID))
 
 			result.cancelUrl shouldBe null

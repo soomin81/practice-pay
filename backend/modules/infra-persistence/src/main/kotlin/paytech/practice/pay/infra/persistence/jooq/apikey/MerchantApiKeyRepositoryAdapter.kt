@@ -90,6 +90,15 @@ class MerchantApiKeyRepositoryAdapter(
 			.fetchOne()
 			?.toDomain()
 
+	/** `FOR UPDATE`로 행을 잠그고 읽는다 — 호출 조건은 Port의 KDoc 참고(반드시 트랜잭션 안). */
+	override fun findByPrefixForUpdate(keyPrefix: ApiKeyPrefix): MerchantApiKey? =
+		dsl
+			.selectFrom(MERCHANT_API_KEY)
+			.where(MERCHANT_API_KEY.KEY_PREFIX.eq(keyPrefix.value))
+			.forUpdate()
+			.fetchOne()
+			?.toDomain()
+
 	override fun findById(merchantApiKeyId: MerchantApiKeyId): MerchantApiKey? =
 		dsl
 			.selectFrom(MERCHANT_API_KEY)

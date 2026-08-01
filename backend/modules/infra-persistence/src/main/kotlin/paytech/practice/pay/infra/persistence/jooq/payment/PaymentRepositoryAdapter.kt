@@ -83,6 +83,15 @@ class PaymentRepositoryAdapter(
 			.fetchOne()
 			?.toDomain()
 
+	/** `FOR UPDATE`로 행을 잠그고 읽는다 — 호출 조건은 Port의 KDoc 참고(반드시 트랜잭션 안). */
+	override fun findByIdForUpdate(paymentId: PaymentId): Payment? =
+		dsl
+			.selectFrom(PAYMENT)
+			.where(PAYMENT.PAYMENT_ID.eq(paymentId.value))
+			.forUpdate()
+			.fetchOne()
+			?.toDomain()
+
 	override fun findByMerchantOrderId(
 		merchantId: MerchantId,
 		merchantOrderId: MerchantOrderId,

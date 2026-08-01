@@ -1,6 +1,7 @@
 package paytech.practice.pay.application.checkout
 
 import paytech.practice.pay.application.port.outbound.CheckoutSessionRepository
+import paytech.practice.pay.application.port.outbound.TransactionManager
 import paytech.practice.pay.domain.checkout.CheckoutSessionStatus
 import java.time.Clock
 
@@ -28,26 +29,33 @@ import java.time.Clock
  */
 class ConnectCheckoutWalletUseCase(
 	private val checkoutSessionRepository: CheckoutSessionRepository,
+	private val transactionManager: TransactionManager,
 	private val clock: Clock,
 ) {
-	fun execute(command: ConnectCheckoutWalletCommand): ConnectCheckoutWalletResult {
-		val checkoutSession =
-			checkoutSessionRepository.findById(command.checkoutSessionId)
-				?: throw CheckoutSessionNotFoundException(command.checkoutSessionId)
+	/**
+	 * 로드부터 저장까지를 **한 트랜잭션 안에서** 수행한다 — 변경할 목적의 읽기를 잠그고
+	 * ([CheckoutSessionRepository.findByIdForUpdate]) 그 잠금을 저장까지 유지하기 위해서다.
+	 * 잠금이 없으면 같은 세션에 대한 동시 요청(재연결·취소·만료 Sweep)이 서로를 덮어쓴다.
+	 */
+	fun execute(command: ConnectCheckoutWalletCommand): ConnectCheckoutWalletResult =
+		transactionManager.runInTransaction {
+			val checkoutSession =
+				checkoutSessionRepository.findByIdForUpdate(command.checkoutSessionId)
+					?: throw CheckoutSessionNotFoundException(command.checkoutSessionId)
 
-		val now = clock.instant()
+			val now = clock.instant()
 
-		if (checkoutSession.status == CheckoutSessionStatus.CREATED) {
-			checkoutSession.open(now)
+			if (checkoutSession.status == CheckoutSessionStatus.CREATED) {
+				checkoutSession.open(now)
+			}
+			checkoutSession.connectWallet(command.walletAddress, now)
+
+			checkoutSessionRepository.save(checkoutSession)
+
+			ConnectCheckoutWalletResult(
+				checkoutSessionId = checkoutSession.id,
+				checkoutSessionStatus = checkoutSession.status,
+				connectedWallet = checkNotNull(checkoutSession.connectedWallet),
+			)
 		}
-		checkoutSession.connectWallet(command.walletAddress, now)
-
-		checkoutSessionRepository.save(checkoutSession)
-
-		return ConnectCheckoutWalletResult(
-			checkoutSessionId = checkoutSession.id,
-			checkoutSessionStatus = checkoutSession.status,
-			connectedWallet = checkNotNull(checkoutSession.connectedWallet),
-		)
-	}
 }

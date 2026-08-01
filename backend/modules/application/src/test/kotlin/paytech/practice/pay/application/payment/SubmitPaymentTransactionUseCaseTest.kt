@@ -114,8 +114,10 @@ class SubmitPaymentTransactionUseCaseTest :
 			val checkoutSessionRepository = mockk<CheckoutSessionRepository>(relaxed = true)
 			val paymentRepository = mockk<PaymentRepository>(relaxed = true)
 			val blockchainTransactionRepository = mockk<BlockchainTransactionRepository>(relaxed = true)
+			// Use Case는 paymentId를 얻기 위해 잠그지 않고 한 번, 그다음 잠금으로 한 번 읽는다.
 			every { checkoutSessionRepository.findById(CS_ID) } returns newCheckoutSessionWalletConnected()
-			every { paymentRepository.findById(PAYMENT_ID) } returns newPaymentReady()
+			every { checkoutSessionRepository.findByIdForUpdate(CS_ID) } returns newCheckoutSessionWalletConnected()
+			every { paymentRepository.findByIdForUpdate(PAYMENT_ID) } returns newPaymentReady()
 			every { blockchainTransactionRepository.findByNetworkAndTransactionHash(any(), HASH) } returns null
 
 			val result =
@@ -135,8 +137,10 @@ class SubmitPaymentTransactionUseCaseTest :
 			val paymentRepository = mockk<PaymentRepository>(relaxed = true)
 			val blockchainTransactionRepository = mockk<BlockchainTransactionRepository>(relaxed = true)
 			val savedTransactions = mutableListOf<BlockchainTransaction>()
+			// Use Case는 paymentId를 얻기 위해 잠그지 않고 한 번, 그다음 잠금으로 한 번 읽는다.
 			every { checkoutSessionRepository.findById(CS_ID) } returns newCheckoutSessionWalletConnected()
-			every { paymentRepository.findById(PAYMENT_ID) } returns newPaymentReady()
+			every { checkoutSessionRepository.findByIdForUpdate(CS_ID) } returns newCheckoutSessionWalletConnected()
+			every { paymentRepository.findByIdForUpdate(PAYMENT_ID) } returns newPaymentReady()
 			every { blockchainTransactionRepository.findByNetworkAndTransactionHash(any(), HASH) } returns null
 			every { blockchainTransactionRepository.save(capture(savedTransactions)) } returns Unit
 
@@ -173,8 +177,10 @@ class SubmitPaymentTransactionUseCaseTest :
 					requiredConfirmationCount = 12,
 					submittedAt = NOW.minusSeconds(10),
 				)
+			// Use Case는 paymentId를 얻기 위해 잠그지 않고 한 번, 그다음 잠금으로 한 번 읽는다.
 			every { checkoutSessionRepository.findById(CS_ID) } returns newCheckoutSessionWalletConnected()
-			every { paymentRepository.findById(PAYMENT_ID) } returns newPaymentReady()
+			every { checkoutSessionRepository.findByIdForUpdate(CS_ID) } returns newCheckoutSessionWalletConnected()
+			every { paymentRepository.findByIdForUpdate(PAYMENT_ID) } returns newPaymentReady()
 			every { blockchainTransactionRepository.findByNetworkAndTransactionHash(any(), HASH) } returns existing
 
 			val result =
@@ -206,8 +212,10 @@ class SubmitPaymentTransactionUseCaseTest :
 					requiredConfirmationCount = 12,
 					submittedAt = NOW.minusSeconds(10),
 				)
+			// Use Case는 paymentId를 얻기 위해 잠그지 않고 한 번, 그다음 잠금으로 한 번 읽는다.
 			every { checkoutSessionRepository.findById(CS_ID) } returns newCheckoutSessionWalletConnected()
-			every { paymentRepository.findById(PAYMENT_ID) } returns newPaymentReady()
+			every { checkoutSessionRepository.findByIdForUpdate(CS_ID) } returns newCheckoutSessionWalletConnected()
+			every { paymentRepository.findByIdForUpdate(PAYMENT_ID) } returns newPaymentReady()
 			every { blockchainTransactionRepository.findByNetworkAndTransactionHash(any(), HASH) } returns existingForOtherPayment
 
 			shouldThrow<DuplicateTransactionHashException> {
@@ -219,7 +227,9 @@ class SubmitPaymentTransactionUseCaseTest :
 
 		test("throws CheckoutSessionNotFoundException when the id does not exist") {
 			val checkoutSessionRepository = mockk<CheckoutSessionRepository>()
+			// Use Case는 paymentId를 얻기 위해 잠그지 않고 한 번, 그다음 잠금으로 한 번 읽는다.
 			every { checkoutSessionRepository.findById(CS_ID) } returns null
+			every { checkoutSessionRepository.findByIdForUpdate(CS_ID) } returns null
 
 			shouldThrow<CheckoutSessionNotFoundException> {
 				newUseCase(checkoutSessionRepository, mockk(), mockk()).execute(SubmitPaymentTransactionCommand(CS_ID, HASH))
@@ -239,8 +249,10 @@ class SubmitPaymentTransactionUseCaseTest :
 					expiresAt = NOW.plusSeconds(1_800),
 					createdAt = NOW.minusSeconds(60),
 				)
+			// Use Case는 paymentId를 얻기 위해 잠그지 않고 한 번, 그다음 잠금으로 한 번 읽는다.
 			every { checkoutSessionRepository.findById(CS_ID) } returns session
-			every { paymentRepository.findById(PAYMENT_ID) } returns newPaymentReady()
+			every { checkoutSessionRepository.findByIdForUpdate(CS_ID) } returns session
+			every { paymentRepository.findByIdForUpdate(PAYMENT_ID) } returns newPaymentReady()
 			every { blockchainTransactionRepository.findByNetworkAndTransactionHash(any(), HASH) } returns null
 
 			shouldThrow<IllegalStateException> {

@@ -76,7 +76,7 @@ class ExpireCheckoutUseCaseTest :
 			val payment = newPayment()
 			val paymentRepository = mockk<PaymentRepository>()
 			val sessionRepository = mockk<CheckoutSessionRepository>()
-			every { paymentRepository.findById(PAYMENT_ID) } returns payment
+			every { paymentRepository.findByIdForUpdate(PAYMENT_ID) } returns payment
 			every { sessionRepository.findByPaymentId(PAYMENT_ID) } returns null
 			justRun { paymentRepository.save(any()) }
 
@@ -92,8 +92,10 @@ class ExpireCheckoutUseCaseTest :
 			val session = newSession()
 			val paymentRepository = mockk<PaymentRepository>()
 			val sessionRepository = mockk<CheckoutSessionRepository>()
-			every { paymentRepository.findById(PAYMENT_ID) } returns payment
+			every { paymentRepository.findByIdForUpdate(PAYMENT_ID) } returns payment
 			every { sessionRepository.findByPaymentId(PAYMENT_ID) } returns session
+			// 세션은 paymentId로 찾은 뒤 잠금 조회로 다시 읽는다(Use Case 참고).
+			every { sessionRepository.findByIdForUpdate(session.id) } returns session
 			justRun { paymentRepository.save(any()) }
 			justRun { sessionRepository.save(any()) }
 
@@ -115,8 +117,10 @@ class ExpireCheckoutUseCaseTest :
 			val session = newSession()
 			val paymentRepository = mockk<PaymentRepository>()
 			val sessionRepository = mockk<CheckoutSessionRepository>()
-			every { paymentRepository.findById(PAYMENT_ID) } returns payment
+			every { paymentRepository.findByIdForUpdate(PAYMENT_ID) } returns payment
 			every { sessionRepository.findByPaymentId(PAYMENT_ID) } returns session
+			// 세션은 paymentId로 찾은 뒤 잠금 조회로 다시 읽는다(Use Case 참고).
+			every { sessionRepository.findByIdForUpdate(session.id) } returns session
 			justRun { sessionRepository.save(any()) }
 
 			useCase(paymentRepository, sessionRepository).execute(command())
@@ -132,8 +136,10 @@ class ExpireCheckoutUseCaseTest :
 			val session = newSession().apply { expire(NOW.minusSeconds(120)) }
 			val paymentRepository = mockk<PaymentRepository>()
 			val sessionRepository = mockk<CheckoutSessionRepository>()
-			every { paymentRepository.findById(PAYMENT_ID) } returns payment
+			every { paymentRepository.findByIdForUpdate(PAYMENT_ID) } returns payment
 			every { sessionRepository.findByPaymentId(PAYMENT_ID) } returns session
+			// 세션은 paymentId로 찾은 뒤 잠금 조회로 다시 읽는다(Use Case 참고).
+			every { sessionRepository.findByIdForUpdate(session.id) } returns session
 			justRun { paymentRepository.save(any()) }
 
 			useCase(paymentRepository, sessionRepository).execute(command())
@@ -145,7 +151,7 @@ class ExpireCheckoutUseCaseTest :
 		test("a missing payment is a no-op") {
 			val paymentRepository = mockk<PaymentRepository>()
 			val sessionRepository = mockk<CheckoutSessionRepository>()
-			every { paymentRepository.findById(PAYMENT_ID) } returns null
+			every { paymentRepository.findByIdForUpdate(PAYMENT_ID) } returns null
 			every { sessionRepository.findByPaymentId(PAYMENT_ID) } returns null
 
 			useCase(paymentRepository, sessionRepository).execute(command())

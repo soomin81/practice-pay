@@ -54,16 +54,33 @@ class SubmitPaymentTransactionUseCase(
 	private val transactionManager: TransactionManager,
 	private val clock: Clock,
 ) {
-	fun execute(command: SubmitPaymentTransactionCommand): SubmitPaymentTransactionResult {
-		val checkoutSession =
-			checkoutSessionRepository.findById(command.checkoutSessionId)
-				?: throw CheckoutSessionNotFoundException(command.checkoutSessionId)
+	fun execute(command: SubmitPaymentTransactionCommand): SubmitPaymentTransactionResult =
+		transactionManager.runInTransaction { submitInTransaction(command) }
+
+	/**
+	 * 로드부터 저장까지를 **한 트랜잭션 안에서** 수행한다 — 잠금은 트랜잭션이 끝날 때 풀리므로
+	 * 변경할 목적의 읽기가 같은 트랜잭션에 있어야 만료 Sweep Worker와의 경합을 막을 수 있다
+	 * (`READY` 결제를 고객이 제출하는 순간 그 결제가 만료 대상이 될 수 있다).
+	 *
+	 * **잠금 순서는 Payment → CheckoutSession으로 통일한다**(`ExpireCheckoutUseCase`와 같은
+	 * 순서 — 반대로 잠그면 교착이 난다). 세션에서 `paymentId`를 얻어야 해서 세션을 먼저 읽되,
+	 * 그 읽기는 잠그지 않고 식별자 확보용으로만 쓴다.
+	 */
+	private fun submitInTransaction(command: SubmitPaymentTransactionCommand): SubmitPaymentTransactionResult {
+		val paymentId =
+			(
+				checkoutSessionRepository.findById(command.checkoutSessionId)
+					?: throw CheckoutSessionNotFoundException(command.checkoutSessionId)
+			).paymentId
 		val payment =
-			paymentRepository.findById(checkoutSession.paymentId)
+			paymentRepository.findByIdForUpdate(paymentId)
 				?: error(
-					"CheckoutSession(${checkoutSession.id.value})의 " +
-						"Payment(${checkoutSession.paymentId.value})를 찾을 수 없습니다.",
+					"CheckoutSession(${command.checkoutSessionId.value})의 " +
+						"Payment(${paymentId.value})를 찾을 수 없습니다.",
 				)
+		val checkoutSession =
+			checkoutSessionRepository.findByIdForUpdate(command.checkoutSessionId)
+				?: throw CheckoutSessionNotFoundException(command.checkoutSessionId)
 
 		findExistingResult(payment, checkoutSession, command)?.let { return it }
 
@@ -95,12 +112,10 @@ class SubmitPaymentTransactionUseCase(
 		checkoutSession.submitPayment(now)
 		payment.submit(customerWallet, now)
 
-		return transactionManager.runInTransaction {
-			blockchainTransactionRepository.save(blockchainTransaction)
-			checkoutSessionRepository.save(checkoutSession)
-			paymentRepository.save(payment)
-			resultOf(blockchainTransaction, checkoutSession, payment)
-		}
+		blockchainTransactionRepository.save(blockchainTransaction)
+		checkoutSessionRepository.save(checkoutSession)
+		paymentRepository.save(payment)
+		return resultOf(blockchainTransaction, checkoutSession, payment)
 	}
 
 	private fun findExistingResult(

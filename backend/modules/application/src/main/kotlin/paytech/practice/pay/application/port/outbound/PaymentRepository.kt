@@ -17,6 +17,20 @@ interface PaymentRepository {
 	fun findById(paymentId: PaymentId): Payment?
 
 	/**
+	 * [findById]와 같지만 **행 잠금을 잡고** 읽는다(`SELECT ... FOR UPDATE`) — 읽은 값을 바꿔
+	 * 다시 저장할 목적일 때만 쓴다.
+	 *
+	 * **반드시 트랜잭션 안에서 불러야 한다**([TransactionManager]) — 잠금은 트랜잭션이 끝날 때
+	 * 풀리므로, 트랜잭션 없이 부르면 자동 커밋으로 즉시 풀려 아무것도 막지 못한다.
+	 *
+	 * 이게 필요한 이유: 같은 결제를 두 흐름이 동시에 읽어 각자 전이시키면(예: 고객의 결제 제출과
+	 * 만료 Sweep Worker) 도메인의 상태 가드는 각자의 메모리 사본에만 적용돼 막지 못하고, 나중에
+	 * 저장한 쪽이 먼저 저장한 쪽을 덮어쓴다. 잠금을 **변경할 목적으로 읽는 시점**에 잡아야 두
+	 * 흐름이 직렬화되고, 뒤에 온 흐름이 앞 흐름의 결과를 보고 다시 판단할 수 있다.
+	 */
+	fun findByIdForUpdate(paymentId: PaymentId): Payment?
+
+	/**
 	 * `(merchant_seq, merchant_order_id)` 조합으로 기존 Payment를 찾는다.
 	 *
 	 * 결제 생성의 멱등성 키다(`backend/CLAUDE.md`의 "Idempotency keys" 참고) — 같은

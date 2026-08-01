@@ -21,6 +21,17 @@ interface MerchantApiKeyRepository {
 	fun findByPrefix(keyPrefix: ApiKeyPrefix): MerchantApiKey?
 
 	/**
+	 * [findByPrefix]와 같지만 **행 잠금을 잡고** 읽는다(`SELECT ... FOR UPDATE`) — 인증이
+	 * `recordUsage()`로 Key를 바꿔 다시 저장하므로 그 경로가 쓴다. **반드시 트랜잭션 안에서
+	 * 불러야 한다**([PaymentRepository.findByIdForUpdate]의 KDoc 참고).
+	 *
+	 * 이게 없으면 **폐기가 되돌려질 수 있다**: 인증은 매 요청마다 Key를 저장하는데 그 UPDATE는
+	 * 상태 컬럼까지 자기 사본 값으로 쓴다 — 관리자가 폐기하는 사이 in-flight 인증이 저장되면
+	 * 상태가 `ACTIVE`로 되돌아간다.
+	 */
+	fun findByPrefixForUpdate(keyPrefix: ApiKeyPrefix): MerchantApiKey?
+
+	/**
 	 * `merchant_api_key_id`로 Key를 찾는다. 없으면 `null`이다.
 	 *
 	 * `RevokeMerchantApiKeyUseCase`가 폐기 대상을 찾는 데 쓴다 — 이 조회만으로는

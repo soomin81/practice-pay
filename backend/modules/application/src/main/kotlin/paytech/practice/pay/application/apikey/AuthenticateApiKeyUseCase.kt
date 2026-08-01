@@ -3,6 +3,7 @@ package paytech.practice.pay.application.apikey
 import paytech.practice.pay.application.port.outbound.ApiKeySecretHasher
 import paytech.practice.pay.application.port.outbound.MerchantApiKeyRepository
 import paytech.practice.pay.application.port.outbound.MerchantRepository
+import paytech.practice.pay.application.port.outbound.TransactionManager
 import paytech.practice.pay.domain.apikey.ApiEnvironment
 import paytech.practice.pay.domain.apikey.ApiKeyPrefix
 import java.time.Clock
@@ -36,12 +37,27 @@ class AuthenticateApiKeyUseCase(
 	private val merchantApiKeyRepository: MerchantApiKeyRepository,
 	private val merchantRepository: MerchantRepository,
 	private val apiKeySecretHasher: ApiKeySecretHasher,
+	private val transactionManager: TransactionManager,
 	private val clock: Clock,
 ) {
-	fun execute(command: AuthenticateApiKeyCommand): AuthenticateApiKeyResult {
+	fun execute(command: AuthenticateApiKeyCommand): AuthenticateApiKeyResult =
+		transactionManager.runInTransaction { authenticateInTransaction(command) }
+
+	/**
+	 * 인증은 `recordUsage()`로 Key를 바꿔 저장하는 read-modify-write라 **한 트랜잭션 안에서**
+	 * 잠금을 잡고 수행한다([MerchantApiKeyRepository.findByPrefixForUpdate]).
+	 *
+	 * 잠그지 않으면 **폐기가 되돌려진다**: 저장 시 UPDATE가 상태 컬럼까지 자기 사본 값으로 쓰기
+	 * 때문에, 관리자가 폐기(`ACTIVE` → `REVOKED`)하는 사이 in-flight 인증이 저장되면 상태가
+	 * `ACTIVE`로 돌아간다. 잠그면 두 흐름이 직렬화돼, 폐기가 먼저면 인증이 `isUsable()`에서
+	 * 걸리고 인증이 먼저면 폐기가 그 뒤에 적용된다 — 어느 순서든 폐기가 유지된다.
+	 *
+	 * 잠금 구간에 외부 호출을 넣지 않는다(결제 API의 hot path다).
+	 */
+	private fun authenticateInTransaction(command: AuthenticateApiKeyCommand): AuthenticateApiKeyResult {
 		val prefix = extractPrefix(command.rawApiKey) ?: throw InvalidApiKeyException()
 		val apiKey =
-			merchantApiKeyRepository.findByPrefix(prefix)
+			merchantApiKeyRepository.findByPrefixForUpdate(prefix)
 				?: throw InvalidApiKeyException()
 
 		if (!apiKeySecretHasher.matches(command.rawApiKey, apiKey.secretHash)) {

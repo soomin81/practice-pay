@@ -10,8 +10,8 @@ import paytech.practice.pay.domain.checkout.CheckoutSessionId
  * 하려는 것이다. 만료는 요청이 틀린 게 아니라 유효했던 자원의 수명이 끝난 것이다.
  *
  * **`CheckoutSession.status`가 아니라 `expiresAt`으로 판단한다.** 만료 상태로
- * 전이시키는 Sweep Worker가 아직 없어서(알려진 gap), 시간이 지났어도 DB의 상태는
- * `OPEN`인 채로 남아 있다 — 시각을 직접 비교해야 실제 만료를 잡는다.
+ * 전이시키는 Sweep Worker(`apps:batch`의 `expireCheckoutsJob`)는 60초 주기라, 그 사이에는
+ * 시간이 지났어도 DB의 상태가 `OPEN`인 채로 남아 있다 — 시각을 직접 비교해야 실제 만료를 잡는다.
  */
 class CheckoutSessionExpiredException(
 	checkoutSessionId: CheckoutSessionId,

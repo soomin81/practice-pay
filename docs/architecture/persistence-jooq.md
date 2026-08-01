@@ -32,6 +32,13 @@ version BIGINT NOT NULL DEFAULT 0
 
 상태 UPDATE 시 식별자, 예상 현재 상태, 예상 version을 함께 조건으로 사용한다.
 
+> **구현 노트**: 실제 구현은 "로드 시점의 예상 version"을 Adapter까지 전달하지 않는다 —
+> 그러려면 도메인 애그리게이트가 `version`을 들고 다녀야 하는데, 영속성 관심사를 도메인에
+> 두지 않기로 했기 때문이다. 대신 경합이 실제로 일어나는 애그리게이트
+> (`Payment`/`CheckoutSession`/`MerchantApiKey`)는 **변경할 목적의 읽기에 행 잠금**을 건다
+> (`SELECT ... FOR UPDATE`, 트랜잭션 안). `version` 컬럼과 UPDATE의 version 조건은 그대로
+> 남겨 이중 안전장치로 쓴다. 자세한 판단은 `backend/CLAUDE.md`의 영속성 Adapter 컨벤션 참고.
+
 ## 타입 매핑
 
 ```text

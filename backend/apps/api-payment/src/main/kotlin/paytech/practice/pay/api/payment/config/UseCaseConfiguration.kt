@@ -41,12 +41,14 @@ class UseCaseConfiguration {
 		merchantApiKeyRepository: MerchantApiKeyRepository,
 		merchantRepository: MerchantRepository,
 		apiKeySecretHasher: ApiKeySecretHasher,
+		transactionManager: TransactionManager,
 		clock: Clock,
 	): AuthenticateApiKeyUseCase =
 		AuthenticateApiKeyUseCase(
 			merchantApiKeyRepository = merchantApiKeyRepository,
 			merchantRepository = merchantRepository,
 			apiKeySecretHasher = apiKeySecretHasher,
+			transactionManager = transactionManager,
 			clock = clock,
 		)
 
@@ -90,10 +92,12 @@ class UseCaseConfiguration {
 	@Bean
 	fun connectCheckoutWalletUseCase(
 		checkoutSessionRepository: CheckoutSessionRepository,
+		transactionManager: TransactionManager,
 		clock: Clock,
 	): ConnectCheckoutWalletUseCase =
 		ConnectCheckoutWalletUseCase(
 			checkoutSessionRepository = checkoutSessionRepository,
+			transactionManager = transactionManager,
 			clock = clock,
 		)
 
@@ -118,10 +122,12 @@ class UseCaseConfiguration {
 	@Bean
 	fun cancelCheckoutSessionUseCase(
 		checkoutSessionRepository: CheckoutSessionRepository,
+		transactionManager: TransactionManager,
 		clock: Clock,
 	): CancelCheckoutSessionUseCase =
 		CancelCheckoutSessionUseCase(
 			checkoutSessionRepository = checkoutSessionRepository,
+			transactionManager = transactionManager,
 			clock = clock,
 		)
 }

@@ -33,7 +33,11 @@ private fun newSession(): CheckoutSession =
 	)
 
 private fun newUseCase(checkoutSessionRepository: CheckoutSessionRepository): ConnectCheckoutWalletUseCase =
-	ConnectCheckoutWalletUseCase(checkoutSessionRepository = checkoutSessionRepository, clock = FIXED_CLOCK)
+	ConnectCheckoutWalletUseCase(
+		checkoutSessionRepository = checkoutSessionRepository,
+		transactionManager = ImmediateTransactionManager(),
+		clock = FIXED_CLOCK,
+	)
 
 class ConnectCheckoutWalletUseCaseTest :
 	FunSpec({
@@ -41,7 +45,7 @@ class ConnectCheckoutWalletUseCaseTest :
 		test("a CREATED session is opened and then connected in one call") {
 			val checkoutSessionRepository = mockk<CheckoutSessionRepository>(relaxed = true)
 			val session = newSession()
-			every { checkoutSessionRepository.findById(CS_ID) } returns session
+			every { checkoutSessionRepository.findByIdForUpdate(CS_ID) } returns session
 
 			val result = newUseCase(checkoutSessionRepository).execute(ConnectCheckoutWalletCommand(CS_ID, WALLET))
 
@@ -56,7 +60,7 @@ class ConnectCheckoutWalletUseCaseTest :
 			val checkoutSessionRepository = mockk<CheckoutSessionRepository>(relaxed = true)
 			val session = newSession()
 			session.open(NOW.minusSeconds(30))
-			every { checkoutSessionRepository.findById(CS_ID) } returns session
+			every { checkoutSessionRepository.findByIdForUpdate(CS_ID) } returns session
 
 			val result = newUseCase(checkoutSessionRepository).execute(ConnectCheckoutWalletCommand(CS_ID, WALLET))
 
@@ -66,7 +70,7 @@ class ConnectCheckoutWalletUseCaseTest :
 
 		test("throws CheckoutSessionNotFoundException when the id does not exist") {
 			val checkoutSessionRepository = mockk<CheckoutSessionRepository>()
-			every { checkoutSessionRepository.findById(CS_ID) } returns null
+			every { checkoutSessionRepository.findByIdForUpdate(CS_ID) } returns null
 
 			shouldThrow<CheckoutSessionNotFoundException> {
 				newUseCase(checkoutSessionRepository).execute(ConnectCheckoutWalletCommand(CS_ID, WALLET))
@@ -78,7 +82,7 @@ class ConnectCheckoutWalletUseCaseTest :
 			val session = newSession()
 			session.open(NOW.minusSeconds(30))
 			session.connectWallet(WALLET, NOW.minusSeconds(20))
-			every { checkoutSessionRepository.findById(CS_ID) } returns session
+			every { checkoutSessionRepository.findByIdForUpdate(CS_ID) } returns session
 
 			shouldThrow<IllegalStateException> {
 				newUseCase(checkoutSessionRepository).execute(ConnectCheckoutWalletCommand(CS_ID, WALLET))
@@ -89,7 +93,7 @@ class ConnectCheckoutWalletUseCaseTest :
 			val checkoutSessionRepository = mockk<CheckoutSessionRepository>()
 			val session = newSession()
 			session.cancel(NOW.minusSeconds(10))
-			every { checkoutSessionRepository.findById(CS_ID) } returns session
+			every { checkoutSessionRepository.findByIdForUpdate(CS_ID) } returns session
 
 			shouldThrow<IllegalStateException> {
 				newUseCase(checkoutSessionRepository).execute(ConnectCheckoutWalletCommand(CS_ID, WALLET))

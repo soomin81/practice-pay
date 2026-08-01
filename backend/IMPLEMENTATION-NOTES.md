@@ -422,3 +422,15 @@
 - **로그인 결과 enum은 내부/가맹점이 공유하는 `LoginOutcome` 하나다** — 처음엔 `InternalLoginOutcome`/`MerchantLoginOutcome`으로 병렬로 뒀다가, 값이 완전히 동일해(`SUCCESS`/`INVALID_CREDENTIALS`/`LOCKED`) 코드 리뷰에서 통합했다. 값이 갈리는 `InternalUserRole`/`MerchantUserRole`은 병렬로 두지만, 값이 같은 것은 `AccountStatus`/`LoginId`처럼 공유하는 이 저장소의 선례를 따른 것이다. 타입만 바뀌었고 DB 저장값(`.name`)·동작·프론트는 그대로다. 인가는 내부 로그인 감사(SUPER_ADMIN 전용)와 달리 **SUPER_ADMIN/OPERATOR**다 — OPERATOR가 "가맹점·결제·운영 업무"·가맹점 계정 관리를 맡기 때문. 프론트 게이트도 그래서 `canManageMerchantAccounts`(SUPER_ADMIN||OPERATOR)로 다르다.
 - **새 테이블이라 Flyway V7 적용 + `:db-core:jooqCodegen`이 어댑터 컴파일보다 먼저**(V6과 같은 순서).
 - **실물 검증(권장)은 아직 안 했다** — 두 앱이 같은 DB를 봐야 한다: api-merchant `bootRun`으로 틀린 비밀번호·성공·없는 merchantCode 로그인 → api-admin `bootRun`의 `GET /admin/merchant-login-audit`에 세 건이 가맹점·결과·IP와 함께 보이고 VIEWER 403·OPERATOR 200인지 확인.
+
+## 동시 쓰기 보호 — 고위험 3개 애그리게이트에 행 잠금(`FOR UPDATE`)
+
+`backend/CLAUDE.md`가 "알려진 한계"로 적어 두고 **"기존 애그리게이트를 다시 저장하는 첫 상태 전이 Use Case가 생기면 반드시 다시 검토한다"**고 단서를 달았던 낙관적 잠금 문제를 처리했다. 그 전제("지금은 `CreatePaymentUseCase`만 `save()`를 부른다")는 이미 깨져 있었다 — 만료 Sweep·Confirm Worker·체크아웃 API·API Key 인증이 전부 기존 애그리게이트를 재저장한다. 만료 Sweep을 추가할 때 이 단서를 확인하지 않아 위험을 키웠다.
+
+- **왜 `save()` 안에서 잠그면 안 되나(핵심).** `save()`의 재조회에 `FOR UPDATE`를 붙여도 못 막는다 — 문제의 읽기는 Use Case가 앞서 부른 `findById()`다. 잠금은 **변경할 목적으로 읽는 시점**에 잡고 저장까지 유지돼야 하므로, 로드와 저장이 같은 트랜잭션에 있어야 한다. 그래서 `ConnectCheckoutWallet`/`CancelCheckoutSession`/`AuthenticateApiKey`는 저장을 묶으려고가 아니라 **잠금을 유지하려고** `TransactionManager`를 새로 받는다. `SubmitPaymentTransaction`은 로드가 트랜잭션 밖에 있어서 전체를 트랜잭션 안으로 옮겼다.
+- **테스트가 문제를 먼저 증명했다.** `PaymentConcurrentWriteTest`를 잠금 없이 돌리면 실패하고(트랜잭션 안에서는 version 가드가 `IllegalStateException`으로 터진다), `findByIdForUpdate`로 바꾸면 통과한다. 적용 후 일부러 되돌려 실패를 재확인했다. **트랜잭션 밖 경로(당시의 체크아웃 2개·API Key 인증)에서는 같은 상황이 조용한 lost update**가 된다는 것이 이 작업의 실제 동기다.
+- **가장 위험했던 것: API Key 폐기가 되돌려진다.** 인증은 매 결제 요청마다 `recordUsage()` 후 저장하는데 그 UPDATE가 상태 컬럼까지 자기 사본 값으로 쓴다 — 관리자가 폐기하는 사이 in-flight 인증이 저장되면 `ACTIVE`로 복구된다. `MerchantApiKeyConcurrentWriteTest`가 "어느 순서로 겹치든 최종 상태는 `REVOKED`"를 고정한다.
+- **잠금 순서는 `Payment` → `CheckoutSession`으로 통일했다** — 반대로 잠그는 경로가 생기면 교착이 난다. `SubmitPaymentTransactionUseCase`가 세션을 **잠그지 않고 한 번 더 읽는** 이유가 이것이다(`paymentId`를 얻어 Payment부터 잠그려고). `ExpireCheckoutUseCase`는 세션을 `paymentId`로 찾은 뒤 그 id로 잠금 조회를 다시 한다 — `findByPaymentId`의 잠금 변형을 Port에 더하지 않기 위해서다.
+- **`ConfirmBlockchainTransactionUseCase`는 의도적으로 제외했다** — 중간에 온체인 RPC 호출이 있어 잠그면 네트워크 지연 동안 행을 붙잡는다. 그 Use Case가 다루는 Payment는 이미 `PROCESSING`/`CONFIRMING`이라 만료 Sweep(`CREATED`/`READY`만 선택)·제출과 겹치지 않아 경합 창이 사실상 없다. **잠금 구간에 외부 호출을 넣지 않는다**는 규칙을 지킨 것이다.
+- **범위는 고위험 3개로 한정했다**(사용자와 확정) — 나머지 7개 어댑터도 같은 재조회 패턴이지만 두 흐름이 같은 행을 동시에 바꾸는 경로가 없다. 그런 경로가 생기면 같은 방식으로 넓힌다.
+- **실물 검증(권장)은 아직 안 했다** — `api-payment`에 같은 Key로 요청을 보내면서 `api-merchant`에서 그 Key를 폐기해, 폐기가 유지되는지 DB로 확인하는 것이 핵심이다.

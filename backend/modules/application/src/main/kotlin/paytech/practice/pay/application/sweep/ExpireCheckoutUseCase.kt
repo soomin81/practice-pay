@@ -32,13 +32,22 @@ class ExpireCheckoutUseCase(
 		transactionManager.runInTransaction {
 			val now = clock.instant()
 
-			val payment = paymentRepository.findById(command.paymentId) ?: return@runInTransaction
+			// 변경할 목적의 읽기라 행을 잠근다 — 고객의 결제 제출과 이 만료가 같은 결제를 동시에
+			// 집을 수 있다. 잠금 순서는 **Payment → CheckoutSession**으로 통일한다(반대 순서로
+			// 잠그는 경로가 생기면 교착이 난다).
+			val payment = paymentRepository.findByIdForUpdate(command.paymentId) ?: return@runInTransaction
 			if (payment.status == PaymentStatus.CREATED || payment.status == PaymentStatus.READY) {
 				payment.expire(now)
 				paymentRepository.save(payment)
 			}
 
-			val session = checkoutSessionRepository.findByPaymentId(command.paymentId)
+			// 세션은 `paymentId`로 찾으므로 식별자를 먼저 얻은 뒤 잠금 조회로 다시 읽는다
+			// (`findByPaymentId`의 잠금 변형을 Port에 더하지 않기 위해서다). 고객의 지갑 연결·
+			// 취소가 같은 세션을 동시에 바꿀 수 있어 이 잠금이 필요하다.
+			val session =
+				checkoutSessionRepository
+					.findByPaymentId(command.paymentId)
+					?.let { checkoutSessionRepository.findByIdForUpdate(it.id) }
 			if (session != null && session.status in EXPIRABLE_SESSION_STATUSES) {
 				session.expire(now)
 				checkoutSessionRepository.save(session)

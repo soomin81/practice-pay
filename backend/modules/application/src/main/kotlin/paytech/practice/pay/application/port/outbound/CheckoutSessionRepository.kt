@@ -15,6 +15,13 @@ interface CheckoutSessionRepository {
 	fun findById(checkoutSessionId: CheckoutSessionId): CheckoutSession?
 
 	/**
+	 * [findById]와 같지만 **행 잠금을 잡고** 읽는다(`SELECT ... FOR UPDATE`) — 읽은 값을 바꿔
+	 * 다시 저장할 목적일 때만 쓴다. **반드시 트랜잭션 안에서 불러야 한다**
+	 * ([PaymentRepository.findByIdForUpdate]의 KDoc에 이유가 있다).
+	 */
+	fun findByIdForUpdate(checkoutSessionId: CheckoutSessionId): CheckoutSession?
+
+	/**
 	 * `payment_seq`로 CheckoutSession을 찾는다. `Payment`와 1:1 관계라 최대 하나만 있다.
 	 *
 	 * 결제 생성이 멱등하게 재요청됐을 때(`PaymentRepository.findByMerchantOrderId`

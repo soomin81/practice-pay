@@ -9,6 +9,7 @@ import io.mockk.verify
 import paytech.practice.pay.application.port.outbound.ApiKeySecretHasher
 import paytech.practice.pay.application.port.outbound.MerchantApiKeyRepository
 import paytech.practice.pay.application.port.outbound.MerchantRepository
+import paytech.practice.pay.application.port.outbound.TransactionManager
 import paytech.practice.pay.domain.apikey.ApiEnvironment
 import paytech.practice.pay.domain.apikey.ApiKeyPrefix
 import paytech.practice.pay.domain.apikey.ApiKeyScope
@@ -64,15 +65,21 @@ private fun newUseCase(
 		merchantApiKeyRepository = merchantApiKeyRepository,
 		merchantRepository = merchantRepository,
 		apiKeySecretHasher = apiKeySecretHasher,
+		transactionManager = ImmediateTransactionManager(),
 		clock = FIXED_CLOCK,
 	)
+
+/** `runInTransaction`을 그대로 실행하는 가짜(다른 Use Case 테스트들과 같은 방식). */
+private class ImmediateTransactionManager : TransactionManager {
+	override fun <T> runInTransaction(block: () -> T): T = block()
+}
 
 class AuthenticateApiKeyUseCaseTest :
 	FunSpec({
 
 		test("a valid key returns the authenticated identity and records usage") {
 			val repository = mockk<MerchantApiKeyRepository>(relaxed = true)
-			every { repository.findByPrefix(PREFIX) } returns activeKey()
+			every { repository.findByPrefixForUpdate(PREFIX) } returns activeKey()
 
 			val result = newUseCase(repository).execute(AuthenticateApiKeyCommand(RAW_KEY))
 
@@ -90,7 +97,7 @@ class AuthenticateApiKeyUseCaseTest :
 		}
 
 		test("an unknown prefix throws InvalidApiKeyException") {
-			val repository = mockk<MerchantApiKeyRepository> { every { findByPrefix(any()) } returns null }
+			val repository = mockk<MerchantApiKeyRepository> { every { findByPrefixForUpdate(any()) } returns null }
 
 			shouldThrow<InvalidApiKeyException> {
 				newUseCase(repository).execute(AuthenticateApiKeyCommand(RAW_KEY))
@@ -98,7 +105,7 @@ class AuthenticateApiKeyUseCaseTest :
 		}
 
 		test("a secret mismatch throws InvalidApiKeyException") {
-			val repository = mockk<MerchantApiKeyRepository> { every { findByPrefix(PREFIX) } returns activeKey() }
+			val repository = mockk<MerchantApiKeyRepository> { every { findByPrefixForUpdate(PREFIX) } returns activeKey() }
 			val hasher = mockk<ApiKeySecretHasher> { every { matches(any(), any()) } returns false }
 
 			shouldThrow<InvalidApiKeyException> {
@@ -108,7 +115,7 @@ class AuthenticateApiKeyUseCaseTest :
 
 		test("a revoked key throws InvalidApiKeyException") {
 			val key = activeKey().apply { revoke(MerchantUserId("mu_test_001"), NOW.minusSeconds(60)) }
-			val repository = mockk<MerchantApiKeyRepository> { every { findByPrefix(PREFIX) } returns key }
+			val repository = mockk<MerchantApiKeyRepository> { every { findByPrefixForUpdate(PREFIX) } returns key }
 
 			shouldThrow<InvalidApiKeyException> {
 				newUseCase(repository).execute(AuthenticateApiKeyCommand(RAW_KEY))
@@ -130,7 +137,7 @@ class AuthenticateApiKeyUseCaseTest :
 					expiresAt = NOW.minusSeconds(1),
 					createdAt = NOW.minusSeconds(3_600),
 				)
-			val repository = mockk<MerchantApiKeyRepository> { every { findByPrefix(PREFIX) } returns key }
+			val repository = mockk<MerchantApiKeyRepository> { every { findByPrefixForUpdate(PREFIX) } returns key }
 
 			shouldThrow<InvalidApiKeyException> {
 				newUseCase(repository).execute(AuthenticateApiKeyCommand(RAW_KEY))
@@ -152,7 +159,7 @@ class AuthenticateApiKeyUseCaseTest :
 					expiresAt = null,
 					createdAt = NOW.minusSeconds(3_600),
 				)
-			val repository = mockk<MerchantApiKeyRepository> { every { findByPrefix(PREFIX) } returns key }
+			val repository = mockk<MerchantApiKeyRepository> { every { findByPrefixForUpdate(PREFIX) } returns key }
 
 			shouldThrow<InvalidApiKeyException> {
 				newUseCase(repository).execute(AuthenticateApiKeyCommand(RAW_KEY))
@@ -160,7 +167,7 @@ class AuthenticateApiKeyUseCaseTest :
 		}
 
 		test("a merchant that cannot accept payments throws InvalidApiKeyException") {
-			val repository = mockk<MerchantApiKeyRepository> { every { findByPrefix(PREFIX) } returns activeKey() }
+			val repository = mockk<MerchantApiKeyRepository> { every { findByPrefixForUpdate(PREFIX) } returns activeKey() }
 			val suspendedMerchant = activeMerchant().apply { suspend(NOW.minusSeconds(60)) }
 			val merchantRepository = mockk<MerchantRepository> { every { findById(MERCHANT_ID) } returns suspendedMerchant }
 

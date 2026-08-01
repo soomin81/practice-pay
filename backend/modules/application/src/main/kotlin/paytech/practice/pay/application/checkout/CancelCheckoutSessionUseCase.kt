@@ -1,6 +1,7 @@
 package paytech.practice.pay.application.checkout
 
 import paytech.practice.pay.application.port.outbound.CheckoutSessionRepository
+import paytech.practice.pay.application.port.outbound.TransactionManager
 import paytech.practice.pay.domain.checkout.CheckoutSessionStatus
 import java.time.Clock
 
@@ -14,38 +15,45 @@ import java.time.Clock
  * **`Payment`는 건드리지 않는다.** 도메인에 `Payment`를 고객 취소로 종료시키는
  * 전이가 없고(`CREATED`/`READY → EXPIRED`는 만료 전용이다), `docs/`도 체크아웃 취소가
  * 결제까지 끝낸다고 말하지 않는다 — 문서에 없는 전이를 새로 만들지 않는다. 결과적으로
- * 취소된 세션의 `Payment`는 만료 시각까지 `READY`로 남았다가 만료 Worker(아직 없음,
- * 알려진 gap)가 정리하게 된다.
+ * 취소된 세션의 `Payment`는 만료 시각까지 `READY`로 남았다가 만료 Sweep Worker
+ * (`apps:batch`의 `expireCheckoutsJob`)가 정리한다.
  *
- * 단일 Aggregate만 저장하므로 `TransactionManager`가 필요 없다
- * (`ConnectCheckoutWalletUseCase`와 같은 이유).
+ * 단일 Aggregate만 저장하지만 **트랜잭션이 필요하다** — 저장을 묶기 위해서가 아니라
+ * 변경할 목적의 읽기에 건 행 잠금을 저장까지 유지하기 위해서다(`execute`의 KDoc 참고).
  */
 class CancelCheckoutSessionUseCase(
 	private val checkoutSessionRepository: CheckoutSessionRepository,
+	private val transactionManager: TransactionManager,
 	private val clock: Clock,
 ) {
-	fun execute(command: CancelCheckoutSessionCommand): CancelCheckoutSessionResult {
-		val checkoutSession =
-			checkoutSessionRepository.findById(command.checkoutSessionId)
-				?: throw CheckoutSessionNotFoundException(command.checkoutSessionId)
+	/**
+	 * 로드부터 저장까지를 **한 트랜잭션 안에서** 수행한다 — 변경할 목적의 읽기를 잠그고
+	 * ([CheckoutSessionRepository.findByIdForUpdate]) 그 잠금을 저장까지 유지하기 위해서다.
+	 * 잠금이 없으면 같은 세션에 대한 동시 요청(지갑 연결·만료 Sweep)이 서로를 덮어쓴다.
+	 */
+	fun execute(command: CancelCheckoutSessionCommand): CancelCheckoutSessionResult =
+		transactionManager.runInTransaction {
+			val checkoutSession =
+				checkoutSessionRepository.findByIdForUpdate(command.checkoutSessionId)
+					?: throw CheckoutSessionNotFoundException(command.checkoutSessionId)
 
-		val now = clock.instant()
-		if (now.isAfter(checkoutSession.expiresAt)) {
-			throw CheckoutSessionExpiredException(command.checkoutSessionId)
+			val now = clock.instant()
+			if (now.isAfter(checkoutSession.expiresAt)) {
+				throw CheckoutSessionExpiredException(command.checkoutSessionId)
+			}
+			if (!checkoutSession.status.isCancellable()) {
+				throw CheckoutSessionNotCancellableException(command.checkoutSessionId, checkoutSession.status)
+			}
+
+			checkoutSession.cancel(now)
+			checkoutSessionRepository.save(checkoutSession)
+
+			CancelCheckoutSessionResult(
+				checkoutSessionId = checkoutSession.id,
+				checkoutSessionStatus = checkoutSession.status,
+				cancelUrl = checkoutSession.cancelUrl,
+			)
 		}
-		if (!checkoutSession.status.isCancellable()) {
-			throw CheckoutSessionNotCancellableException(command.checkoutSessionId, checkoutSession.status)
-		}
-
-		checkoutSession.cancel(now)
-		checkoutSessionRepository.save(checkoutSession)
-
-		return CancelCheckoutSessionResult(
-			checkoutSessionId = checkoutSession.id,
-			checkoutSessionStatus = checkoutSession.status,
-			cancelUrl = checkoutSession.cancelUrl,
-		)
-	}
 }
 
 /**

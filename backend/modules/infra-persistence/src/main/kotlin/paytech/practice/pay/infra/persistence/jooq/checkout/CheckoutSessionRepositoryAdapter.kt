@@ -71,6 +71,15 @@ class CheckoutSessionRepositoryAdapter(
 			.fetchOne()
 			?.let { it.toDomain(dsl.paymentId(it.paymentSeq!!)) }
 
+	/** `FOR UPDATE`로 행을 잠그고 읽는다 — 호출 조건은 Port의 KDoc 참고(반드시 트랜잭션 안). */
+	override fun findByIdForUpdate(checkoutSessionId: CheckoutSessionId): CheckoutSession? =
+		dsl
+			.selectFrom(CHECKOUT_SESSION)
+			.where(CHECKOUT_SESSION.CHECKOUT_SESSION_ID.eq(checkoutSessionId.value))
+			.forUpdate()
+			.fetchOne()
+			?.let { it.toDomain(dsl.paymentId(it.paymentSeq!!)) }
+
 	override fun findByPaymentId(paymentId: PaymentId): CheckoutSession? =
 		dsl
 			.selectFrom(CHECKOUT_SESSION)

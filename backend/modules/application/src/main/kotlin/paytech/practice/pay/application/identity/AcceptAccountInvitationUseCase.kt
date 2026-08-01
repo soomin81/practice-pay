@@ -32,7 +32,7 @@ import java.time.Instant
  * **만료된 초대를 발견해도 `AccountInvitation.expire()`를 호출해 `EXPIRED`로
  * 갱신하지는 않는다** — `docs/database/database-design.md`의
  * `idx_account_invitation_pending(invitation_status, expires_at)` 인덱스가
- * 암시하는 별도의 만료 Sweep Worker의 책임으로 남겨둔다(아직 없음, 알려진 gap).
+ * 암시하는 별도의 만료 Sweep Worker(`apps:batch`의 `expireAccountInvitationsJob`)의 책임이다.
  * 이 Use Case는 만료 여부를 읽기 전용으로만 판단한다.
  *
  * `AccountInvitation + (InternalUser 또는 MerchantUser)`를 함께 저장하는 이
