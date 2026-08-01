@@ -40,7 +40,9 @@ PG가 결제 결과를 고객에게 표시하는 페이지다. Redirect만으로
 고객이 체크아웃에 연결하는 외부 지갑이다.
 
 ## Receiving Wallet — 수취 지갑
-고객 USDC를 수취하는 PG 관리 지갑이다.
+고객 USDC를 수취하는 PG 관리 지갑이다. **가맹점의 지갑이 아니다** — 정산이 "PG가 USDC를 보유한
+뒤 KRW로 바꿔 가맹점에 채권을 세운다"는 구조라서다. 귀속 모델과 현재 API의 gap은
+[MVP 범위](../architecture/mvp-scope.md)의 "수취 지갑 귀속" 절에 있다.
 
 ## Token Contract Address — 토큰 계약 주소
 네트워크에서 토큰을 식별하는 Contract 주소다. Symbol이 아니라 Network와 Contract 조합으로 검증한다.

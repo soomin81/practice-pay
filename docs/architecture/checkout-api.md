@@ -142,6 +142,9 @@
   판단하지 않고 항상 (네트워크, Contract 주소) 조합으로 다룬다는 도메인 규칙
   (`docs/domain/domain-model.md`)이 프론트에도 그대로 적용된다. 출처는 백엔드의
   `PaymentNetworkConfig`다.
+- **`receivingWallet`은 PG가 수탁하는 지갑이지 가맹점 지갑이 아니다**(`mvp-scope.md`의
+  "수취 지갑 귀속" 절). MVP는 네트워크당 하나를 공용으로 쓰므로 **주소만으로는 어느 결제의
+  입금인지 구분되지 않는다** — 귀속은 전적으로 4.4에서 제출하는 Transaction Hash가 결정한다.
 - **이 `GET`은 상태를 바꾸지 않는다.** `CheckoutSession.open()`(`CREATED → OPEN`)은
   호출하지 않는다 — 조회는 `GET`으로 남기고, 고객이 실제로 처음 행동하는 순간(지갑
   연결)에 `open()`을 함께 처리한다는 기존 판단을 따른다

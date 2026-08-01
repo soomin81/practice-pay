@@ -12,8 +12,10 @@ import jakarta.validation.constraints.Positive
  * API Key 인증이 없어서 임시로 요청 본문에 받았지만, 이제는 인증된 가맹점만
  * 결제를 생성할 수 있다.
  *
- * [network]/[receivingWallet]은 여전히 `CreatePaymentCommand`의 KDoc이 설명하는
- * 이유(가맹점 지갑 설정을 어디서 조회하는지 아직 `docs/`에 없음)로 직접 받는다.
+ * [network]/[receivingWallet]을 요청 본문으로 받는 것은 **알려진 gap이다** — 수취 지갑은
+ * PG가 수탁하는 지갑이라 가맹점이 정할 값이 아니고, 지금은 허용 목록 검증도 없다. 근거와
+ * 예정된 방향은 `CreatePaymentCommand`의 KDoc과 `docs/architecture/mvp-scope.md`의
+ * "수취 지갑 귀속" 절에 있다.
  */
 data class CreatePaymentRequest(
 	@field:NotBlank

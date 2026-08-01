@@ -239,7 +239,7 @@ inbound adapter → application → domain ← outbound port ← outbound adapte
 - **`TransactionManager`**(`fun <T> runInTransaction(block: () -> T): T`)는 Use Case가 애플리케이션 계층에서 Spring의 `@Transactional`에 의존하거나 어떤 영속성 프레임워크가 뒤에 있는지 몰라도, 문서화된 여러 애그리게이트에 걸친 트랜잭션 경계(`docs/architecture/persistence-jooq.md`의 "트랜잭션 경계" 절)를 만족시키는 방법이다. 나머지 두 개의 문서화된 경계(결제 완료, 환전 완료)를 위한 Use Case를 만들 때도 이 Port를 재사용한다 — Use Case마다 별도의 묶음 Repository Port를 새로 만들지 않는다.
 - **Use Case는 `execute(command): result` 메서드 하나만 있는 평범한 클래스다** — 아직 구현이 하나 이상 필요한 경우가 없어서 별도의 inbound Port 인터페이스는 두지 않는다. `Command`/`Result`는 같은 패키지에 `<UseCaseName>Command`/`<UseCaseName>Result`로 이름 붙인 작은 데이터 클래스다. 생성 Command의 `execute`가 식별자(또는 그 밖의 최소한의 데이터)를 반환하는 건 Use Case 레벨에서 허용되는 CQS 예외다 — 위의 CQS 규칙은 도메인 애그리게이트 메서드에 대한 것이지 Use Case 진입점에 대한 것이 아니다.
 - **멱등성 체크**(아래 "멱등성 키" 참고)는 Port에 아무것도 쓰기 전에 `execute` 시작 지점에서 한다 — 문서화된 키로 조회해서 이미 있으면 그 결과로 바로 반환한다. 이건 최선을 다하는 빠른 경로일 뿐 최종 보증이 아니다 — 동시 요청 사이의 경합을 막는 최후의 방어선은 여전히 DB 자체의 `UNIQUE` 제약이다.
-- `docs/`가 아직 풀지 않은 빈틈(예: 가맹점의 수취 지갑/네트워크가 어디서 오는지)은 지금은 새 Port/테이블을 만들어내지 않고 `Command`의 입력값으로 받는다 — 나중에 쉽게 찾아 바꿀 수 있도록 그 `Command`의 KDoc에 이 단순화를 표시해둔다.
+- `docs/`가 아직 풀지 않은 빈틈은 지금은 새 Port/테이블을 만들어내지 않고 `Command`의 입력값으로 받는다 — 나중에 쉽게 찾아 바꿀 수 있도록 그 `Command`의 KDoc에 이 단순화를 표시해둔다. **다만 그 표시를 "결정되지 않았다"로 두면 결정이 난 뒤에도 코드가 그대로 남는다** — `CreatePaymentCommand`의 `receivingWallet`이 실제로 그렇게 됐다(`docs/`는 PG 수탁으로 정해져 있었는데 KDoc은 "아직 정의돼 있지 않다"로 남아 있었고, 그 사이 가맹점이 자기 지갑을 넣을 수 있는 구멍이 생겼다). 빈틈을 표시할 때는 **무엇이 미정인지와 무엇이 위험한지를 나눠 적는다.**
 
 ### 영속성 Adapter 컨벤션(`modules:infra-persistence`)
 
