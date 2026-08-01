@@ -54,6 +54,7 @@ import paytech.practice.pay.application.identity.RegisterMerchantUseCase
 import paytech.practice.pay.application.merchant.ListMerchantsResult
 import paytech.practice.pay.application.merchant.ListMerchantsUseCase
 import paytech.practice.pay.application.payment.ExportPaymentsUseCase
+import paytech.practice.pay.application.payment.GetPaymentDetailUseCase
 import paytech.practice.pay.application.payment.ListPaymentsResult
 import paytech.practice.pay.application.payment.ListPaymentsUseCase
 import paytech.practice.pay.application.port.outbound.InternalLoginAuditEntry
@@ -213,6 +214,9 @@ class AdminApiDocumentationTest : FunSpec() {
 
 	@MockkBean
 	lateinit var listSettlementReceivablesUseCase: ListSettlementReceivablesUseCase
+
+	@MockkBean
+	lateinit var getPaymentDetailUseCase: GetPaymentDetailUseCase
 
 	init {
 		extensions(SpringExtension)
@@ -901,6 +905,29 @@ class AdminApiDocumentationTest : FunSpec() {
 				.perform(get("/admin/payments").with(authenticatedAs(VIEWER)))
 				.andExpect(status().isOk)
 				.andDo(document("admin-payments", snippet))
+		}
+
+		test("document GET payment detail") {
+			every { getPaymentDetailUseCase.execute(any()) } returns paymentDetailFixture()
+
+			val snippet =
+				adminResource(
+					summary = "결제 상세 조회",
+					description =
+						"**인증된 내부 사용자 전원**(VIEWER 포함)이 조회할 수 있다. 결제 한 건의 전체 맥락을 " +
+							"단계별로 돌려준다: 견적·체크아웃 세션·온체인 거래·환전·정산 채권·Webhook 전송 이력. " +
+							"**흐름이 진행돼야 생기는 부분은 null이고, 그 null 자체가 \"어디까지 갔는지\"를 말해준다** " +
+							"(blockchainTransaction이 null이면 고객이 아직 Hash를 제출하지 않았다). 없는 결제는 404다. " +
+							"토큰 금액(paymentAmount, blockchainTransaction.amountMinor, exchangeOrder.executedAmount)은 " +
+							"Minor Unit 정수를 **문자열로** 주고 KRW는 숫자로 준다.",
+					responseSchema = "PaymentDetailResponse",
+					responseFields = paymentDetailFields(),
+				)
+
+			mockMvc
+				.perform(get("/admin/payments/{paymentId}", "pay_3b81").with(authenticatedAs(VIEWER)))
+				.andExpect(status().isOk)
+				.andDo(document("admin-payment-detail", snippet))
 		}
 
 		test("document GET settlement receivables") {

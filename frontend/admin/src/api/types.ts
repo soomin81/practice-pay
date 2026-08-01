@@ -158,3 +158,5 @@ export type SettlementFilters = {
 	page?: number
 	size?: number
 }
+
+export type PaymentDetailResponse = JsonResponse<'admin-payment-detail', 200>

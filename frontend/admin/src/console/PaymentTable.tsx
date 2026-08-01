@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import type { PaymentSummary } from '@/api/types'
 import { formatDateTime, formatKrw, formatTokenAmount } from '@/console/format'
 import { Badge } from '@/components/ui/badge'
@@ -31,7 +32,10 @@ export function PaymentTable({ payments }: { payments: PaymentSummary[] }) {
 							<td className="py-2 pr-3 whitespace-nowrap">{formatDateTime(payment.createdAt)}</td>
 							<td className="py-2 pr-3">{payment.merchantName}</td>
 							<td className="py-2 pr-3">
-								<div>{payment.orderName}</div>
+								{/* 주문명을 상세로 가는 입구로 쓴다(가맹점 목록이 이름을 링크로 쓰는 것과 같은 방식). */}
+								<Link className="underline underline-offset-2" to={`/payments/${payment.paymentId}`}>
+									{payment.orderName}
+								</Link>
 								<div className="text-xs text-muted-foreground">{payment.merchantOrderId}</div>
 							</td>
 							<td className="py-2 pr-3 whitespace-nowrap">{formatKrw(payment.orderAmount)}</td>

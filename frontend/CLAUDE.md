@@ -355,6 +355,23 @@ npm run gen:api        # api-admin의 openapi3.yaml → src/api/schema.d.ts
 - 이 페이지 전체가 여전히 SUPER_ADMIN 전용이라(라우트·내비·서버 3중), 관리 액션도 그
   안에서만 노출된다. 계약은 `docs/architecture/admin-console-api.md`의 4절에 있다.
 
+## 결제 상세 화면(admin) — 비어 있는 단계를 감추지 않는다
+
+`/payments/:paymentId`(`PaymentDetailPage`). 목록의 주문명이 입구다. 결제 한 건의 전체 맥락을
+단계별로 보여준다: 결제·견적·체크아웃·온체인 거래·환전·정산·Webhook 전송.
+
+- **아직 진행되지 않은 단계를 숨기지 않고 이유를 적는다**(`NotYet`). 감추면 "없는 것"과
+  "아직인 것"이 화면에서 같아져 운영자가 진단할 수 없다 — 이 화면의 목적이 "돈이 어디 있나"에
+  답하는 것이라(ADR-007) 어디까지 갔는지가 곧 정보다.
+- **결제가 실패해도 온체인 기록을 보여준다** — 실패가 "돈이 오지 않았다"를 뜻하지 않는다.
+- 주소·Hash는 줄이지 않고 전체를 그린다(운영자가 온체인 탐색기와 대조해야 한다).
+- **알려진 gap**: 서버는 진행되지 않은 단계를 `null`로 내려주는데 생성된 타입은
+  `undefined`(optional)로만 표현한다 — restdocs-api-spec이 OpenAPI `nullable`을 표현하지
+  못해서다. 화면 코드는 truthy 검사라 둘 다 안전하고, 테스트 픽스처에서만 타입을 느슨하게 둔다.
+- **가맹점 콘솔에는 아직 없다.** 만들 때는 목록과 같은 규율로 `merchantId`를 필수로 받는 별도
+  Use Case를 두고 **조회한 결제가 그 가맹점 것인지 확인해야 한다** — 단건 조회는 "필터가 비면
+  전체가 나온다"가 아니라 **"남의 것을 ID로 찍어 볼 수 있다"**는 형태로 샌다.
+
 ## 정산 채권 화면 — 결제 내역과 다른 두 가지
 
 `admin`·`merchant` 양쪽에 `SettlementPage`/`SettlementTable`/`useSettlementReceivables`가 있다.

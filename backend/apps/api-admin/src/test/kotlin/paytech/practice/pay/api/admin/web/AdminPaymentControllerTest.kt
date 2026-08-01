@@ -23,11 +23,23 @@ import paytech.practice.pay.api.admin.config.SecurityConfig
 import paytech.practice.pay.api.admin.security.InternalUserPrincipal
 import paytech.practice.pay.application.payment.ExportPaymentsResult
 import paytech.practice.pay.application.payment.ExportPaymentsUseCase
+import paytech.practice.pay.application.payment.GetPaymentDetailUseCase
 import paytech.practice.pay.application.payment.ListPaymentsCommand
 import paytech.practice.pay.application.payment.ListPaymentsResult
 import paytech.practice.pay.application.payment.ListPaymentsUseCase
+import paytech.practice.pay.application.port.outbound.PaymentDetailBlockchainTransaction
+import paytech.practice.pay.application.port.outbound.PaymentDetailCheckoutSession
+import paytech.practice.pay.application.port.outbound.PaymentDetailExchangeOrder
+import paytech.practice.pay.application.port.outbound.PaymentDetailPayment
+import paytech.practice.pay.application.port.outbound.PaymentDetailQuote
+import paytech.practice.pay.application.port.outbound.PaymentDetailSettlement
+import paytech.practice.pay.application.port.outbound.PaymentDetailView
+import paytech.practice.pay.application.port.outbound.PaymentDetailWebhookDelivery
 import paytech.practice.pay.application.port.outbound.PaymentListEntry
+import paytech.practice.pay.domain.blockchain.BlockchainTransactionStatus
 import paytech.practice.pay.domain.blockchain.TransactionHash
+import paytech.practice.pay.domain.checkout.CheckoutSessionStatus
+import paytech.practice.pay.domain.exchange.ExchangeOrderStatus
 import paytech.practice.pay.domain.identity.InternalUserId
 import paytech.practice.pay.domain.identity.InternalUserRole
 import paytech.practice.pay.domain.identity.LoginId
@@ -35,14 +47,19 @@ import paytech.practice.pay.domain.merchant.MerchantId
 import paytech.practice.pay.domain.payment.MerchantOrderId
 import paytech.practice.pay.domain.payment.PaymentId
 import paytech.practice.pay.domain.payment.PaymentStatus
+import paytech.practice.pay.domain.settlement.SettlementReceivableStatus
 import paytech.practice.pay.domain.shared.Asset
 import paytech.practice.pay.domain.shared.BlockchainNetwork
 import paytech.practice.pay.domain.shared.Money
 import paytech.practice.pay.domain.shared.TokenAmount
+import paytech.practice.pay.domain.webhook.WebhookDeliveryStatus
+import java.math.BigDecimal
 import java.time.Clock
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneOffset
 
+private val NOW: Instant = Instant.parse("2026-08-01T04:07:24Z")
 private val SUPER_ADMIN =
 	InternalUserPrincipal(InternalUserId("iu_super"), LoginId("super"), InternalUserRole.SUPER_ADMIN)
 private val VIEWER =
@@ -83,6 +100,105 @@ class FixedClockConfiguration {
 	fun clock(): Clock = Clock.fixed(Instant.parse("2026-08-01T06:30:00Z"), ZoneOffset.UTC)
 }
 
+private fun detailView(
+	blockchainTransaction: PaymentDetailBlockchainTransaction? =
+		PaymentDetailBlockchainTransaction(
+			transactionHash = TransactionHash("0x" + "d".repeat(64)),
+			status = BlockchainTransactionStatus.CONFIRMED,
+			blockNumber = 44_910_246,
+			confirmationCount = 433,
+			requiredConfirmationCount = 12,
+			fromAddress = "0x" + "b".repeat(40),
+			toAddress = "0x" + "9".repeat(40),
+			tokenContractAddress = "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+			amountMinor = 14_357_502,
+			failureCode = null,
+			submittedAt = NOW,
+			detectedAt = NOW,
+			confirmedAt = NOW,
+		),
+	exchangeOrder: PaymentDetailExchangeOrder? =
+		PaymentDetailExchangeOrder(
+			exchangeOrderId = "exo_001",
+			providerCode = "FAKE",
+			status = ExchangeOrderStatus.COMPLETED,
+			executedAmountMinor = 14_357_502,
+			averageExecutionRate = BigDecimal("1400"),
+			receivedAmount = 20_101,
+			feeAmount = 0,
+			completedAt = NOW,
+		),
+	settlement: PaymentDetailSettlement? =
+		PaymentDetailSettlement(
+			settlementReceivableId = "str_001",
+			status = SettlementReceivableStatus.READY,
+			grossAmount = 20_000,
+			feeRate = BigDecimal("0.015"),
+			feeAmount = 300,
+			adjustmentAmount = 0,
+			netAmount = 19_700,
+			exchangeProfitLossAmount = 101,
+			eligibleDate = LocalDate.parse("2026-08-01"),
+		),
+	webhooks: List<PaymentDetailWebhookDelivery> =
+		listOf(
+			PaymentDetailWebhookDelivery(
+				webhookDeliveryId = "whd_001",
+				eventType = "payment.created",
+				destinationUrl = "http://localhost:9000/webhook",
+				status = WebhookDeliveryStatus.SUCCEEDED,
+				attemptCount = 1,
+				lastHttpStatus = 200,
+				lastErrorMessage = null,
+				nextRetryAt = null,
+				deliveredAt = NOW,
+				createdAt = NOW,
+			),
+		),
+) = PaymentDetailView(
+	payment =
+		PaymentDetailPayment(
+			paymentId = PaymentId("pay_001"),
+			merchantId = MerchantId("mrc_001"),
+			merchantName = "테스트 가맹점",
+			merchantOrderId = MerchantOrderId("order-001"),
+			orderName = "테스트 주문",
+			orderAmount = 20_000,
+			orderCurrency = "KRW",
+			paymentAsset = "USDC",
+			paymentAmountMinor = 14_357_502,
+			tokenDecimals = 6,
+			network = "BASE_SEPOLIA",
+			receivingWallet = "0x" + "9".repeat(40),
+			customerWallet = "0x" + "b".repeat(40),
+			status = PaymentStatus.SUCCEEDED,
+			failureReason = null,
+			expiresAt = NOW,
+			paidAt = NOW,
+			createdAt = NOW,
+		),
+	quote =
+		PaymentDetailQuote(
+			marketProviderCode = "FAKE",
+			marketRate = BigDecimal("1400"),
+			appliedRate = BigDecimal("1393"),
+			spreadRate = BigDecimal("0.005"),
+			quotedAt = NOW,
+			expiresAt = NOW,
+		),
+	checkoutSession =
+		PaymentDetailCheckoutSession(
+			checkoutSessionId = "cs_001",
+			status = CheckoutSessionStatus.COMPLETED,
+			connectedWallet = "0x" + "b".repeat(40),
+			expiresAt = NOW,
+		),
+	blockchainTransaction = blockchainTransaction,
+	exchangeOrder = exchangeOrder,
+	settlementReceivable = settlement,
+	webhookDeliveries = webhooks,
+)
+
 @WebMvcTest(AdminPaymentController::class)
 @Import(SecurityConfig::class, FixedClockConfiguration::class)
 class AdminPaymentControllerTest : FunSpec() {
@@ -94,6 +210,9 @@ class AdminPaymentControllerTest : FunSpec() {
 
 	@MockkBean
 	lateinit var exportPaymentsUseCase: ExportPaymentsUseCase
+
+	@MockkBean
+	lateinit var getPaymentDetailUseCase: GetPaymentDetailUseCase
 
 	init {
 		extensions(SpringExtension)
@@ -210,6 +329,64 @@ class AdminPaymentControllerTest : FunSpec() {
 
 		test("export requires authentication") {
 			mockMvc.perform(get("/admin/payments/export")).andExpect(status().isUnauthorized)
+		}
+
+		test("detail returns the full context of one payment") {
+			every { getPaymentDetailUseCase.execute(PaymentId("pay_001")) } returns detailView()
+
+			mockMvc
+				.perform(get("/admin/payments/pay_001").with(authenticatedAs(VIEWER)))
+				.andExpect(status().isOk)
+				.andExpect(jsonPath("$.payment.paymentId").value("pay_001"))
+				.andExpect(jsonPath("$.payment.paymentAmount").value("14357502"))
+				.andExpect(jsonPath("$.quote.appliedRate").value(1393))
+				.andExpect(jsonPath("$.blockchainTransaction.confirmationCount").value(433))
+				.andExpect(jsonPath("$.settlementReceivable.netAmount").value(19700))
+				.andExpect(jsonPath("$.webhookDeliveries[0].status").value("SUCCEEDED"))
+		}
+
+		/**
+		 * 흐름이 진행되지 않은 부분은 `null`이고, **그 `null` 자체가 "어디까지 갔는지"를
+		 * 말해준다** — 화면이 그 구분으로 단계를 그린다.
+		 */
+		test("detail leaves later stages null when the flow has not reached them") {
+			every { getPaymentDetailUseCase.execute(PaymentId("pay_early")) } returns
+				detailView(blockchainTransaction = null, exchangeOrder = null, settlement = null, webhooks = emptyList())
+
+			mockMvc
+				.perform(get("/admin/payments/pay_early").with(authenticatedAs(VIEWER)))
+				.andExpect(status().isOk)
+				.andExpect(jsonPath("$.blockchainTransaction").doesNotExist())
+				.andExpect(jsonPath("$.exchangeOrder").doesNotExist())
+				.andExpect(jsonPath("$.settlementReceivable").doesNotExist())
+				.andExpect(jsonPath("$.webhookDeliveries").isEmpty)
+		}
+
+		test("detail returns 404 for an unknown payment") {
+			every { getPaymentDetailUseCase.execute(any()) } returns null
+
+			mockMvc
+				.perform(get("/admin/payments/pay_nope").with(authenticatedAs(VIEWER)))
+				.andExpect(status().isNotFound)
+		}
+
+		/**
+		 * **`/export`가 `/{paymentId}`에 잡아먹히지 않아야 한다.** Spring이 리터럴 세그먼트를
+		 * 경로 변수보다 먼저 고르는 데 기대고 있으므로 회귀로 고정한다 — 순서가 뒤집히면
+		 * 엑셀 다운로드가 "pay_export를 찾을 수 없다"는 404로 조용히 죽는다.
+		 */
+		test("the export path is not swallowed by the detail path variable") {
+			every { exportPaymentsUseCase.execute(any()) } returns
+				ExportPaymentsResult(spreadsheet = byteArrayOf(1), rowCount = 0, truncated = false)
+
+			mockMvc
+				.perform(get("/admin/payments/export").with(authenticatedAs(VIEWER)))
+				.andExpect(status().isOk)
+				.andExpect(header().string("X-Export-Truncated", "false"))
+		}
+
+		test("detail requires authentication") {
+			mockMvc.perform(get("/admin/payments/pay_001")).andExpect(status().isUnauthorized)
 		}
 
 		test("an unknown status returns 400") {

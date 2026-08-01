@@ -17,6 +17,7 @@ import paytech.practice.pay.application.identity.InvalidMerchantUserTransitionEx
 import paytech.practice.pay.application.identity.LastActiveOwnerException
 import paytech.practice.pay.application.identity.LastActiveSuperAdminException
 import paytech.practice.pay.application.identity.MerchantUserNotFoundException
+import paytech.practice.pay.application.payment.PaymentNotFoundException
 
 /**
  * `application`/`domain` 계층이 던지는 예외를 HTTP 상태 코드로 옮긴다 — 이 매핑
@@ -49,6 +50,10 @@ class AdminApiExceptionHandler {
 	@ExceptionHandler(InternalUserNotFoundException::class)
 	@ResponseStatus(HttpStatus.NOT_FOUND)
 	fun handleInternalUserNotFound(ex: InternalUserNotFoundException): ErrorResponse = ErrorResponse(ex.message ?: "내부 운영자를 찾을 수 없습니다.")
+
+	@ExceptionHandler(PaymentNotFoundException::class)
+	@ResponseStatus(HttpStatus.NOT_FOUND)
+	fun handlePaymentNotFound(ex: PaymentNotFoundException): ErrorResponse = ErrorResponse(ex.message ?: "결제를 찾을 수 없습니다.")
 
 	@ExceptionHandler(InternalUserNotManageableException::class)
 	@ResponseStatus(HttpStatus.FORBIDDEN)

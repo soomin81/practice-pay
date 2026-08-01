@@ -6,6 +6,7 @@ import { canManageInternalUsers, canManageMerchantAccounts } from '@/api/types'
 import { LoginPage } from '@/console/LoginPage'
 import { ConsoleShell } from '@/console/ConsoleShell'
 import { MerchantsPage } from '@/console/MerchantsPage'
+import { PaymentDetailPage } from '@/console/PaymentDetailPage'
 import { PaymentsPage } from '@/console/PaymentsPage'
 import { SettlementPage } from '@/console/SettlementPage'
 import { MerchantDetailPage } from '@/console/MerchantDetailPage'
@@ -61,6 +62,7 @@ function ConsoleRoutes() {
 				<Route path="/merchants/:merchantId" element={<MerchantDetailPage me={me} />} />
 				<Route path="/payments" element={<PaymentsPage />} />
 				<Route path="/settlements" element={<SettlementPage />} />
+				<Route path="/payments/:paymentId" element={<PaymentDetailPage />} />
 				{/* 내부 직원 관리는 SUPER_ADMIN 전용 — 서버도 403이므로 라우트 자체를 막는다. */}
 				{canManageInternalUsers(String(me.role)) && (
 					<Route path="/internal-users" element={<InternalUsersPage />} />

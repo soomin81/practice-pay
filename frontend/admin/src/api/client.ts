@@ -15,6 +15,7 @@ import type {
 	ListMerchantUsersResponse,
 	ListMerchantsResponse,
 	ListPaymentsResponse,
+	PaymentDetailResponse,
 	ListSettlementReceivablesResponse,
 	SettlementFilters,
 	PaymentListFilters,
@@ -96,6 +97,10 @@ export const adminApi = {
 	 */
 	listPayments: (filters: PaymentListFilters = {}) =>
 		request<ListPaymentsResponse>(`/admin/payments${paymentQueryString(filters)}`),
+
+	/** 결제 한 건의 전체 맥락. 없으면 404(AdminApiError.status로 분기한다). */
+	getPaymentDetail: (paymentId: string) =>
+		request<PaymentDetailResponse>(`/admin/payments/${encodeURIComponent(paymentId)}`),
 
 	/**
 	 * 현재 필터에 걸린 결제를 `.xlsx`로 받는다. **페이징 파라미터는 보내지 않는다** —

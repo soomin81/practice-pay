@@ -55,6 +55,7 @@ PG 내부 운영자용 콘솔(브라우저 SPA, `frontend/admin`)이 호출하�
 | `POST /admin/internal-users/{id}/terminate` | **SUPER_ADMIN만** | 필요 | 200 상태(TERMINATED) | 401, 403(자기 자신), 404, 409(마지막 SUPER_ADMIN·잘못된 전이) |
 | `POST /admin/internal-users/{id}/role` | **SUPER_ADMIN만** | 필요 | 200 역할 | **400 `role=SUPER_ADMIN`**, 401, 403(자기 자신), 404, 409(마지막 SUPER_ADMIN 강등·종료된 계정) |
 | `GET /admin/payments` | **내부 운영자 전원**(VIEWER 포함) | — | 200 결제 내역(전 가맹점, 최신순) | 400 잘못된 status, 401 |
+| `GET /admin/payments/{paymentId}` | **내부 운영자 전원**(VIEWER 포함) | — | 200 결제 상세(전체 맥락) | 401, 404 없는 결제 |
 | `GET /admin/payments/export` | **내부 운영자 전원**(VIEWER 포함) | — | 200 `.xlsx` 첨부 | 400 잘못된 status, 401 |
 | `GET /admin/settlement-receivables` | **내부 운영자 전원**(VIEWER 포함) | — | 200 정산 채권(전 가맹점, 정산 예정일 최신순) | 400 잘못된 status, 401 |
 | `GET /admin/merchants/{merchantId}/users` | **내부 운영자 전원**(VIEWER 포함) | — | 200 명부 | 401 |
@@ -127,6 +128,23 @@ PG 내부 운영자용 콘솔(브라우저 SPA, `frontend/admin`)이 호출하�
   때만, `paidAt`은 `SUCCEEDED`일 때만 값이 있다.
 - 정렬은 생성 시각 최신순으로 고정이다(정렬 파라미터를 두지 않았다).
 - 엑셀 다운로드는 아래 4.2에 있다.
+
+### 4.1.1 결제 상세
+
+`GET /admin/payments/{paymentId}`가 결제 한 건의 **전체 맥락**을 돌려준다: 결제·견적·체크아웃
+세션·온체인 거래·환전 주문·정산 채권·Webhook 전송 이력.
+
+- **흐름이 진행돼야 생기는 부분은 `null`이고, 그 `null` 자체가 정보다** —
+  `blockchainTransaction`이 `null`이면 고객이 아직 Hash를 제출하지 않았다는 뜻이다. 화면도
+  이 구분을 감추지 않고 "아직 진행되지 않음"으로 그린다.
+- **결제가 실패해도 `blockchainTransaction`은 남는다**([ADR-007](../decisions/ADR-007-onchain-irreversibility.md)) —
+  실패가 "돈이 오지 않았다"를 뜻하지 않으므로, 이 화면이 "돈이 어디 있나"에 답하는 자리다.
+- **`/export`와 경로가 겹치지 않는다** — 리터럴 세그먼트가 경로 변수보다 우선한다. 이
+  우선순위에 기대고 있어 회귀 테스트로 고정해 뒀다.
+- 없는 결제는 `404`이고 **식별자를 응답에 담지 않는다**(존재 여부를 응답으로 알려주지 않는다).
+- 토큰 금액(`payment.paymentAmount`, `blockchainTransaction.amountMinor`,
+  `exchangeOrder.executedAmount`)은 Minor Unit 정수를 **문자열로**, KRW는 숫자로 준다.
+- **가맹점 콘솔에는 아직 없다**(6절).
 
 ### 4.2 결제 내역 엑셀 다운로드
 
@@ -230,6 +248,10 @@ PG 내부 운영자용 콘솔(브라우저 SPA, `frontend/admin`)이 호출하�
   SUPER_ADMIN 전용)와 **가맹점 로그인 감사**(`GET /admin/merchant-login-audit`, SUPER_ADMIN/OPERATOR,
   기록은 api-merchant·조회는 이 콘솔)도 붙었다. 남은 후속 후보는 **API Key 사용 감사**(같은 감사
   인프라를 확장 — [identity-access-api-key.md](identity-access-api-key.md)의 9절 후속)다.
+- **가맹점 콘솔의 결제 상세** — 내부 운영자 콘솔에만 있다(4.1.1). 만들 때는 목록과 같은
+  규율로 `merchantId`를 필수로 받는 별도 Use Case를 두고 **조회한 결제가 그 가맹점 것인지
+  확인해야 한다**: 단건 조회는 "필터가 비면 전체가 나온다"가 아니라 **"남의 것을 ID로 찍어
+  볼 수 있다"**는 형태로 새기 때문에 목록보다 위험하다.
 - **결제 내역 엑셀 내보내기의 후속**: 상한(10,000행)을 넘는 대량 내보내기. 지금은 잘라내고
   헤더로 알리는데, 실제로 그만큼 필요해지면 **비동기 생성 + 다운로드 링크 통지**로 가야 한다
   (요청-응답 안에서 만드는 한 상한은 곧 메모리 상한이다).
