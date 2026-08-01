@@ -54,6 +54,7 @@ PG 내부 운영자용 콘솔(브라우저 SPA, `frontend/admin`)이 호출하�
 | `POST /admin/internal-users/{id}/reactivate` | **SUPER_ADMIN만** | 필요 | 200 상태(ACTIVE) | 401, 403(자기 자신), 404, 409(잘못된 전이) |
 | `POST /admin/internal-users/{id}/terminate` | **SUPER_ADMIN만** | 필요 | 200 상태(TERMINATED) | 401, 403(자기 자신), 404, 409(마지막 SUPER_ADMIN·잘못된 전이) |
 | `POST /admin/internal-users/{id}/role` | **SUPER_ADMIN만** | 필요 | 200 역할 | **400 `role=SUPER_ADMIN`**, 401, 403(자기 자신), 404, 409(마지막 SUPER_ADMIN 강등·종료된 계정) |
+| `GET /admin/payments` | **내부 운영자 전원**(VIEWER 포함) | — | 200 결제 내역(전 가맹점, 최신순) | 400 잘못된 status, 401 |
 | `GET /admin/merchants/{merchantId}/users` | **내부 운영자 전원**(VIEWER 포함) | — | 200 명부 | 401 |
 | `POST /admin/merchants/{merchantId}/users/{id}/suspend` | SUPER_ADMIN/OPERATOR | 필요 | 200 상태(SUSPENDED) | 401, 403, 404, 409(마지막 OWNER·잘못된 전이) |
 | `POST /admin/merchants/{merchantId}/users/{id}/reactivate` | SUPER_ADMIN/OPERATOR | 필요 | 200 상태(ACTIVE) | 401, 403, 404, 409(잘못된 전이) |
@@ -97,6 +98,33 @@ PG 내부 운영자용 콘솔(브라우저 SPA, `frontend/admin`)이 호출하�
     **이 API가 그 불변식이 실제로 트리거되는 첫 경로다**(가맹점 콘솔 경로에서는 자기 자신
     차단·ADMIN 제한 때문에 도달할 수 없었다).
   - 대상이 경로의 가맹점 소속이 아니면 404다(남의 가맹점 사용자의 존재 여부를 숨긴다).
+
+### 4.1 결제 내역 조회 — 필터와 페이징
+
+`GET /admin/payments`와 가맹점 콘솔의 `GET /merchant/payments`는 **같은 읽기 모델**을 쓰고
+범위만 다르다(이쪽은 전 가맹점, 그쪽은 세션의 가맹점 하나).
+
+| 쿼리 파라미터 | 값 | 비고 |
+|---|---|---|
+| `merchantId` | 가맹점 공개 ID | **이 콘솔에만 있다.** 없으면 전 가맹점 |
+| `status` | `PaymentStatus` 값 | 없는 값이면 `400` |
+| `from` / `to` | ISO-8601 UTC | **`created_at` 기준**이다 |
+| `page` | 0부터 | 음수는 0으로 |
+| `size` | 기본 50 | **서버가 최대 200으로 자른다** |
+
+- **기간 필터가 `paid_at`이 아니라 `created_at`인 이유**: 완료되지 않은 결제(`EXPIRED`,
+  `FAILED`, 진행 중)도 내역에 나와야 하는데 그것들은 `paid_at`이 없다.
+- **`size`는 서버가 자르고, 실제로 적용된 값을 응답의 `size`로 돌려준다** — 요청값과 다를
+  수 있으므로 프론트는 응답 값을 신뢰한다. 상한을 두지 않으면 조회 하나로 DB와 응답
+  직렬화를 모두 밀어버릴 수 있다.
+- **`totalCount`는 현재 페이지 건수가 아니라 필터 전체 건수다.** 마지막 페이지를 넘어선
+  요청(행 0건)에서도 값이 나온다.
+- **`paymentAmount`는 Minor Unit 정수를 문자열로 준다** — 토큰 금액이 JavaScript `Number`의
+  안전 정수 범위를 넘을 수 있다(`checkout-api.md`와 같은 규칙). `orderAmount`(KRW)는 숫자다.
+- **`transactionHash`는 고객이 제출하기 전이면 `null`**이고, `failureReason`은 `FAILED`일
+  때만, `paidAt`은 `SUCCEEDED`일 때만 값이 있다.
+- 정렬은 생성 시각 최신순으로 고정이다(정렬 파라미터를 두지 않았다).
+- **엑셀 다운로드는 아직 없다** — 다음 슬라이스에서 별도 경로로 붙인다(6절).
 
 ## 5. 초대 링크가 **두 종류**다 — 가리키는 콘솔이 다르다
 
@@ -142,3 +170,6 @@ PG 내부 운영자용 콘솔(브라우저 SPA, `frontend/admin`)이 호출하�
   SUPER_ADMIN 전용)와 **가맹점 로그인 감사**(`GET /admin/merchant-login-audit`, SUPER_ADMIN/OPERATOR,
   기록은 api-merchant·조회는 이 콘솔)도 붙었다. 남은 후속 후보는 **API Key 사용 감사**(같은 감사
   인프라를 확장 — [identity-access-api-key.md](identity-access-api-key.md)의 9절 후속)다.
+- **결제 내역 엑셀(.xlsx) 다운로드** — 조회(4.1)는 붙었고 내보내기는 다음 슬라이스다. 화면
+  페이징과 요구 조건이 달라(한 번에 훨씬 많은 행) `size` 상한을 그대로 쓰지 않고 별도
+  경로로 스트리밍한다. 두 콘솔 모두에 붙인다.

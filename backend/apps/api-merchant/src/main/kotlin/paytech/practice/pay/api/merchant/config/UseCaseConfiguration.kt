@@ -13,6 +13,7 @@ import paytech.practice.pay.application.identity.InviteMerchantSubAccountUseCase
 import paytech.practice.pay.application.identity.ListMerchantUsersUseCase
 import paytech.practice.pay.application.identity.ResendMerchantUserInvitationUseCase
 import paytech.practice.pay.application.identity.RevokeMerchantUserInvitationUseCase
+import paytech.practice.pay.application.payment.ListMerchantPaymentsUseCase
 import paytech.practice.pay.application.port.outbound.AccountInvitationRepository
 import paytech.practice.pay.application.port.outbound.ApiKeySecretHasher
 import paytech.practice.pay.application.port.outbound.IdGenerator
@@ -25,6 +26,7 @@ import paytech.practice.pay.application.port.outbound.MerchantRepository
 import paytech.practice.pay.application.port.outbound.MerchantUserListProjection
 import paytech.practice.pay.application.port.outbound.MerchantUserRepository
 import paytech.practice.pay.application.port.outbound.PasswordEncoder
+import paytech.practice.pay.application.port.outbound.PaymentListProjection
 import paytech.practice.pay.application.port.outbound.TransactionManager
 import java.time.Clock
 
@@ -183,4 +185,8 @@ class UseCaseConfiguration {
 			accountInvitationRepository = accountInvitationRepository,
 			clock = clock,
 		)
+
+	@Bean
+	fun listMerchantPaymentsUseCase(paymentListProjection: PaymentListProjection): ListMerchantPaymentsUseCase =
+		ListMerchantPaymentsUseCase(paymentListProjection)
 }

@@ -52,19 +52,30 @@ import paytech.practice.pay.application.identity.ResendMerchantUserInvitationRes
 import paytech.practice.pay.application.identity.ResendMerchantUserInvitationUseCase
 import paytech.practice.pay.application.identity.RevokeMerchantUserInvitationResult
 import paytech.practice.pay.application.identity.RevokeMerchantUserInvitationUseCase
+import paytech.practice.pay.application.payment.ListMerchantPaymentsUseCase
+import paytech.practice.pay.application.payment.ListPaymentsResult
 import paytech.practice.pay.application.port.outbound.MerchantApiKeySummary
 import paytech.practice.pay.application.port.outbound.MerchantUserSummary
+import paytech.practice.pay.application.port.outbound.PaymentListEntry
 import paytech.practice.pay.domain.apikey.ApiEnvironment
 import paytech.practice.pay.domain.apikey.ApiKeyPrefix
 import paytech.practice.pay.domain.apikey.ApiKeyScope
 import paytech.practice.pay.domain.apikey.ApiKeyStatus
 import paytech.practice.pay.domain.apikey.MerchantApiKeyId
+import paytech.practice.pay.domain.blockchain.TransactionHash
 import paytech.practice.pay.domain.identity.AccountStatus
 import paytech.practice.pay.domain.identity.Email
 import paytech.practice.pay.domain.identity.LoginId
 import paytech.practice.pay.domain.identity.MerchantUserId
 import paytech.practice.pay.domain.identity.MerchantUserRole
 import paytech.practice.pay.domain.merchant.MerchantId
+import paytech.practice.pay.domain.payment.MerchantOrderId
+import paytech.practice.pay.domain.payment.PaymentId
+import paytech.practice.pay.domain.payment.PaymentStatus
+import paytech.practice.pay.domain.shared.Asset
+import paytech.practice.pay.domain.shared.BlockchainNetwork
+import paytech.practice.pay.domain.shared.Money
+import paytech.practice.pay.domain.shared.TokenAmount
 import tools.jackson.databind.ObjectMapper
 import java.time.Instant
 
@@ -132,6 +143,7 @@ private fun merchantResource(
 		MerchantLogoutController::class,
 		MerchantApiKeyController::class,
 		MerchantSubAccountController::class,
+		MerchantPaymentController::class,
 		AcceptAccountInvitationController::class,
 	],
 )
@@ -162,6 +174,9 @@ class MerchantApiDocumentationTest : FunSpec() {
 
 	@MockkBean
 	lateinit var listMerchantUsersUseCase: ListMerchantUsersUseCase
+
+	@MockkBean
+	lateinit var listMerchantPaymentsUseCase: ListMerchantPaymentsUseCase
 
 	@MockkBean
 	lateinit var acceptAccountInvitationUseCase: AcceptAccountInvitationUseCase
@@ -688,6 +703,72 @@ class MerchantApiDocumentationTest : FunSpec() {
 				.perform(delete("/merchant/api-keys/{merchantApiKeyId}", "mak_001").with(authenticatedAs(OWNER)).with(csrf()))
 				.andExpect(status().isOk)
 				.andDo(document("merchant-revoke-api-key", snippet))
+		}
+
+		test("document GET payments") {
+			every { listMerchantPaymentsUseCase.execute(any(), any()) } returns
+				ListPaymentsResult(
+					entries =
+						listOf(
+							PaymentListEntry(
+								paymentId = PaymentId("pay_3b81"),
+								merchantId = MerchantId("mrc_001"),
+								merchantName = "테스트 가맹점",
+								merchantOrderId = MerchantOrderId("order-1001"),
+								orderName = "테스트 상품",
+								orderAmount = Money(50_000),
+								paymentAsset = Asset.USDC,
+								paymentAmount = TokenAmount(72_992_701),
+								tokenDecimals = 6,
+								network = BlockchainNetwork.BASE_SEPOLIA,
+								status = PaymentStatus.SUCCEEDED,
+								failureReason = null,
+								transactionHash = TransactionHash("0x" + "7f3a".repeat(16)),
+								paidAt = NOW,
+								createdAt = NOW,
+							),
+						),
+					totalCount = 1L,
+					page = 0,
+					size = 50,
+				)
+
+			val snippet =
+				merchantResource(
+					summary = "결제 내역 조회(자기 가맹점)",
+					description =
+						"**인증된 가맹점 사용자 전원**(VIEWER 포함)이 조회할 수 있다. 조회 범위는 세션의 가맹점으로 " +
+							"서버가 고정하므로 merchantId를 보낼 수 없다. 쿼리 파라미터로 좁힌다: status(PaymentStatus), " +
+							"from/to(생성 시각 ISO-8601 UTC), page(0부터), size. size는 서버가 최대 200으로 자르고 " +
+							"실제로 적용된 값을 응답의 size로 돌려준다. 정렬은 생성 시각 최신순이다. paymentAmount는 " +
+							"Minor Unit 정수를 **문자열로** 준다 — 토큰 금액이 JavaScript Number의 안전 정수 범위를 넘을 수 있다.",
+					responseSchema = "ListPaymentsResponse",
+					responseFields =
+						listOf(
+							fieldWithPath("payments").description("결제 배열(생성 시각 최신순)"),
+							fieldWithPath("payments[].paymentId").description("결제 식별자"),
+							fieldWithPath("payments[].merchantOrderId").description("가맹점이 부여한 주문 식별자"),
+							fieldWithPath("payments[].orderName").description("주문명"),
+							fieldWithPath("payments[].orderAmount").description("KRW 주문 금액(원 단위 정수)"),
+							fieldWithPath("payments[].paymentAsset").description("결제 자산 코드(USDC)"),
+							fieldWithPath("payments[].paymentAmount").description("결제 토큰 금액. Minor Unit 정수를 문자열로 준다."),
+							fieldWithPath("payments[].tokenDecimals").description("토큰 소수 자릿수(USDC는 6)"),
+							fieldWithPath("payments[].network").description("블록체인 네트워크 코드"),
+							fieldWithPath("payments[].status").description("PaymentStatus 값"),
+							fieldWithPath("payments[].failureReason").description("실패 사유. FAILED가 아니면 null.").optional(),
+							fieldWithPath("payments[].transactionHash").description("온체인 거래 Hash. 고객이 제출하기 전이면 null.").optional(),
+							fieldWithPath("payments[].paidAt").description("결제 완료 시각(UTC). SUCCEEDED가 아니면 null.").optional(),
+							fieldWithPath("payments[].createdAt").description("결제 생성 시각(UTC)"),
+							fieldWithPath("totalCount").description("필터 전체에 걸린 건수(현재 페이지 건수가 아니다)"),
+							fieldWithPath("page").description("조회한 페이지 번호(0부터)"),
+							fieldWithPath("size").description("실제로 적용된 페이지 크기. 상한에 걸리면 요청값과 다르다."),
+						),
+				)
+
+			mockMvc
+				.perform(get("/merchant/payments").with(authenticatedAs(OWNER)))
+				.andExpect(status().isOk)
+				.andDo(document("merchant-payments", snippet))
 		}
 	}
 }

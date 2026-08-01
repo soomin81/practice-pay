@@ -42,6 +42,11 @@ fun insertTestPayment(
 	merchantId: String,
 	paymentId: String = "pay_${uniqueSuffix()}",
 	merchantOrderId: String = "order-${uniqueSuffix()}",
+	paymentStatus: String = "READY",
+	createdAt: LocalDateTime = LocalDateTime.now(),
+	// ck_payment_paid_at이 "SUCCEEDED면 paid_at이 있어야 한다"를 강제한다 — 호출부가
+	// 상태만 바꿔도 제약에 걸리지 않도록 기본값을 상태에서 끌어낸다.
+	paidAt: LocalDateTime? = if (paymentStatus == "SUCCEEDED") createdAt else null,
 ): String {
 	val merchantSeq =
 		PersistenceTestSupport.dsl
@@ -65,13 +70,13 @@ fun insertTestPayment(
 			networkCode = "BASE_SEPOLIA"
 			receivingWalletAddress = "0x" + "a".repeat(40)
 			customerWalletAddress = null
-			paymentStatus = "READY"
+			this.paymentStatus = paymentStatus
 			failureCode = null
 			failureMessage = null
-			expiresAt = LocalDateTime.now().plusMinutes(30)
-			paidAt = null
-			createdAt = LocalDateTime.now()
-			updatedAt = LocalDateTime.now()
+			expiresAt = createdAt.plusMinutes(30)
+			this.paidAt = paidAt
+			this.createdAt = createdAt
+			updatedAt = createdAt
 			version = 0
 		}.insert()
 	return paymentId

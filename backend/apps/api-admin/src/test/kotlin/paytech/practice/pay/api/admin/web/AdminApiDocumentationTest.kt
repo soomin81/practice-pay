@@ -52,11 +52,15 @@ import paytech.practice.pay.application.identity.RegisterMerchantResult
 import paytech.practice.pay.application.identity.RegisterMerchantUseCase
 import paytech.practice.pay.application.merchant.ListMerchantsResult
 import paytech.practice.pay.application.merchant.ListMerchantsUseCase
+import paytech.practice.pay.application.payment.ListPaymentsResult
+import paytech.practice.pay.application.payment.ListPaymentsUseCase
 import paytech.practice.pay.application.port.outbound.InternalLoginAuditEntry
 import paytech.practice.pay.application.port.outbound.InternalUserSummary
 import paytech.practice.pay.application.port.outbound.MerchantLoginAuditEntry
 import paytech.practice.pay.application.port.outbound.MerchantSummary
 import paytech.practice.pay.application.port.outbound.MerchantUserSummary
+import paytech.practice.pay.application.port.outbound.PaymentListEntry
+import paytech.practice.pay.domain.blockchain.TransactionHash
 import paytech.practice.pay.domain.identity.AccountStatus
 import paytech.practice.pay.domain.identity.Email
 import paytech.practice.pay.domain.identity.InternalLoginAuditId
@@ -70,12 +74,21 @@ import paytech.practice.pay.domain.identity.MerchantUserRole
 import paytech.practice.pay.domain.merchant.MerchantCode
 import paytech.practice.pay.domain.merchant.MerchantId
 import paytech.practice.pay.domain.merchant.MerchantStatus
+import paytech.practice.pay.domain.payment.MerchantOrderId
+import paytech.practice.pay.domain.payment.PaymentId
+import paytech.practice.pay.domain.payment.PaymentStatus
+import paytech.practice.pay.domain.shared.Asset
+import paytech.practice.pay.domain.shared.BlockchainNetwork
+import paytech.practice.pay.domain.shared.Money
+import paytech.practice.pay.domain.shared.TokenAmount
 import tools.jackson.databind.ObjectMapper
 import java.time.Instant
 
 private val NOW: Instant = Instant.parse("2026-07-19T00:00:00Z")
 private val SUPER_ADMIN =
 	InternalUserPrincipal(InternalUserId("iu_sa01"), LoginId("super-admin"), InternalUserRole.SUPER_ADMIN)
+private val VIEWER =
+	InternalUserPrincipal(InternalUserId("iu_vw01"), LoginId("viewer01"), InternalUserRole.VIEWER)
 private val OPERATOR =
 	InternalUserPrincipal(InternalUserId("iu_op01"), LoginId("operator01"), InternalUserRole.OPERATOR)
 
@@ -130,6 +143,7 @@ private fun adminResource(
 		AdminMerchantUserController::class,
 		LoginAuditController::class,
 		MerchantLoginAuditController::class,
+		AdminPaymentController::class,
 		AcceptAccountInvitationController::class,
 	],
 )
@@ -180,6 +194,9 @@ class AdminApiDocumentationTest : FunSpec() {
 
 	@MockkBean
 	lateinit var listMerchantLoginAuditUseCase: ListMerchantLoginAuditUseCase
+
+	@MockkBean
+	lateinit var listPaymentsUseCase: ListPaymentsUseCase
 
 	init {
 		extensions(SpringExtension)
@@ -800,6 +817,74 @@ class AdminApiDocumentationTest : FunSpec() {
 				.perform(get("/admin/merchant-login-audit").with(authenticatedAs(OPERATOR)))
 				.andExpect(status().isOk)
 				.andDo(document("admin-merchant-login-audit", snippet))
+		}
+
+		test("document GET payments") {
+			every { listPaymentsUseCase.execute(any()) } returns
+				ListPaymentsResult(
+					entries =
+						listOf(
+							PaymentListEntry(
+								paymentId = PaymentId("pay_3b81"),
+								merchantId = MerchantId("mrc_001"),
+								merchantName = "테스트 가맹점",
+								merchantOrderId = MerchantOrderId("order-1001"),
+								orderName = "테스트 상품",
+								orderAmount = Money(50_000),
+								paymentAsset = Asset.USDC,
+								paymentAmount = TokenAmount(72_992_701),
+								tokenDecimals = 6,
+								network = BlockchainNetwork.BASE_SEPOLIA,
+								status = PaymentStatus.SUCCEEDED,
+								failureReason = null,
+								transactionHash = TransactionHash("0x" + "7f3a".repeat(16)),
+								paidAt = NOW,
+								createdAt = NOW,
+							),
+						),
+					totalCount = 1L,
+					page = 0,
+					size = 50,
+				)
+
+			val snippet =
+				adminResource(
+					summary = "결제 내역 조회(전 가맹점)",
+					description =
+						"**인증된 내부 사용자 전원**(VIEWER 포함)이 조회할 수 있다. 쿼리 파라미터로 좁힌다: " +
+							"merchantId, status(PaymentStatus), from/to(생성 시각 ISO-8601 UTC), page(0부터), size. " +
+							"size는 서버가 최대 200으로 자르고, 실제로 적용된 값을 응답의 size로 돌려준다. " +
+							"정렬은 생성 시각 최신순이다. paymentAmount는 Minor Unit 정수를 **문자열로** 준다 — " +
+							"토큰 금액이 JavaScript Number의 안전 정수 범위를 넘을 수 있어서다.",
+					responseSchema = "ListPaymentsResponse",
+					responseFields =
+						listOf(
+							fieldWithPath("payments").description("결제 배열(생성 시각 최신순)"),
+							fieldWithPath("payments[].paymentId").description("결제 식별자"),
+							fieldWithPath("payments[].merchantId").description("가맹점 식별자"),
+							fieldWithPath("payments[].merchantName").description("가맹점 이름"),
+							fieldWithPath("payments[].merchantOrderId").description("가맹점이 부여한 주문 식별자"),
+							fieldWithPath("payments[].orderName").description("주문명"),
+							fieldWithPath("payments[].orderAmount").description("KRW 주문 금액(원 단위 정수)"),
+							fieldWithPath("payments[].paymentAsset").description("결제 자산 코드(USDC)"),
+							fieldWithPath("payments[].paymentAmount").description("결제 토큰 금액. Minor Unit 정수를 문자열로 준다."),
+							fieldWithPath("payments[].tokenDecimals").description("토큰 소수 자릿수(USDC는 6)"),
+							fieldWithPath("payments[].network").description("블록체인 네트워크 코드"),
+							fieldWithPath("payments[].status").description("PaymentStatus 값"),
+							fieldWithPath("payments[].failureReason").description("실패 사유. FAILED가 아니면 null.").optional(),
+							fieldWithPath("payments[].transactionHash").description("온체인 거래 Hash. 고객이 제출하기 전이면 null.").optional(),
+							fieldWithPath("payments[].paidAt").description("결제 완료 시각(UTC). SUCCEEDED가 아니면 null.").optional(),
+							fieldWithPath("payments[].createdAt").description("결제 생성 시각(UTC)"),
+							fieldWithPath("totalCount").description("필터 전체에 걸린 건수(현재 페이지 건수가 아니다)"),
+							fieldWithPath("page").description("조회한 페이지 번호(0부터)"),
+							fieldWithPath("size").description("실제로 적용된 페이지 크기. 상한에 걸리면 요청값과 다르다."),
+						),
+				)
+
+			mockMvc
+				.perform(get("/admin/payments").with(authenticatedAs(VIEWER)))
+				.andExpect(status().isOk)
+				.andDo(document("admin-payments", snippet))
 		}
 	}
 }
