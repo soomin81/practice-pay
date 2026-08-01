@@ -204,7 +204,20 @@ IntelliJ HTTP Client(`backend/apps/api-payment/requests.http`)로 테스트할 �
 
 ## 9. 완료 확인
 
-화면에 **"결제가 완료되었습니다"**가 뜨고 가맹점 URL(`https://merchant.example.com/done`)로 이동하는 버튼이 나오면 성공이다. 그 URL은 실제로 존재하지 않으므로 눌러도 404가 나는 것이 정상이다.
+화면에 **"결제가 완료되었습니다"**가 뜨고 가맹점 URL로 이동하면 성공이다.
+
+원래 이 자리는 **가맹점의 자기 사이트**인데 로컬에는 그런 사이트가 없다. 예전에는
+`https://merchant.example.com/done`을 넣어 두어 마지막 단계가 죽은 화면으로 끝났는데, 지금은
+DEV 버튼이 **이 앱 자신**(`http://localhost:5173/?dev-return=success`)을 가리켜서 "가맹점
+사이트로 복귀했다"는 것까지 확인할 수 있다.
+
+> **Webhook은 기본적으로 전송되지 않는다.** 시드의 `merchant.webhook_url`이 비어 있기
+> 때문이다(예전에는 api-payment 자기 자신을 가리켜 매번 401로 실패했다). 그 구간까지
+> 확인하려면 받아 줄 곳을 하나 정해서 넣는다:
+>
+> ```sql
+> UPDATE merchant SET webhook_url = 'https://webhook.site/…' WHERE merchant_code = 'TEST_MERCHANT';
+> ```
 
 **MVP의 종착점은 화면이 아니라 데이터다.** DB에서 확인한다:
 

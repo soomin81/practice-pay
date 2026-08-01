@@ -52,8 +52,13 @@ export function DevPaymentCreator({ onCreated }: { onCreated: (sessionId: string
 					// 두 번 받아야 해서 테스트 한 바퀴에 2시간이 걸렸다.
 					orderAmount: 20000,
 					network: 'BASE_SEPOLIA',
-					successUrl: 'https://merchant.example.com/done',
-					cancelUrl: 'https://merchant.example.com/cancel',
+					// **원래 이 값은 가맹점의 자기 사이트 주소다.** 로컬에는 그런 사이트가 없어서
+					// `merchant.example.com`을 쓰고 있었는데, 그러면 결제가 성공한 직후 고객이
+					// **존재하지 않는 도메인으로 튕긴다** — 마지막 단계만 죽은 화면으로 끝나서
+					// 흐름을 끝까지 확인할 수 없었다. 이 앱 자신으로 되돌아오게 해서 "가맹점
+					// 사이트로 복귀했다"는 것까지 눈으로 확인한다.
+					successUrl: `${window.location.origin}/?dev-return=success`,
+					cancelUrl: `${window.location.origin}/?dev-return=cancel`,
 				}),
 			})
 

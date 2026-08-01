@@ -33,7 +33,17 @@ VALUES (
     'TEST_MERCHANT',
     '테스트 가맹점',
     'ACTIVE',
-    'http://localhost:8081/webhooks/stablecoin',
+    -- **Webhook URL은 비워 둔다.** 예전에는 'http://localhost:8081/webhooks/stablecoin'이
+    -- 들어 있었는데, 그건 **api-payment 자기 자신**을 가리키는 주소이고 그런 엔드포인트가
+    -- 없다. 결제가 성공할 때마다 발행 Worker가 5회 재시도한 뒤 전부 FAILED로 끝났고,
+    -- 그때 남는 것이 401이라 "가맹점 서버 인증 문제"처럼 보여 원인을 찾기도 어려웠다.
+    --
+    -- `PublishOutboxEventUseCase`는 webhook_url이 NULL이면 "가맹점이 Webhook을 설정하지
+    -- 않은 정상적인 경우"로 처리하고 전송을 만들지 않는다.
+    --
+    -- Webhook 구간까지 실제로 확인하려면 받아 줄 곳을 하나 정해서 아래처럼 넣는다:
+    --   UPDATE merchant SET webhook_url = 'https://webhook.site/…' WHERE merchant_code = 'TEST_MERCHANT';
+    NULL,
     UTC_TIMESTAMP(6),
     UTC_TIMESTAMP(6),
     0
