@@ -14,6 +14,8 @@
 
 **워크스페이스(pnpm/npm workspaces)를 쓰지 않는다 — 각 앱이 독립 프로젝트다.** 셋이 호출하는 API도 타입도 인증 방식도 전부 달라서 지금 공유할 것이 실질적으로 없다. 진짜 공유될 만한 UI 컴포넌트는 **두 번째 앱을 만들 때 무엇이 겹치는지 드러난 뒤** `frontend/packages/`로 뽑는다. 이 판단은 백엔드의 "지금 실제로 하는 일에만 맞춘다 — 나중에 할 일까지 미리 넣지 않는다"와 같은 원칙이다.
 
+**세션 쿠키 SPA(admin·merchant)의 HTTP 계층은 각 앱의 `src/api/http.ts`에 있다** — 오류 타입(`ConsoleApiError`), CSRF 토큰 왕복, `fetch` 래퍼가 거기 있고 `client.ts`는 앱 설정(baseUrl·CSRF 부트스트랩 경로·오류 생성자)을 주입해 엔드포인트 함수만 갖는다. **두 앱의 `http.ts`는 거의 동일한 복제본이다** — 워크스페이스가 없어 지금은 각 앱에 두고, 세 번째 소비자가 생기거나 워크스페이스를 도입하면 그때 `frontend/packages/`로 승격한다(그전까지는 **한쪽을 고치면 다른 쪽도 함께 본다**). `payment`는 쿠키·CSRF를 쓰지 않아 이 계층을 공유하지 않는다.
+
 **merchant/admin을 만들 때는 CORS가 지금보다 까다롭다.** 그 둘은 세션 쿠키 인증이라 교차 출처에서 쿠키를 보내려면 `allowCredentials = true` + 정확한 Origin + `SameSite=None; Secure`가 필요하다. `payment`는 쿠키를 쓰지 않아 이 문제가 없다(그래서 백엔드가 `allowCredentials`를 꺼 뒀다).
 
 ## 실행 — 호스트 Node로 돌린다
