@@ -3,6 +3,8 @@ import { CheckoutShell } from './checkout/components/CheckoutShell'
 import { StatusScreen } from './checkout/components/StatusScreen'
 import { CheckoutPage } from './checkout/CheckoutPage'
 import { DevPaymentCreator } from './dev/DevPaymentCreator'
+import { DevMerchantReturn } from './dev/DevMerchantReturn'
+import { readDevReturnFromUrl } from './dev/devReturn'
 
 /**
  * 세션 식별자는 쿼리 파라미터로 받는다: `/?session=cs_xxx`
@@ -18,6 +20,7 @@ function readSessionIdFromUrl(): string | null {
 
 export default function App() {
 	const [sessionId, setSessionId] = useState<string | null>(readSessionIdFromUrl)
+	const [devReturn, setDevReturn] = useState(() => readDevReturnFromUrl(window.location.search))
 
 	function useSession(id: string) {
 		// 새로고침해도 같은 세션으로 돌아오도록 주소를 함께 바꾼다.
@@ -25,6 +28,23 @@ export default function App() {
 		url.searchParams.set('session', id)
 		window.history.replaceState(null, '', url)
 		setSessionId(id)
+	}
+
+	/** 복귀 화면에서 다시 시작할 때 주소를 비운다 — 새로고침해도 복귀 화면에 갇히지 않게. */
+	function restart() {
+		window.history.replaceState(null, '', window.location.pathname)
+		setDevReturn(null)
+		setSessionId(null)
+	}
+
+	// 결제를 마치고 가맹점 사이트로 돌아온 자리다. 체크아웃 화면과 섞이면 안 되므로
+	// 세션 조회보다 먼저 분기한다(돌아온 URL에는 ?session=도 함께 남아 있다).
+	if (import.meta.env.DEV && devReturn) {
+		return (
+			<CheckoutShell>
+				<DevMerchantReturn kind={devReturn} onRestart={restart} />
+			</CheckoutShell>
+		)
 	}
 
 	return (
