@@ -32,3 +32,26 @@ export function formatDateTime(iso: string | null | undefined): string {
 	if (Number.isNaN(date.getTime())) return iso
 	return new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeStyle: 'short' }).format(date)
 }
+
+/**
+ * KRW 주문 금액을 천 단위로 끊어 보여준다. 원 단위 정수라 `Number`로 다뤄도 안전하다
+ * (토큰 금액과 다른 점 — 아래 [formatTokenAmount] 참고).
+ */
+export function formatKrw(amount: number): string {
+	return `${amount.toLocaleString('ko-KR')}원`
+}
+
+/**
+ * Minor Unit **문자열**을 사람이 읽는 소수로 바꾼다(`72992701`, 6 → `72.992701`).
+ *
+ * **`Number`로 변환하지 않는다** — 백엔드가 이 값을 문자열로 주는 이유가 토큰 금액이
+ * JavaScript `Number`의 안전 정수 범위를 넘을 수 있어서다. 문자열 자리수만 잘라 쓴다
+ * (`frontend/payment`의 같은 이름 함수와 같은 규칙).
+ */
+export function formatTokenAmount(minorUnits: string, decimals: number): string {
+	const negative = minorUnits.startsWith('-')
+	const digits = (negative ? minorUnits.slice(1) : minorUnits).padStart(decimals + 1, '0')
+	const whole = digits.slice(0, digits.length - decimals)
+	const fraction = decimals > 0 ? `.${digits.slice(digits.length - decimals)}` : ''
+	return `${negative ? '-' : ''}${whole}${fraction}`
+}

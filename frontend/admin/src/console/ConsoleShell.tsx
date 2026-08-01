@@ -24,6 +24,7 @@ export function ConsoleShell({ me, children }: { me: MeResponse; children: React
 				</div>
 				<nav className="mx-auto flex max-w-5xl gap-1 px-6 pb-2">
 					<ConsoleNavLink to="/">가맹점</ConsoleNavLink>
+					<ConsoleNavLink to="/payments">결제 내역</ConsoleNavLink>
 					{/* 내부 직원 관리·로그인 감사는 SUPER_ADMIN 전용이라 다른 역할에게는 탭 자체를 감춘다. */}
 					{canManageInternalUsers(String(me.role)) && (
 						<>

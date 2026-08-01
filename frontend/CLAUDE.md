@@ -9,7 +9,7 @@
 | 디렉토리 | 대상 | 호출하는 백엔드 | 상태 |
 |---|---|---|---|
 | `payment/` | **고객**(Hosted Checkout) | `api-payment` `:8081`의 `/checkout/**` | **구현 중** |
-| `merchant/` | 가맹점 운영자 | `api-merchant` `:8083`의 `/merchant/**` | **구현 중**(API Key 관리 + 팀 계정·초대) |
+| `merchant/` | 가맹점 운영자 | `api-merchant` `:8083`의 `/merchant/**` | **구현 중**(API Key 관리 + 팀 계정·초대 + 결제 내역) |
 | `admin/` | PG 내부 운영자 | `api-admin` `:8082`의 `/admin/**` | **구현 중**(로그인 → 가맹점 목록·등록·상세(사용자 관리) + 내부 직원 명부·발급·계정 관리 + 로그인 감사(내부·가맹점)) |
 
 **워크스페이스(pnpm/npm workspaces)를 쓰지 않는다 — 각 앱이 독립 프로젝트다.** 셋이 호출하는 API도 타입도 인증 방식도 전부 달라서 지금 공유할 것이 실질적으로 없다. 진짜 공유될 만한 UI 컴포넌트는 **두 번째 앱을 만들 때 무엇이 겹치는지 드러난 뒤** `frontend/packages/`로 뽑는다. 이 판단은 백엔드의 "지금 실제로 하는 일에만 맞춘다 — 나중에 할 일까지 미리 넣지 않는다"와 같은 원칙이다.
@@ -350,3 +350,32 @@ npm run gen:api        # api-admin의 openapi3.yaml → src/api/schema.d.ts
   merchant와 같은 방식이다.
 - 이 페이지 전체가 여전히 SUPER_ADMIN 전용이라(라우트·내비·서버 3중), 관리 액션도 그
   안에서만 노출된다. 계약은 `docs/architecture/admin-console-api.md`의 4절에 있다.
+
+## 결제 내역 화면 — 두 콘솔이 거의 같다
+
+`admin`과 `merchant` 양쪽에 같은 모양의 결제 내역 페이지가 있다(`PaymentsPage`,
+`PaymentTable`, `usePayments`, `paymentQueryString`). 계약은
+[`docs/architecture/admin-console-api.md`](../docs/architecture/admin-console-api.md)의 4.1과
+[`merchant-console-api.md`](../docs/architecture/merchant-console-api.md)의 4.1이다.
+
+**다른 곳은 둘뿐이다** — 나머지는 복제본이므로 **한쪽을 고치면 다른 쪽도 함께 본다**
+(`http.ts`와 같은 규율):
+
+- admin에만 **가맹점 필터**가 있다. 선택지는 이미 캐시된 `useMerchants()`에서 가져온다 —
+  이 화면 때문에 단건 조회를 새로 만들지 않는다.
+- admin 표에만 **가맹점 이름 열**이 있다. merchant는 언제나 자기 가맹점 하나라 응답에
+  `merchantName` 자체가 없다.
+
+지킬 것 셋(payment 앱의 같은 이름 절과 같은 결):
+
+- **`paymentAmount`를 `Number`로 옮기지 않는다.** `formatTokenAmount`가 Minor Unit
+  **문자열**의 자리수만 잘라 쓴다. 안전 정수 범위를 넘는 값과 18-decimals 케이스를
+  `payments.test.tsx`가 회귀로 지킨다.
+- **종료일 필터는 그날 23:59:59.999로 늘린다.** `YYYY-MM-DD`를 그대로 보내면 그날 00:00까지가
+  되어 **마지막 날 결제가 통째로 빠진다** — 기간 필터에서 가장 흔한 실수라 테스트로 고정했다.
+- **필터를 바꾸면 페이지를 0으로 되돌린다.** 3페이지에서 조건을 좁히면 결과가 비는데 화면에는
+  "결제가 없다"로 보인다.
+
+**admin 페이지 테스트는 `fetch` 목을 URL별로 갈라야 한다** — 그 화면은 결제 목록 말고
+가맹점 목록도 불러오기 때문에, 하나의 응답을 모든 요청에 돌려주면 가맹점 필터가 빈 데이터를
+받아 터진다(`routedFetch` 참고).

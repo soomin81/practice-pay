@@ -13,6 +13,8 @@ import type {
 	IssueApiKeyResponse,
 	ListApiKeysResponse,
 	ListMerchantUsersResponse,
+	ListPaymentsResponse,
+	PaymentListFilters,
 	LoginRequest,
 	LoginResponse,
 	MeResponse,
@@ -75,6 +77,14 @@ export const merchantApi = {
 	revokeApiKey: (merchantApiKeyId: string) =>
 		request<RevokeApiKeyResponse>(`/merchant/api-keys/${encodeURIComponent(merchantApiKeyId)}`, { method: 'DELETE' }),
 
+	/**
+	 * 결제 내역(**자기 가맹점만**, 생성 시각 최신순). 인증된 가맹점 사용자 전원(VIEWER 포함)이
+	 * 조회할 수 있다. 조회 범위는 세션의 가맹점으로 서버가 고정하므로 `merchantId`를 보내지
+	 * 않는다(`docs/architecture/merchant-console-api.md`의 4.1).
+	 */
+	listPayments: (filters: PaymentListFilters = {}) =>
+		request<ListPaymentsResponse>(`/merchant/payments${paymentQueryString(filters)}`),
+
 	listMerchantUsers: () => request<ListMerchantUsersResponse>('/merchant/merchant-users'),
 
 	inviteSubAccount: (body: InviteSubAccountRequest) =>
@@ -118,4 +128,20 @@ export const merchantApi = {
 			`/merchant/merchant-users/${encodeURIComponent(merchantUserId)}/invitation/revoke`,
 			{ method: 'POST' },
 		),
+}
+
+/**
+ * 결제 내역 필터를 쿼리스트링으로 만든다. **값이 없거나 빈 문자열인 항목은 넣지 않는다** —
+ * 서버가 빈 값을 "필터 없음"으로 처리하긴 하지만, URL에 남으면 캐시 키가 불필요하게 갈린다.
+ * `page`/`size`는 0도 유효한 값이라 `undefined`만 걸러낸다.
+ */
+export function paymentQueryString(filters: PaymentListFilters): string {
+	const params = new URLSearchParams()
+	if (filters.status) params.set('status', filters.status)
+	if (filters.from) params.set('from', filters.from)
+	if (filters.to) params.set('to', filters.to)
+	if (filters.page !== undefined) params.set('page', String(filters.page))
+	if (filters.size !== undefined) params.set('size', String(filters.size))
+	const query = params.toString()
+	return query ? `?${query}` : ''
 }

@@ -14,6 +14,8 @@ import type {
 	ListMerchantLoginAuditResponse,
 	ListMerchantUsersResponse,
 	ListMerchantsResponse,
+	ListPaymentsResponse,
+	PaymentListFilters,
 	MerchantUserRole,
 	MerchantUserStatusAction,
 	LoginRequest,
@@ -75,6 +77,15 @@ export const adminApi = {
 	registerMerchant: (body: RegisterMerchantRequest) =>
 		request<RegisterMerchantResponse>('/admin/merchants', { method: 'POST', body: JSON.stringify(body) }),
 
+	/**
+	 * 결제 내역(전 가맹점, 생성 시각 최신순). 인증된 내부 사용자 전원이 조회할 수 있다.
+	 *
+	 * **빈 값은 파라미터에서 아예 뺀다** — 서버도 빈 문자열을 "필터 없음"으로 처리하지만,
+	 * 쿼리스트링에 `status=`가 남으면 react-query 캐시 키가 갈려 같은 조회가 두 번 나간다.
+	 */
+	listPayments: (filters: PaymentListFilters = {}) =>
+		request<ListPaymentsResponse>(`/admin/payments${paymentQueryString(filters)}`),
+
 	listInternalUsers: () => request<ListInternalUsersResponse>('/admin/internal-users'),
 
 	/** 로그인 감사 로그(최근 시도, 최신순). SUPER_ADMIN 전용 — 서버도 403으로 막는다. */
@@ -126,4 +137,21 @@ export const adminApi = {
 			`/admin/merchants/${encodeURIComponent(merchantId)}/users/${encodeURIComponent(merchantUserId)}/role`,
 			{ method: 'POST', body: JSON.stringify({ role }) },
 		),
+}
+
+/**
+ * 결제 내역 필터를 쿼리스트링으로 만든다. **값이 없거나 빈 문자열인 항목은 넣지 않는다** —
+ * 서버가 빈 값을 "필터 없음"으로 처리하긴 하지만, URL에 남으면 캐시 키가 불필요하게 갈린다.
+ * `page`/`size`는 0도 유효한 값이라 `undefined`만 걸러낸다.
+ */
+export function paymentQueryString(filters: PaymentListFilters): string {
+	const params = new URLSearchParams()
+	if (filters.merchantId) params.set('merchantId', filters.merchantId)
+	if (filters.status) params.set('status', filters.status)
+	if (filters.from) params.set('from', filters.from)
+	if (filters.to) params.set('to', filters.to)
+	if (filters.page !== undefined) params.set('page', String(filters.page))
+	if (filters.size !== undefined) params.set('size', String(filters.size))
+	const query = params.toString()
+	return query ? `?${query}` : ''
 }

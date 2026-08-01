@@ -67,3 +67,33 @@ export const ISSUABLE_SCOPES: readonly ApiKeyScope[] = ['PAYMENT_CREATE', 'PAYME
  * 운영자가 가맹점 등록 트랜잭션에서 만든다.
  */
 export const INVITABLE_ROLES: readonly MerchantUserRole[] = ['ADMIN', 'VIEWER']
+
+export type ListPaymentsResponse = JsonResponse<'merchant-payments', 200>
+export type PaymentSummary = ListPaymentsResponse['payments'][number]
+
+/** 결제 상태(`docs/domain/state-transitions.md`). 화면 필터의 선택지이기도 하다. */
+export type PaymentStatus = 'CREATED' | 'READY' | 'PROCESSING' | 'CONFIRMING' | 'SUCCEEDED' | 'EXPIRED' | 'FAILED'
+
+export const PAYMENT_STATUSES: readonly PaymentStatus[] = [
+	'CREATED',
+	'READY',
+	'PROCESSING',
+	'CONFIRMING',
+	'SUCCEEDED',
+	'EXPIRED',
+	'FAILED',
+]
+
+/**
+ * 결제 내역 조회 필터. 서버의 쿼리 파라미터와 1:1로 대응한다.
+ *
+ * **`merchantId`가 없다** — 조회 범위는 세션의 가맹점으로 서버가 고정한다
+ * (`docs/architecture/merchant-console-api.md`의 4.1). 내부 운영자 콘솔의 같은 타입에만 있다.
+ */
+export type PaymentListFilters = {
+	status?: PaymentStatus | ''
+	from?: string
+	to?: string
+	page?: number
+	size?: number
+}

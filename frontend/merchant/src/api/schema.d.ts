@@ -112,6 +112,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/merchant/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 결제 내역 조회(자기 가맹점)
+         * @description **인증된 가맹점 사용자 전원**(VIEWER 포함)이 조회할 수 있다. 조회 범위는 세션의 가맹점으로 서버가 고정하므로 merchantId를 보낼 수 없다. 쿼리 파라미터로 좁힌다: status(PaymentStatus), from/to(생성 시각 ISO-8601 UTC), page(0부터), size. size는 서버가 최대 200으로 자르고 실제로 적용된 값을 응답의 size로 돌려준다. 정렬은 생성 시각 최신순이다. paymentAmount는 Minor Unit 정수를 **문자열로** 준다 — 토큰 금액이 JavaScript Number의 안전 정수 범위를 넘을 수 있다.
+         */
+        get: operations["merchant-payments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/merchant/account-invitations/accept": {
         parameters: {
             query?: never;
@@ -329,7 +349,7 @@ export interface components {
             /** @description 가맹점 내에서 유일한 이메일 */
             email: string;
         };
-        "merchant-merchant-users-merchantUserId-suspend-33084672": Record<string, never>;
+        "merchant-logout-33084672": Record<string, never>;
         /** MerchantMeResponse */
         MerchantMeResponse: {
             /** @description OWNER | ADMIN | VIEWER */
@@ -424,6 +444,44 @@ export interface components {
                 /** @description ACTIVE | REVOKED | EXPIRED */
                 status: string;
             }[];
+        };
+        /** ListPaymentsResponse */
+        ListPaymentsResponse: {
+            /** @description 실제로 적용된 페이지 크기. 상한에 걸리면 요청값과 다르다. */
+            size: number;
+            /** @description 결제 배열(생성 시각 최신순) */
+            payments: {
+                /** @description 가맹점이 부여한 주문 식별자 */
+                merchantOrderId: string;
+                /** @description 결제 토큰 금액. Minor Unit 정수를 문자열로 준다. */
+                paymentAmount: string;
+                /** @description 온체인 거래 Hash. 고객이 제출하기 전이면 null. */
+                transactionHash?: string | null;
+                /** @description 블록체인 네트워크 코드 */
+                network: string;
+                /** @description 결제 자산 코드(USDC) */
+                paymentAsset: string;
+                /** @description 결제 생성 시각(UTC) */
+                createdAt: string;
+                /** @description KRW 주문 금액(원 단위 정수) */
+                orderAmount: number;
+                /** @description 토큰 소수 자릿수(USDC는 6) */
+                tokenDecimals: number;
+                /** @description 결제 식별자 */
+                paymentId: string;
+                /** @description 실패 사유. FAILED가 아니면 null. */
+                failureReason?: string | null;
+                /** @description 결제 완료 시각(UTC). SUCCEEDED가 아니면 null. */
+                paidAt?: string | null;
+                /** @description PaymentStatus 값 */
+                status: string;
+                /** @description 주문명 */
+                orderName: string;
+            }[];
+            /** @description 조회한 페이지 번호(0부터) */
+            page: number;
+            /** @description 필터 전체에 걸린 건수(현재 페이지 건수가 아니다) */
+            totalCount: number;
         };
         /** InviteMerchantSubAccountResponse */
         InviteMerchantSubAccountResponse: {
@@ -556,7 +614,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-suspend-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-logout-33084672"];
             };
         };
         responses: {
@@ -633,6 +691,26 @@ export interface operations {
             };
         };
     };
+    "merchant-payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 200 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListPaymentsResponse"];
+                };
+            };
+        };
+    };
     "merchant-accept-invitation": {
         parameters: {
             query?: never;
@@ -669,7 +747,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-suspend-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-logout-33084672"];
             };
         };
         responses: {
@@ -696,7 +774,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-suspend-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-logout-33084672"];
             };
         };
         responses: {
@@ -750,7 +828,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-suspend-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-logout-33084672"];
             };
         };
         responses: {
@@ -777,7 +855,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-suspend-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-logout-33084672"];
             };
         };
         responses: {
@@ -804,7 +882,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-suspend-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-logout-33084672"];
             };
         };
         responses: {
@@ -831,7 +909,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-suspend-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-logout-33084672"];
             };
         };
         responses: {

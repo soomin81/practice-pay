@@ -5,6 +5,7 @@ import { MerchantApiError } from '@/api/client'
 import { LoginPage } from '@/console/LoginPage'
 import { ConsoleShell } from '@/console/ConsoleShell'
 import { ApiKeysPage } from '@/console/ApiKeysPage'
+import { PaymentsPage } from '@/console/PaymentsPage'
 import { TeamPage } from '@/console/TeamPage'
 import { AcceptInvitationPage } from '@/invitation/AcceptInvitationPage'
 import { Button } from '@/components/ui/button'
@@ -56,6 +57,7 @@ function ConsoleRoutes() {
 			<Routes>
 				<Route path="/" element={<ApiKeysPage />} />
 				<Route path="/team" element={<TeamPage />} />
+				<Route path="/payments" element={<PaymentsPage />} />
 				<Route path="*" element={<Navigate to="/" replace />} />
 			</Routes>
 		</ConsoleShell>

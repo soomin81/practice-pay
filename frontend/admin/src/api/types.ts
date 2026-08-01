@@ -100,3 +100,29 @@ export function canManageMerchantAccounts(role: string): boolean {
 export function canRegisterMerchant(role: string): boolean {
 	return role === 'SUPER_ADMIN' || role === 'OPERATOR'
 }
+
+export type ListPaymentsResponse = JsonResponse<'admin-payments', 200>
+export type PaymentSummary = ListPaymentsResponse['payments'][number]
+
+/** 결제 상태(`docs/domain/state-transitions.md`). 화면 필터의 선택지이기도 하다. */
+export type PaymentStatus = 'CREATED' | 'READY' | 'PROCESSING' | 'CONFIRMING' | 'SUCCEEDED' | 'EXPIRED' | 'FAILED'
+
+export const PAYMENT_STATUSES: readonly PaymentStatus[] = [
+	'CREATED',
+	'READY',
+	'PROCESSING',
+	'CONFIRMING',
+	'SUCCEEDED',
+	'EXPIRED',
+	'FAILED',
+]
+
+/** 결제 내역 조회 필터. 서버의 쿼리 파라미터와 1:1로 대응한다. */
+export type PaymentListFilters = {
+	merchantId?: string
+	status?: PaymentStatus | ''
+	from?: string
+	to?: string
+	page?: number
+	size?: number
+}

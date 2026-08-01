@@ -17,6 +17,7 @@ import org.springframework.context.annotation.Import
 import org.springframework.http.MediaType
 import org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.document
 import org.springframework.restdocs.payload.FieldDescriptor
+import org.springframework.restdocs.payload.JsonFieldType
 import org.springframework.restdocs.payload.PayloadDocumentation.fieldWithPath
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
 import org.springframework.security.core.authority.SimpleGrantedAuthority
@@ -755,9 +756,9 @@ class MerchantApiDocumentationTest : FunSpec() {
 							fieldWithPath("payments[].tokenDecimals").description("토큰 소수 자릿수(USDC는 6)"),
 							fieldWithPath("payments[].network").description("블록체인 네트워크 코드"),
 							fieldWithPath("payments[].status").description("PaymentStatus 값"),
-							fieldWithPath("payments[].failureReason").description("실패 사유. FAILED가 아니면 null.").optional(),
-							fieldWithPath("payments[].transactionHash").description("온체인 거래 Hash. 고객이 제출하기 전이면 null.").optional(),
-							fieldWithPath("payments[].paidAt").description("결제 완료 시각(UTC). SUCCEEDED가 아니면 null.").optional(),
+							fieldWithPath("payments[].failureReason").type(JsonFieldType.STRING).description("실패 사유. FAILED가 아니면 null.").optional(),
+							fieldWithPath("payments[].transactionHash").type(JsonFieldType.STRING).description("온체인 거래 Hash. 고객이 제출하기 전이면 null.").optional(),
+							fieldWithPath("payments[].paidAt").type(JsonFieldType.STRING).description("결제 완료 시각(UTC). SUCCEEDED가 아니면 null.").optional(),
 							fieldWithPath("payments[].createdAt").description("결제 생성 시각(UTC)"),
 							fieldWithPath("totalCount").description("필터 전체에 걸린 건수(현재 페이지 건수가 아니다)"),
 							fieldWithPath("page").description("조회한 페이지 번호(0부터)"),
