@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useAccount, useConnect, useSwitchChain, useWriteContract } from 'wagmi'
-import { UserRejectedRequestError } from 'viem'
+import { UserRejectedRequestError, getAddress } from 'viem'
 import { CheckoutApiError, checkoutApi } from '@/api/client'
 import type { CheckoutSession } from '@/api/types'
 import { erc20Abi } from './erc20'
@@ -79,6 +79,19 @@ export function useWalletPayment({
 
 		setError(null)
 		try {
+			// **이 세션에 지갑이 등록돼 있지 않으면 먼저 등록한다.**
+			//
+			// 등록을 [connect]에만 맡기면 안 된다 — wagmi는 연결 상태를 브라우저에 저장하므로,
+			// 새 체크아웃 세션을 열었을 때 화면은 이미 `isConnected`라 연결 버튼을 건너뛰고
+			// 곧장 "보내기"를 보여준다. 그러면 **그 세션은 지갑이 등록된 적이 없어** 전송
+			// 서명까지 끝난 뒤 `POST /transaction`이 "연결된 지갑이 없습니다"로 거부한다 —
+			// 고객은 USDC를 이미 보낸 뒤다. 등록은 연결이라는 *동작*이 아니라 **세션의
+			// 상태**에 묶여야 한다.
+			if (!session.connectedWallet) {
+				setStep('registering')
+				await registerWallet(session.checkoutSessionId, address)
+			}
+
 			// 서버가 준 chainId를 앱이 실제로 말을 걸 수 있는 체인인지 확인해서 좁힌다.
 			// 모르는 체인이면 여기서 멈춘다 — 추측해서 보내면 돈이 사라진다.
 			const target = asSupportedChainId(targetChainId)
@@ -155,12 +168,26 @@ export function asSupportedChainId(chainId: number): SupportedChainId {
 	return supported.id
 }
 
-/** viem은 주소를 `0x…` 리터럴 타입으로 받는다. 형식을 확인하고 좁힌다 — 캐스팅만 하면 잘못된 값이 그대로 지갑까지 간다. */
+/**
+ * viem은 주소를 `0x…` 리터럴 타입으로 받는다. 형식을 확인하고 좁힌다 — 캐스팅만 하면
+ * 잘못된 값이 그대로 지갑까지 간다.
+ *
+ * **[getAddress]로 EIP-55 체크섬(대소문자)을 정규화한다.** viem은 인코딩 단계에서 체크섬이
+ * 맞지 않으면 거부하는데, 백엔드의 `WalletAddress`는 체크섬을 검증하지 않는다(의도적 —
+ * "EIP-55 checksum 검증은 하지 않는다"). 그래서 수취 지갑을 소문자로 설정하면(주소를
+ * 다루는 도구 상당수가 소문자로 출력한다) **결제가 지갑 단계에서
+ * "Address must match its checksum counterpart"로 막힌다.** 정규화는 대소문자만 바꾸므로
+ * 주소 자체는 달라지지 않는다.
+ *
+ * **알려진 gap**: 이 정규화는 운영자가 수취 지갑을 오타로 넣은 경우를 잡아주지 못한다.
+ * 원래도 백엔드가 잡지 않았으므로 여기서 잃는 보호는 없지만, 오타를 실제로 막으려면
+ * 백엔드가 설정을 읽는 시점에 체크섬을 검증해 기동을 실패시키는 편이 맞다.
+ */
 export function asAddress(value: string, label: string): `0x${string}` {
 	if (!/^0x[0-9a-fA-F]{40}$/.test(value)) {
 		throw new Error(`${label} 형식이 올바르지 않습니다: ${value}`)
 	}
-	return value as `0x${string}`
+	return getAddress(value)
 }
 
 function toMessage(cause: unknown): string {

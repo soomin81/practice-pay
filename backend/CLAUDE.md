@@ -195,6 +195,8 @@ gradlew.bat ktlintFormat                                  # 모든 모듈 자동
 | `BigInteger.toLong()`이 `Long` 범위 초과분을 조용히 잘라 `TokenAmount`가 음수가 됨 | 유닛 테스트가 Mock한 응답은 **실제 RPC 응답의 값 범위**를 재현하지 않는다(18-decimals 토큰 전송량은 흔히 `Long.MAX_VALUE`를 넘는다) | 실제 Base Sepolia RPC에 진짜 Transaction Hash로 조회(아래 "온체인 Adapter" 절) |
 | 새로 만든 DB 볼륨에서 **모든 DB 연결 실패**(`RSA public key is not available client side`) | MySQL 9의 `caching_sha2_password`는 첫 인증 성공 후 서버가 캐싱해서, **기존 볼륨에서는 원리적으로 재현되지 않는다.** Testcontainers도 매번 새 컨테이너지만 JDBC 옵션이 달라 드러나지 않았다 | `docker compose down -v` 후 README 세팅 흐름을 처음부터 따라감 |
 | 잘못된 요청 본문에 400이 아니라 **401**이 나감(404/405/500도 마찬가지) | 컨테이너의 `/error` **ERROR 디스패치**에서 벌어지는 일인데, `@WebMvcTest`의 MockMvc는 그 디스패치를 재현하지 않는다 | 실제 `bootRun` + `curl` |
+| 브라우저에서만 **CORS로 차단**(`Failed to fetch`) | `curl`·MockMvc는 `Origin`을 보내지 않아 **CORS를 아예 거치지 않는다.** 노출 헤더(`exposedHeaders`)도 마찬가지다 | DEV 결제 생성이 CORS 밖 경로라 브라우저에서 한 번도 동작한 적이 없었다. `curl`에 `-H "Origin: …"`을 붙여야 재현된다 |
+| 백엔드가 허용한 값을 **프론트 라이브러리가 거부** | 두 계층의 검증 규칙이 다른데(백엔드는 EIP-55 미검증, viem은 요구) 어느 쪽 테스트도 경계를 넘지 않는다 | 소문자 수취 지갑이 지갑 서명 단계에서 막혔다 |
 | 새 환경변수를 설정했는데 **앱에 전달되지 않음** | `bootRun`의 앱은 **Gradle 데몬의 자식**이라 데몬이 처음 뜰 때의 환경을 물려받는다 — 나중에 `export`해도 이미 떠 있는 데몬은 모른다. 테스트는 환경변수를 아예 거치지 않아 이 층이 통째로 비어 있다 | `APP_PAYMENT_RECEIVING_WALLETS_BASE_SEPOLIA` 검증 중 겪음. `gradlew --stop` 후 다시 띄우면 해결된다 |
 
 - **실물 검증이 필요한 대표적인 층**: 외부 시스템 실제 응답(RPC/HTTP), DB 연결 옵션과 드라이버 동작, Spring Security 필터 체인과 오류 디스패치, 컴포넌트 스캔 배선, 설정값(`application.yaml`) 해석. 반대로 도메인 규칙·Use Case 분기·상태 전이는 유닛 테스트가 충분히 잡는다.

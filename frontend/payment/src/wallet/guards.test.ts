@@ -24,6 +24,19 @@ test('올바른 EVM 주소는 그대로 통과한다', () => {
 	expect(asAddress(address, '토큰 Contract 주소')).toBe(address)
 })
 
+/**
+ * **백엔드는 EIP-55 체크섬을 검증하지 않는다**(의도적). 그래서 수취 지갑이 소문자로
+ * 설정돼 내려오는 일이 실제로 있는데, 정규화하지 않으면 viem이 인코딩 단계에서
+ * "Address must match its checksum counterpart"로 거부해 **결제가 지갑 단계에서 막힌다.**
+ * 실물 검증에서 실제로 걸렸던 회귀다.
+ */
+test.each([
+	['소문자', '0x036cbd53842c5426634e7929541ec2318f3dcf7e'],
+	['대문자', '0x036CBD53842C5426634E7929541EC2318F3DCF7E'],
+])('체크섬이 맞지 않는 주소(%s)는 정규화해서 통과시킨다', (_, value) => {
+	expect(asAddress(value, '수취 지갑 주소')).toBe('0x036CbD53842c5426634e7929541eC2318f3dCF7e')
+})
+
 test.each([
 	['0x 접두사 없음', '036CbD53842c5426634e7929541eC2318f3dCF7e'],
 	['자리수 부족', '0x036CbD53842c5426634e7929541eC2318f3dCF'],

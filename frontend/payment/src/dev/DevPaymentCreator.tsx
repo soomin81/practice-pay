@@ -29,7 +29,6 @@ export function DevPaymentCreator({ onCreated }: { onCreated: (sessionId: string
 	if (!import.meta.env.DEV) return null
 
 	const apiKey: string | undefined = import.meta.env.VITE_DEV_API_KEY
-	const baseUrl: string = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8081'
 
 	if (!apiKey) {
 		return <MissingEnv name="VITE_DEV_API_KEY" />
@@ -39,7 +38,10 @@ export function DevPaymentCreator({ onCreated }: { onCreated: (sessionId: string
 		setBusy(true)
 		setError(null)
 		try {
-			const response = await fetch(`${baseUrl}/api/v1/payments`, {
+			// **상대 경로다** — Vite 개발 서버의 프록시(`vite.config.ts`)를 타서 브라우저에는
+			// 동일 출처 요청이 된다. 백엔드는 CORS를 `/checkout/**`에만 열어 두므로
+			// (의도된 보안 경계) 8081을 직접 부르면 "Failed to fetch"로 막힌다.
+			const response = await fetch('/api/v1/payments', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
 				body: JSON.stringify({
