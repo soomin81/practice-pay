@@ -179,9 +179,10 @@ export function asSupportedChainId(chainId: number): SupportedChainId {
  * "Address must match its checksum counterpart"로 막힌다.** 정규화는 대소문자만 바꾸므로
  * 주소 자체는 달라지지 않는다.
  *
- * **알려진 gap**: 이 정규화는 운영자가 수취 지갑을 오타로 넣은 경우를 잡아주지 못한다.
- * 원래도 백엔드가 잡지 않았으므로 여기서 잃는 보호는 없지만, 오타를 실제로 막으려면
- * 백엔드가 설정을 읽는 시점에 체크섬을 검증해 기동을 실패시키는 편이 맞다.
+ * **오타 방어는 백엔드가 한다** — api-payment가 기동할 때 수취 지갑 설정의 EIP-55 체크섬을
+ * 검증해 어긋나면 아예 뜨지 않는다. 그래서 여기 정규화는 "체크섬 없이 적힌 주소"를 받아주는
+ * 관용이지 오타 방어가 아니다(방어를 여기에 두면 이미 결제 화면까지 온 고객에게 실패가
+ * 드러난다 — 그건 너무 늦다).
  */
 export function asAddress(value: string, label: string): `0x${string}` {
 	if (!/^0x[0-9a-fA-F]{40}$/.test(value)) {

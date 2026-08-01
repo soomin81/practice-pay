@@ -29,6 +29,9 @@ mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
 springmockk = { module = "com.ninja-squad:springmockk", version.ref = "springmockk" }
 archunit = { module = "com.tngtech.archunit:archunit", version.ref = "archunit" }
 web3j-core = { module = "org.web3j:core", version.ref = "web3j" }
+# 수취 지갑 EIP-55 체크섬 검증에만 쓴다(modules:infra-support). RPC 클라이언트가 딸린
+# web3j-core와 달리 crypto만 담은 작은 아티팩트다.
+web3j-crypto = { module = "org.web3j:crypto", version.ref = "web3j" }
 # Apache POI — 결제 내역 .xlsx 내보내기(modules:infra-support의 XlsxPaymentExportWriter).
 # poi-ooxml이 xlsx(OOXML)를 담당하고 코어 poi를 전이로 끌고 온다.
 poi-ooxml = { module = "org.apache.poi:poi-ooxml", version.ref = "poi" }

@@ -26,6 +26,8 @@ import org.springframework.boot.runApplication
 		"paytech.practice.pay.infra.support.id",
 		"paytech.practice.pay.infra.support.exchange",
 		"paytech.practice.pay.infra.support.apikey",
+		// 수취 지갑 EIP-55 체크섬 검증(Web3jWalletAddressChecksum).
+		"paytech.practice.pay.infra.support.wallet",
 	],
 )
 class PaymentApiApplication

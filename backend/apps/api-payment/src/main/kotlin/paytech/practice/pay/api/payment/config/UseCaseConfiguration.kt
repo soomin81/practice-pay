@@ -23,6 +23,7 @@ import paytech.practice.pay.application.port.outbound.OutboxEventRepository
 import paytech.practice.pay.application.port.outbound.PaymentQuoteRepository
 import paytech.practice.pay.application.port.outbound.PaymentRepository
 import paytech.practice.pay.application.port.outbound.TransactionManager
+import paytech.practice.pay.application.port.outbound.WalletAddressChecksum
 import paytech.practice.pay.domain.shared.BlockchainNetwork
 import paytech.practice.pay.domain.shared.WalletAddress
 import java.time.Clock
@@ -67,15 +68,46 @@ class UseCaseConfiguration {
 	 */
 	@Bean
 	fun receivingWalletRegistry(
+		walletAddressChecksum: WalletAddressChecksum,
 		@Value("\${app.payment.receiving-wallets.base-sepolia:}") baseSepoliaWallet: String,
 	): ReceivingWalletRegistry =
 		ReceivingWalletRegistry(
 			buildMap {
 				if (baseSepoliaWallet.isNotBlank()) {
-					put(BlockchainNetwork.BASE_SEPOLIA, WalletAddress(baseSepoliaWallet))
+					put(
+						BlockchainNetwork.BASE_SEPOLIA,
+						checksummedReceivingWallet(walletAddressChecksum, baseSepoliaWallet, "base-sepolia"),
+					)
 				}
 			},
 		)
+
+	/**
+	 * 설정된 수취 지갑이 **EIP-55 체크섬 형태인지 확인하고, 아니면 기동을 실패시킨다.**
+	 *
+	 * 이 값은 사람이 손으로 옮겨 적는 주소이고, 틀리면 **고객이 보낸 USDC가 아무도 통제하지
+	 * 못하는 주소로 가서 되돌릴 수 없다.** 그런데 형식 검증(`0x` + 40 hex)은 한 글자 오타를
+	 * 잡지 못한다 — EIP-55는 정확히 그 오타를 잡으려고 대소문자에 체크섬을 실은 규약이다.
+	 *
+	 * **틀렸을 때 정규 형태를 메시지에 찍지 않는다.** 찍으면 운영자가 그 값을 그대로
+	 * 복사해 넣게 되는데, 오타가 있었다면 그건 "체크섬만 맞는 남의 주소"라 오히려 오타를
+	 * 확정시킨다. 지갑에서 다시 복사하라고 안내하는 것이 유일하게 옳은 대응이다.
+	 *
+	 * 소문자로만 적힌 주소도 거부한다 — 체크섬 정보가 없어 오타를 검증할 수 없기 때문이다.
+	 * 지갑은 언제나 체크섬 형태로 보여주므로 복사해 넣으면 그대로 통과한다.
+	 */
+	private fun checksummedReceivingWallet(
+		checksum: WalletAddressChecksum,
+		configured: String,
+		networkKey: String,
+	): WalletAddress {
+		val address = WalletAddress(configured)
+		check(checksum.isChecksummed(configured)) {
+			"app.payment.receiving-wallets.$networkKey 주소의 EIP-55 체크섬이 맞지 않습니다. " +
+				"오타이거나 체크섬 없이 적힌 주소입니다 — 지갑에서 주소를 다시 복사해 넣으세요."
+		}
+		return address
+	}
 
 	@Bean
 	fun createPaymentUseCase(

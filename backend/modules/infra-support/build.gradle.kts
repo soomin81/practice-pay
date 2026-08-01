@@ -36,4 +36,9 @@ dependencies {
 	// **앱이 아니라 이 모듈에 두는 것이 규칙이다** — 앱에는 outbound Port 구현을 두지
 	// 않는다(HexagonalLayerTest). 두 콘솔 앱이 같은 구현을 공유하는 이점도 있다.
 	implementation(libs.poi.ooxml)
+
+	// Web3jWalletAddressChecksum만 쓴다 — EIP-55 체크섬 계산에 keccak256이 필요한데
+	// 직접 구현할 것은 아니다. RPC 클라이언트가 딸린 web3j-core가 아니라 crypto만 받는다
+	// (modules:infra-blockchain은 RPC URL 설정을 강제해서 api-payment가 쓸 수 없다).
+	implementation(libs.web3j.crypto)
 }
