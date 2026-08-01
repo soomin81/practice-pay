@@ -29,6 +29,13 @@ import paytech.practice.pay.domain.payment.PaymentFailureReason
  *   `uk_blockchain_network_hash` Unique 제약이 그 BlockchainTransaction이
  *   생성되던 시점에 이미 보장했다(그 생성 Use Case는 이 Use Case의 범위 밖이다).
  *   여기서 다시 확인할 근거 데이터가 없다.
+ *
+ * **`Invalid`가 "돈이 오지 않았다"를 뜻하지 않는다.** 온체인 전송은 되돌릴 수 없어서, 여기서
+ * 실패로 판정해도 자금은 이미 움직인 뒤다 — 특히 `AMOUNT_INSUFFICIENT`(금액 부족)와
+ * `TOKEN_CONTRACT_NOT_ALLOWED`(허용되지 않은 토큰)는 **자금이 PG 수취 지갑에 들어온 상태**다.
+ * MVP는 이런 입금을 자동 반환하거나 정산에 반영하지 않고 수령 사실만 `blockchain_transaction`에
+ * 남긴다(ADR-007). 금액 비교가 `>=`인 것도 같은 맥락이다 — 초과 지급은 결제를 막지 않고,
+ * 초과분은 정산(견적 금액 기준)에 반영되지 않은 채 수취 지갑에 남는다.
  */
 object PaymentTransactionValidator {
 	fun validate(

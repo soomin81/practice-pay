@@ -26,10 +26,16 @@ PROCESSING 또는 CONFIRMING → FAILED
 - Network 및 Chain ID 일치
 - Token Contract 허용
 - Receiving Wallet 일치
-- Amount 충족
+- Amount 충족(`받은 금액 >= 결제 금액` — 초과분은 결제를 막지 않는다)
 - Receipt 성공
 - Required Confirmation 충족
 - Transaction Hash 중복 아님
+
+**`FAILED`가 "돈이 오지 않았다"를 뜻하지 않는다.** 온체인 전송은 되돌릴 수 없어서, 검증
+실패 중 일부(금액 부족·허용되지 않은 토큰)는 **자금이 이미 PG 수취 지갑에 들어온 상태**다.
+MVP는 이런 입금을 자동으로 반환하거나 정산에 반영하지 않고 수령 사실만
+`blockchain_transaction`에 남긴다 — 판단 근거와 후속 계획은
+[ADR-007](../decisions/ADR-007-onchain-irreversibility.md)에 있다.
 
 ## CheckoutSession
 

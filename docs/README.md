@@ -34,3 +34,4 @@
 - [ADR-004 Fake Exchange](decisions/ADR-004-fake-exchange.md)
 - [ADR-005 정산 경계](decisions/ADR-005-settlement-boundary.md)
 - [ADR-006 관리자 계정과 가맹점 API Key 분리](decisions/ADR-006-identity-api-key-separation.md)
+- [ADR-007 온체인 비가역성과 금액 불일치 처리](decisions/ADR-007-onchain-irreversibility.md)
