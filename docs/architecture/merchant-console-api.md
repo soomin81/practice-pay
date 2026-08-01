@@ -63,6 +63,7 @@
 | `POST /merchant/api-keys` | OWNER/ADMIN | 필요 | 201 발급(rawApiKey 1회) | 400 검증, 401, 403 |
 | `DELETE /merchant/api-keys/{id}` | OWNER/ADMIN | 필요 | 200 폐기 | 401, 403, 404 없음 |
 | `GET /merchant/payments` | **가맹점 사용자 전원**(VIEWER 포함) | — | 200 결제 내역(자기 가맹점, 최신순) | 400 잘못된 status, 401 |
+| `GET /merchant/payments/{paymentId}` | **가맹점 사용자 전원**(VIEWER 포함) | — | 200 결제 상세(자기 가맹점) | 401, **404 없는 결제·남의 결제** |
 | `GET /merchant/payments/export` | **가맹점 사용자 전원**(VIEWER 포함) | — | 200 `.xlsx` 첨부(자기 가맹점) | 400 잘못된 status, 401 |
 | `GET /merchant/settlement-receivables` | **가맹점 사용자 전원**(VIEWER 포함) | — | 200 정산 채권(자기 가맹점, 정산 예정일 최신순) | 400 잘못된 status, 401 |
 | `GET /merchant/merchant-users` | OWNER/ADMIN | — | 200 명부 | 401, 403(VIEWER) |
@@ -106,6 +107,19 @@
 - 정렬은 생성 시각 최신순 고정이다. **엑셀 다운로드**(`GET /merchant/payments/export`)는 같은
   필터를 쓰고 범위도 같게 서버가 고정한다 — 계약 상세(상한·헤더·파일 이름)는 내부 운영자
   콘솔과 동일해서 [admin-console-api.md](admin-console-api.md)의 4.2에 한 번만 적었다.
+
+### 4.1.1 결제 상세 — 소유 확인이 목록보다 중요하다
+
+`GET /merchant/payments/{paymentId}`. 응답 형태는 내부 운영자 콘솔과 같고 **가맹점 열만
+없다**([admin-console-api.md](admin-console-api.md)의 4.1.1).
+
+- **단건 조회는 목록보다 위험하다.** 목록은 "필터가 비면 전체가 나온다"는 형태로 새지만,
+  단건은 **"남의 것을 ID로 찍어 볼 수 있다"**는 형태로 샌다 — 범위를 좁히는 필터가 아예
+  없으므로 조회 후 **그 결제가 요청한 가맹점 것인지 확인한다**.
+- **없는 결제와 다른 가맹점의 결제가 똑같이 `404`다.** `403`으로 나누면 "그 결제는
+  존재한다"가 새어 나가고, 그것만으로 식별자를 훑어 다른 가맹점의 거래를 추정할 수 있다
+  (API Key 폐기가 남의 Key를 404로 가리는 것과 같은 판단).
+- **`/export`와 겹치지 않는다** — 리터럴 세그먼트가 경로 변수보다 우선한다(회귀 테스트로 고정).
 
 ### 4.2 정산 채권 조회
 

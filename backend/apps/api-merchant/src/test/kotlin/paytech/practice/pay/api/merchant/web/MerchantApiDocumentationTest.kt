@@ -54,6 +54,7 @@ import paytech.practice.pay.application.identity.ResendMerchantUserInvitationUse
 import paytech.practice.pay.application.identity.RevokeMerchantUserInvitationResult
 import paytech.practice.pay.application.identity.RevokeMerchantUserInvitationUseCase
 import paytech.practice.pay.application.payment.ExportMerchantPaymentsUseCase
+import paytech.practice.pay.application.payment.GetMerchantPaymentDetailUseCase
 import paytech.practice.pay.application.payment.ListMerchantPaymentsUseCase
 import paytech.practice.pay.application.payment.ListPaymentsResult
 import paytech.practice.pay.application.port.outbound.MerchantApiKeySummary
@@ -193,6 +194,9 @@ class MerchantApiDocumentationTest : FunSpec() {
 
 	@MockkBean
 	lateinit var listSettlementReceivablesUseCase: ListMerchantSettlementReceivablesUseCase
+
+	@MockkBean
+	lateinit var getMerchantPaymentDetailUseCase: GetMerchantPaymentDetailUseCase
 
 	@MockkBean
 	lateinit var acceptAccountInvitationUseCase: AcceptAccountInvitationUseCase
@@ -785,6 +789,29 @@ class MerchantApiDocumentationTest : FunSpec() {
 				.perform(get("/merchant/payments").with(authenticatedAs(OWNER)))
 				.andExpect(status().isOk)
 				.andDo(document("merchant-payments", snippet))
+		}
+
+		test("document GET payment detail") {
+			every { getMerchantPaymentDetailUseCase.execute(any(), any()) } returns merchantPaymentDetailFixture()
+
+			val snippet =
+				merchantResource(
+					summary = "결제 상세 조회(자기 가맹점)",
+					description =
+						"**인증된 가맹점 사용자 전원**(VIEWER 포함)이 조회할 수 있다. 결제 한 건의 전체 맥락을 " +
+							"단계별로 돌려준다: 견적·체크아웃 세션·온체인 거래·환전·정산 채권·Webhook 전송 이력. " +
+							"**흐름이 진행돼야 생기는 부분은 null이고, 그 null 자체가 \"어디까지 갔는지\"를 말해준다.** " +
+							"응답에 가맹점 열이 없다(언제나 자기 가맹점이다). " +
+							"**없는 결제와 다른 가맹점의 결제가 똑같이 404다** — 403으로 나누면 \"그 결제는 존재한다\"가 " +
+							"새어 나가 식별자를 훑어 다른 가맹점의 거래를 추정할 수 있다.",
+					responseSchema = "PaymentDetailResponse",
+					responseFields = merchantPaymentDetailFields(),
+				)
+
+			mockMvc
+				.perform(get("/merchant/payments/{paymentId}", "pay_3b81").with(authenticatedAs(OWNER)))
+				.andExpect(status().isOk)
+				.andDo(document("merchant-payment-detail", snippet))
 		}
 
 		test("document GET settlement receivables") {

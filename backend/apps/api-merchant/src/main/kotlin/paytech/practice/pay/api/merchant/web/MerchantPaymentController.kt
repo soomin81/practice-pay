@@ -4,13 +4,17 @@ import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import paytech.practice.pay.api.merchant.security.MerchantUserPrincipal
 import paytech.practice.pay.application.payment.ExportMerchantPaymentsUseCase
+import paytech.practice.pay.application.payment.GetMerchantPaymentDetailUseCase
 import paytech.practice.pay.application.payment.ListMerchantPaymentsUseCase
 import paytech.practice.pay.application.payment.ListPaymentsCommand
+import paytech.practice.pay.application.payment.PaymentNotFoundException
+import paytech.practice.pay.domain.payment.PaymentId
 import paytech.practice.pay.domain.payment.PaymentStatus
 import java.time.Clock
 import java.time.Instant
@@ -33,8 +37,31 @@ import java.time.Instant
 class MerchantPaymentController(
 	private val listMerchantPaymentsUseCase: ListMerchantPaymentsUseCase,
 	private val exportMerchantPaymentsUseCase: ExportMerchantPaymentsUseCase,
+	private val getMerchantPaymentDetailUseCase: GetMerchantPaymentDetailUseCase,
 	private val clock: Clock,
 ) {
+	/**
+	 * 결제 한 건의 전체 맥락을 돌려준다.
+	 *
+	 * **없는 결제와 다른 가맹점의 결제가 똑같이 `404`다** — `403`으로 나누면 "그 결제는
+	 * 존재한다"가 새어 나가고, 그것만으로 식별자를 훑어 다른 가맹점의 거래를 추정할 수 있다.
+	 * 소유 확인은 `GetMerchantPaymentDetailUseCase`가 한다.
+	 *
+	 * **`/export`와 겹치지 않는다** — 리터럴 세그먼트가 경로 변수보다 우선한다(회귀 테스트로
+	 * 고정했다).
+	 */
+	@GetMapping("/{paymentId}")
+	fun getPaymentDetail(
+		@AuthenticationPrincipal principal: MerchantUserPrincipal,
+		@PathVariable paymentId: String,
+	): PaymentDetailResponse {
+		val view =
+			getMerchantPaymentDetailUseCase.execute(principal.merchantId, PaymentId(paymentId))
+				?: throw PaymentNotFoundException(paymentId)
+
+		return toResponse(view)
+	}
+
 	/**
 	 * 현재 필터에 걸린 **자기 가맹점** 결제를 `.xlsx`로 내려준다. 조회와 같은 필터를 받되
 	 * 페이징 파라미터는 받지 않는다(내보내기는 조건 전체가 대상이다).

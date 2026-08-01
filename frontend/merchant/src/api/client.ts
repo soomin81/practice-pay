@@ -14,6 +14,7 @@ import type {
 	ListApiKeysResponse,
 	ListMerchantUsersResponse,
 	ListPaymentsResponse,
+	PaymentDetailResponse,
 	ListSettlementReceivablesResponse,
 	SettlementFilters,
 	PaymentListFilters,
@@ -95,6 +96,13 @@ export const merchantApi = {
 	 */
 	listPayments: (filters: PaymentListFilters = {}) =>
 		request<ListPaymentsResponse>(`/merchant/payments${paymentQueryString(filters)}`),
+
+	/**
+	 * 결제 한 건의 전체 맥락(자기 가맹점만). **없는 결제와 남의 결제가 똑같이 404다** —
+	 * 서버가 존재 여부를 알려주지 않는다.
+	 */
+	getPaymentDetail: (paymentId: string) =>
+		request<PaymentDetailResponse>(`/merchant/payments/${encodeURIComponent(paymentId)}`),
 
 	/**
 	 * 현재 필터에 걸린 **자기 가맹점** 결제를 `.xlsx`로 받는다. 페이징 파라미터는 보내지

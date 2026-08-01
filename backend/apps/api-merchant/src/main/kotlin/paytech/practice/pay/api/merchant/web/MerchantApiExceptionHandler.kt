@@ -18,6 +18,7 @@ import paytech.practice.pay.application.identity.LastActiveOwnerException
 import paytech.practice.pay.application.identity.MerchantUserCannotInviteSubAccountsException
 import paytech.practice.pay.application.identity.MerchantUserNotFoundException
 import paytech.practice.pay.application.identity.MerchantUserNotManageableException
+import paytech.practice.pay.application.payment.PaymentNotFoundException
 
 /**
  * `application`/`domain` 계층이 던지는 예외를 HTTP 상태 코드로 옮긴다 — 이 매핑
@@ -66,6 +67,14 @@ class MerchantApiExceptionHandler {
 	@ResponseStatus(HttpStatus.CONFLICT)
 	fun handleMerchantApiKeyNotActive(ex: MerchantApiKeyNotActiveException): ErrorResponse =
 		ErrorResponse(ex.message ?: "이미 폐기되었거나 만료된 API Key입니다.")
+
+	/**
+	 * 없는 결제와 **다른 가맹점의 결제**가 똑같이 404다 — 403으로 나누면 "그 결제는
+	 * 존재한다"가 새어 나간다(`GetMerchantPaymentDetailUseCase`의 KDoc 참고).
+	 */
+	@ExceptionHandler(PaymentNotFoundException::class)
+	@ResponseStatus(HttpStatus.NOT_FOUND)
+	fun handlePaymentNotFound(ex: PaymentNotFoundException): ErrorResponse = ErrorResponse(ex.message ?: "결제를 찾을 수 없습니다.")
 
 	@ExceptionHandler(MerchantUserNotFoundException::class)
 	@ResponseStatus(HttpStatus.NOT_FOUND)

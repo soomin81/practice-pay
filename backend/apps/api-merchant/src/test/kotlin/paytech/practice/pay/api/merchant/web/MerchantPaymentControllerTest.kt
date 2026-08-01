@@ -23,6 +23,7 @@ import paytech.practice.pay.api.merchant.config.SecurityConfig
 import paytech.practice.pay.api.merchant.security.MerchantUserPrincipal
 import paytech.practice.pay.application.payment.ExportMerchantPaymentsUseCase
 import paytech.practice.pay.application.payment.ExportPaymentsResult
+import paytech.practice.pay.application.payment.GetMerchantPaymentDetailUseCase
 import paytech.practice.pay.application.payment.ListMerchantPaymentsUseCase
 import paytech.practice.pay.application.payment.ListPaymentsCommand
 import paytech.practice.pay.application.payment.ListPaymentsResult
@@ -92,6 +93,9 @@ class MerchantPaymentControllerTest : FunSpec() {
 
 	@MockkBean
 	lateinit var exportMerchantPaymentsUseCase: ExportMerchantPaymentsUseCase
+
+	@MockkBean
+	lateinit var getMerchantPaymentDetailUseCase: GetMerchantPaymentDetailUseCase
 
 	init {
 		extensions(SpringExtension)
@@ -208,6 +212,61 @@ class MerchantPaymentControllerTest : FunSpec() {
 
 		test("export requires authentication") {
 			mockMvc.perform(get("/merchant/payments/export")).andExpect(status().isUnauthorized)
+		}
+
+		test("detail returns the payment without merchant columns") {
+			every { getMerchantPaymentDetailUseCase.execute(MERCHANT_ID, PaymentId("pay_001")) } returns merchantDetailView()
+
+			mockMvc
+				.perform(get("/merchant/payments/pay_001").with(authenticatedAs(OWNER)))
+				.andExpect(status().isOk)
+				.andExpect(jsonPath("$.payment.paymentId").value("pay_001"))
+				.andExpect(jsonPath("$.payment.merchantId").doesNotExist())
+				.andExpect(jsonPath("$.payment.merchantName").doesNotExist())
+		}
+
+		/**
+		 * **이 슬라이스에서 가장 중요한 회귀다.** 단건 조회는 범위를 좁히는 필터가 없어서,
+		 * 소유를 확인하지 않으면 남의 결제를 ID로 찍어 볼 수 있다. 조회 범위는 쿼리스트링이
+		 * 아니라 인증 주체에서 와야 한다.
+		 */
+		test("detail scopes to the authenticated merchant") {
+			val merchantSlot = slot<MerchantId>()
+			every { getMerchantPaymentDetailUseCase.execute(capture(merchantSlot), any()) } returns merchantDetailView()
+
+			mockMvc
+				.perform(
+					get("/merchant/payments/pay_001").param("merchantId", "mrc_someone_else").with(authenticatedAs(OWNER)),
+				).andExpect(status().isOk)
+
+			merchantSlot.captured shouldBe MERCHANT_ID
+		}
+
+		/**
+		 * 남의 결제는 **없는 것과 똑같이 404**다 — 403으로 나누면 "그 결제는 존재한다"가
+		 * 새어 나가고, 식별자를 훑어 다른 가맹점의 거래를 추정할 수 있다.
+		 */
+		test("another merchant's payment is a 404, not a 403") {
+			every { getMerchantPaymentDetailUseCase.execute(any(), any()) } returns null
+
+			mockMvc
+				.perform(get("/merchant/payments/pay_someone_else").with(authenticatedAs(OWNER)))
+				.andExpect(status().isNotFound)
+		}
+
+		// /export가 /{paymentId}에 잡아먹히면 엑셀 다운로드가 404로 조용히 죽는다.
+		test("the export path is not swallowed by the detail path variable") {
+			every { exportMerchantPaymentsUseCase.execute(any(), any()) } returns
+				ExportPaymentsResult(spreadsheet = byteArrayOf(1), rowCount = 0, truncated = false)
+
+			mockMvc
+				.perform(get("/merchant/payments/export").with(authenticatedAs(OWNER)))
+				.andExpect(status().isOk)
+				.andExpect(header().string("X-Export-Truncated", "false"))
+		}
+
+		test("detail requires authentication") {
+			mockMvc.perform(get("/merchant/payments/pay_001")).andExpect(status().isUnauthorized)
 		}
 
 		test("an unknown status returns 400") {

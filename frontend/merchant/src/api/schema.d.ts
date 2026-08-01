@@ -192,6 +192,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/merchant/payments/{paymentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 결제 상세 조회(자기 가맹점)
+         * @description **인증된 가맹점 사용자 전원**(VIEWER 포함)이 조회할 수 있다. 결제 한 건의 전체 맥락을 단계별로 돌려준다: 견적·체크아웃 세션·온체인 거래·환전·정산 채권·Webhook 전송 이력. **흐름이 진행돼야 생기는 부분은 null이고, 그 null 자체가 "어디까지 갔는지"를 말해준다.** 응답에 가맹점 열이 없다(언제나 자기 가맹점이다). **없는 결제와 다른 가맹점의 결제가 똑같이 404다** — 403으로 나누면 "그 결제는 존재한다"가 새어 나가 식별자를 훑어 다른 가맹점의 거래를 추정할 수 있다.
+         */
+        get: operations["merchant-payment-detail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/merchant/merchant-users/{merchantUserId}/reactivate": {
         parameters: {
             query?: never;
@@ -340,15 +360,6 @@ export interface components {
             /** @description 발급 응답에서 받은 초대 Token 원문 */
             invitationToken: string;
         };
-        /** ChangeMerchantUserRoleResponse */
-        ChangeMerchantUserRoleResponse: {
-            /** @description 변경 후 역할 */
-            role: string;
-            /** @description 변경 시각(UTC) */
-            changedAt: string;
-            /** @description 대상 가맹점 사용자 식별자 */
-            merchantUserId: string;
-        };
         /** ResendInvitationResponse */
         ResendInvitationResponse: {
             /** @description 새 초대의 만료 시각(UTC) */
@@ -357,6 +368,15 @@ export interface components {
             merchantUserId: string;
             /** @description 새 초대 Token 원문. 최초 1회만 노출된다. */
             invitationToken: string;
+        };
+        /** ChangeMerchantUserRoleResponse */
+        ChangeMerchantUserRoleResponse: {
+            /** @description 변경 후 역할 */
+            role: string;
+            /** @description 변경 시각(UTC) */
+            changedAt: string;
+            /** @description 대상 가맹점 사용자 식별자 */
+            merchantUserId: string;
         };
         /** InviteMerchantSubAccountRequest */
         InviteMerchantSubAccountRequest: {
@@ -432,15 +452,6 @@ export interface components {
                 status: string;
             }[];
         };
-        /** ChangeMerchantUserStatusResponse */
-        ChangeMerchantUserStatusResponse: {
-            /** @description 변경 시각(UTC) */
-            changedAt: string;
-            /** @description 대상 가맹점 사용자 식별자 */
-            merchantUserId: string;
-            /** @description 변경 후 계정 상태 */
-            status: string;
-        };
         /** ListSettlementReceivablesResponse */
         ListSettlementReceivablesResponse: {
             /** @description 실제로 적용된 페이지 크기 */
@@ -507,6 +518,15 @@ export interface components {
                 status: string;
             }[];
         };
+        /** ChangeMerchantUserStatusResponse */
+        ChangeMerchantUserStatusResponse: {
+            /** @description 변경 시각(UTC) */
+            changedAt: string;
+            /** @description 대상 가맹점 사용자 식별자 */
+            merchantUserId: string;
+            /** @description 변경 후 계정 상태 */
+            status: string;
+        };
         /** ListPaymentsResponse */
         ListPaymentsResponse: {
             /** @description 실제로 적용된 페이지 크기. 상한에 걸리면 요청값과 다르다. */
@@ -561,6 +581,162 @@ export interface components {
             userName: string;
             /** @description 이메일 */
             email: string;
+        };
+        /** PaymentDetailResponse */
+        PaymentDetailResponse: {
+            /** @description Webhook 전송 이력(오래된 순). 설정하지 않았으면 빈 배열. */
+            webhookDeliveries: {
+                /** @description 생성 시각(UTC) */
+                createdAt: string;
+                /** @description 다음 재시도 시각 */
+                nextRetryAt?: string | null;
+                /** @description 마지막 응답 코드 */
+                lastHttpStatus?: number | null;
+                /** @description 마지막 오류 메시지 */
+                lastErrorMessage?: string | null;
+                /** @description 시도 횟수 */
+                attemptCount: number;
+                /** @description 전송 대상 URL */
+                destinationUrl: string;
+                /** @description 이벤트 종류 */
+                eventType: string;
+                /** @description 전송 식별자 */
+                webhookDeliveryId: string;
+                /** @description 전송 성공 시각(UTC) */
+                deliveredAt?: string | null;
+                /** @description WebhookDeliveryStatus 값 */
+                status: string;
+            }[];
+            /** @description 견적 스냅샷. 언제나 있다. */
+            quote: {
+                /** @description 견적 시각(UTC) */
+                quotedAt: string;
+                /** @description 스프레드율 */
+                spreadRate: number;
+                /** @description 적용 환율 */
+                appliedRate: number;
+                /** @description 시장 환율 제공자 코드 */
+                marketProviderCode: string;
+                /** @description 시장 환율 */
+                marketRate: number;
+                /** @description 견적 만료 시각(UTC) */
+                expiresAt: string;
+            };
+            /** @description 결제 본문. 언제나 있다. **가맹점 열은 없다**(언제나 자기 가맹점이다). */
+            payment: {
+                /** @description 주문 통화(KRW) */
+                orderCurrency: string;
+                /** @description PG 수취 지갑 주소 */
+                receivingWallet: string;
+                /** @description 가맹점이 부여한 주문 식별자 */
+                merchantOrderId: string;
+                /** @description 결제 토큰 금액. Minor Unit 정수를 문자열로 준다. */
+                paymentAmount: string;
+                /** @description 결제 만료 시각(UTC) */
+                expiresAt: string;
+                /** @description 블록체인 네트워크 코드 */
+                network: string;
+                /** @description 결제 자산 코드(USDC) */
+                paymentAsset: string;
+                /** @description 생성 시각(UTC) */
+                createdAt: string;
+                /** @description KRW 주문 금액(원 단위 정수) */
+                orderAmount: number;
+                /** @description 토큰 소수 자릿수 */
+                tokenDecimals: number;
+                /** @description 결제 식별자 */
+                paymentId: string;
+                /** @description 실패 사유. FAILED가 아니면 null. */
+                failureReason?: string | null;
+                /** @description 완료 시각(UTC). SUCCEEDED가 아니면 null. */
+                paidAt?: string | null;
+                /** @description 고객 지갑. 연결 전에는 null. */
+                customerWallet?: string | null;
+                /** @description PaymentStatus 값 */
+                status: string;
+                /** @description 주문명 */
+                orderName: string;
+            };
+            /** @description 온체인 거래. Hash 제출 전에는 null. */
+            blockchainTransaction?: {
+                /** @description 실패 코드 */
+                failureCode?: string | null;
+                /** @description 확정에 필요한 Confirm 수 */
+                requiredConfirmationCount: number;
+                /** @description 실제 수령 금액(Minor Unit 문자열) */
+                amountMinor?: string | null;
+                /** @description 받은 주소 */
+                toAddress?: string | null;
+                /** @description 거래 Hash */
+                transactionHash: string;
+                /** @description 누적 Confirm 수 */
+                confirmationCount: number;
+                /** @description 토큰 Contract 주소 */
+                tokenContractAddress?: string | null;
+                /** @description 블록 번호 */
+                blockNumber?: number | null;
+                /** @description 감지 시각(UTC) */
+                detectedAt?: string | null;
+                /** @description 보낸 주소 */
+                fromAddress?: string | null;
+                /** @description 확정 시각(UTC) */
+                confirmedAt?: string | null;
+                /** @description 제출 시각(UTC) */
+                submittedAt: string;
+                /** @description BlockchainTransactionStatus 값 */
+                status: string;
+            };
+            /** @description 환전 주문. 매도 전에는 null. */
+            exchangeOrder?: {
+                /** @description 거래소 수수료 */
+                feeAmount?: number | null;
+                /** @description 체결 완료 시각(UTC) */
+                completedAt?: string | null;
+                /** @description 거래소 코드(MVP는 FAKE) */
+                providerCode: string;
+                /** @description 평균 체결 환율 */
+                averageExecutionRate?: number | null;
+                /** @description 확보한 KRW */
+                receivedAmount?: number | null;
+                /** @description 체결 수량(Minor Unit 문자열) */
+                executedAmount?: string | null;
+                /** @description ExchangeOrderStatus 값 */
+                status: string;
+                /** @description 환전 주문 식별자 */
+                exchangeOrderId: string;
+            };
+            /** @description 정산 채권. 환전 전에는 null. */
+            settlementReceivable?: {
+                /** @description 수수료 */
+                feeAmount: number;
+                /** @description 정산 예정 금액 */
+                netAmount: number;
+                /** @description 정산 예정일 */
+                eligibleDate: string;
+                /** @description 환전 손익. 음수 가능. */
+                exchangeProfitLossAmount?: number | null;
+                /** @description 정산 기준 금액 */
+                grossAmount: number;
+                /** @description 조정 금액(음수 가능) */
+                adjustmentAmount: number;
+                /** @description 적용 수수료율 */
+                feeRate: number;
+                /** @description 정산 채권 식별자 */
+                settlementReceivableId: string;
+                /** @description SettlementReceivableStatus 값 */
+                status: string;
+            };
+            /** @description 체크아웃 세션. 언제나 있다. */
+            checkoutSession: {
+                /** @description 체크아웃 세션 식별자 */
+                checkoutSessionId: string;
+                /** @description 연결된 지갑. 연결 전에는 null. */
+                connectedWallet?: string | null;
+                /** @description 세션 만료 시각(UTC) */
+                expiresAt: string;
+                /** @description CheckoutSessionStatus 값 */
+                status: string;
+            };
         };
         /** IssueMerchantApiKeyRequest */
         IssueMerchantApiKeyRequest: {
@@ -840,6 +1016,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RevokeMerchantApiKeyResponse"];
+                };
+            };
+        };
+    };
+    "merchant-payment-detail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                paymentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 200 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentDetailResponse"];
                 };
             };
         };
