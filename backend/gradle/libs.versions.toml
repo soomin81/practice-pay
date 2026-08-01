@@ -12,6 +12,7 @@ archunit = "1.4.1"
 web3j = "4.14.0"
 kotlinLogging = "7.0.7"
 restdocsApiSpec = "0.20.1"
+poi = "5.4.0"
 
 [libraries]
 kotlin-gradlePlugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
@@ -28,6 +29,9 @@ mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
 springmockk = { module = "com.ninja-squad:springmockk", version.ref = "springmockk" }
 archunit = { module = "com.tngtech.archunit:archunit", version.ref = "archunit" }
 web3j-core = { module = "org.web3j:core", version.ref = "web3j" }
+# Apache POI — 결제 내역 .xlsx 내보내기(modules:infra-support의 XlsxPaymentExportWriter).
+# poi-ooxml이 xlsx(OOXML)를 담당하고 코어 poi를 전이로 끌고 온다.
+poi-ooxml = { module = "org.apache.poi:poi-ooxml", version.ref = "poi" }
 kotlinLogging-jvm = { module = "io.github.oshai:kotlin-logging-jvm", version.ref = "kotlinLogging" }
 
 # Spring Boot BOM이 버전을 관리하는 좌표라 version이 없다.

@@ -121,3 +121,67 @@ export function createRequest(config: HttpConfig) {
 		return (await response.json()) as T
 	}
 }
+
+/** 서버가 내려준 파일 하나. [truncated]가 `true`면 상한에 걸려 **일부만 담긴 파일**이다. */
+export type DownloadedFile = {
+	blob: Blob
+	fileName: string | null
+	truncated: boolean
+}
+
+/**
+ * 파일 다운로드용 요청을 만든다. [createRequest]와 나눈 이유는 응답 처리 방식이 아예 달라서다 —
+ * JSON이 아니라 `Blob`을 읽고, 본문이 아니라 **응답 헤더**에서 메타데이터를 가져온다.
+ *
+ * **`<a href>`로 바로 받지 않고 `fetch`를 거치는 이유** 둘:
+ *  1. 세션 쿠키를 실으려면 `credentials: 'include'`가 필요하다.
+ *  2. **잘림 여부가 헤더에만 있다.** 링크로 받으면 브라우저가 파일만 저장하고 헤더는
+ *     화면 코드에 닿지 않아, 사용자가 일부만 담긴 파일을 그냥 받아가게 된다.
+ *
+ * 두 헤더 모두 백엔드 CORS의 `exposedHeaders`에 있어야 읽힌다 — 교차 출처에서는 기본적으로
+ * 몇 개의 표준 헤더만 JS에 노출된다.
+ */
+export function createDownload(config: HttpConfig) {
+	return async function download(path: string): Promise<DownloadedFile> {
+		let response: Response
+		try {
+			response = await fetch(`${config.baseUrl}${path}`, { credentials: 'include' })
+		} catch (cause) {
+			throw config.createError(0, '콘솔 서버에 연결하지 못했습니다.', { cause })
+		}
+
+		if (!response.ok) {
+			throw config.createError(response.status, await readErrorMessage(response))
+		}
+
+		return {
+			blob: await response.blob(),
+			fileName: fileNameFrom(response.headers.get('Content-Disposition')),
+			truncated: response.headers.get('X-Export-Truncated') === 'true',
+		}
+	}
+}
+
+/** `attachment; filename="payments-20260801-153000.xlsx"`에서 이름만 꺼낸다. */
+function fileNameFrom(contentDisposition: string | null): string | null {
+	const match = contentDisposition?.match(/filename="?([^";]+)"?/)
+	return match ? match[1] : null
+}
+
+/**
+ * 받은 파일을 브라우저에 저장시킨다. 임시 object URL은 **반드시 해제한다** — 안 하면
+ * 탭이 살아 있는 동안 blob이 메모리에 남는다.
+ */
+export function saveFile(file: DownloadedFile, fallbackName: string): void {
+	const url = URL.createObjectURL(file.blob)
+	try {
+		const anchor = document.createElement('a')
+		anchor.href = url
+		anchor.download = file.fileName ?? fallbackName
+		document.body.appendChild(anchor)
+		anchor.click()
+		anchor.remove()
+	} finally {
+		URL.revokeObjectURL(url)
+	}
+}

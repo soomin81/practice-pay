@@ -21,7 +21,7 @@ import type {
 	RevokeApiKeyResponse,
 } from './types'
 
-import { ConsoleApiError, createRequest } from './http'
+import { ConsoleApiError, createDownload, createRequest } from './http'
 
 const BASE_URL: string = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8083'
 
@@ -42,6 +42,15 @@ export class MerchantApiError extends ConsoleApiError {
  * 변환은 전부 거기서 처리한다(payment와 결정적으로 다른 지점은 세션 쿠키를 실어 보낸다는 것).
  * CSRF 부트스트랩은 `GET /merchant/me`를 쓴다.
  */
+const downloadConfig = {
+	baseUrl: BASE_URL,
+	csrfBootstrapPath: '/merchant/me',
+	createError: (status: number, message: string, options?: ErrorOptions) => new MerchantApiError(status, message, options),
+}
+
+/** 파일 다운로드 전용 요청. JSON이 아니라 Blob과 응답 헤더를 읽는다(`http.ts` 참고). */
+const download = createDownload(downloadConfig)
+
 const request = createRequest({
 	baseUrl: BASE_URL,
 	csrfBootstrapPath: '/merchant/me',
@@ -84,6 +93,14 @@ export const merchantApi = {
 	 */
 	listPayments: (filters: PaymentListFilters = {}) =>
 		request<ListPaymentsResponse>(`/merchant/payments${paymentQueryString(filters)}`),
+
+	/**
+	 * 현재 필터에 걸린 **자기 가맹점** 결제를 `.xlsx`로 받는다. 페이징 파라미터는 보내지
+	 * 않는다 — 내보내기는 조건 전체가 대상이다(서버가 최대 10,000행에서 자르고, 잘렸으면
+	 * 응답의 `truncated`로 알려준다).
+	 */
+	exportPayments: (filters: PaymentListFilters = {}) =>
+		download(`/merchant/payments/export${paymentQueryString({ ...filters, page: undefined, size: undefined })}`),
 
 	listMerchantUsers: () => request<ListMerchantUsersResponse>('/merchant/merchant-users'),
 

@@ -63,6 +63,7 @@
 | `POST /merchant/api-keys` | OWNER/ADMIN | 필요 | 201 발급(rawApiKey 1회) | 400 검증, 401, 403 |
 | `DELETE /merchant/api-keys/{id}` | OWNER/ADMIN | 필요 | 200 폐기 | 401, 403, 404 없음 |
 | `GET /merchant/payments` | **가맹점 사용자 전원**(VIEWER 포함) | — | 200 결제 내역(자기 가맹점, 최신순) | 400 잘못된 status, 401 |
+| `GET /merchant/payments/export` | **가맹점 사용자 전원**(VIEWER 포함) | — | 200 `.xlsx` 첨부(자기 가맹점) | 400 잘못된 status, 401 |
 | `GET /merchant/merchant-users` | OWNER/ADMIN | — | 200 명부 | 401, 403(VIEWER) |
 | `POST /merchant/merchant-users` | OWNER/ADMIN | 필요 | 201 초대(invitationToken 1회) | 400 검증, 401, 403, 409 중복 |
 | `POST /merchant/account-invitations/accept` | **공개** | **불필요**(2절) | 200 활성화 | 400 유효하지 않거나 만료된 초대 |
@@ -101,7 +102,9 @@
 - **`paymentAmount`는 Minor Unit 정수를 문자열로 준다**(`checkout-api.md`와 같은 이유 —
   토큰 금액이 JavaScript `Number`의 안전 정수 범위를 넘을 수 있다). `orderAmount`는 숫자다.
 - 응답에 `merchantName`이 없다 — 언제나 자기 가맹점 하나라서다.
-- 정렬은 생성 시각 최신순 고정이고, **엑셀 다운로드는 다음 슬라이스다**(7절).
+- 정렬은 생성 시각 최신순 고정이다. **엑셀 다운로드**(`GET /merchant/payments/export`)는 같은
+  필터를 쓰고 범위도 같게 서버가 고정한다 — 계약 상세(상한·헤더·파일 이름)는 내부 운영자
+  콘솔과 동일해서 [admin-console-api.md](admin-console-api.md)의 4.2에 한 번만 적었다.
 
 ## 5. 초대 링크
 
@@ -162,6 +165,5 @@ MVP에는 초대 메일 발송이 없다. 그래서 **발급한 OWNER/ADMIN이 �
 > 내부 운영자(`api-admin`)의 가맹점 계정 관리는 구현됐다 — 6절 5번(마지막 활성 OWNER)
 > 규칙이 실제로 트리거되는 첫 경로다([admin-console-api.md](admin-console-api.md)의 4절).
 
-> **결제 내역 엑셀(.xlsx) 다운로드** — 조회(4.1)는 붙었고 내보내기는 다음 슬라이스다.
-> 화면 페이징과 요구 조건이 달라(한 번에 훨씬 많은 행) `size` 상한을 그대로 쓰지 않고
-> 별도 경로로 스트리밍한다. 내부 운영자 콘솔에도 같은 시점에 붙인다.
+> 결제 내역 엑셀(.xlsx) 다운로드는 구현됐다 — 4.1 끝과
+> [admin-console-api.md](admin-console-api.md)의 4.2를 참고한다.

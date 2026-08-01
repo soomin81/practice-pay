@@ -31,4 +31,9 @@ dependencies {
 	// BCryptPasswordEncoderAdapter만 쓴다 — spring-security-crypto는 웹/필터 없이
 	// 해시 알고리즘만 담은 최소 모듈이라, 웹 앱이 아닌 곳에서 써도 부담이 없다.
 	implementation("org.springframework.security:spring-security-crypto")
+
+	// XlsxPaymentExportWriter만 쓴다. 여기 있는 다른 구현들과 달리 무거운 의존성이지만,
+	// **앱이 아니라 이 모듈에 두는 것이 규칙이다** — 앱에는 outbound Port 구현을 두지
+	// 않는다(HexagonalLayerTest). 두 콘솔 앱이 같은 구현을 공유하는 이점도 있다.
+	implementation(libs.poi.ooxml)
 }

@@ -53,6 +53,7 @@ import paytech.practice.pay.application.identity.ResendMerchantUserInvitationRes
 import paytech.practice.pay.application.identity.ResendMerchantUserInvitationUseCase
 import paytech.practice.pay.application.identity.RevokeMerchantUserInvitationResult
 import paytech.practice.pay.application.identity.RevokeMerchantUserInvitationUseCase
+import paytech.practice.pay.application.payment.ExportMerchantPaymentsUseCase
 import paytech.practice.pay.application.payment.ListMerchantPaymentsUseCase
 import paytech.practice.pay.application.payment.ListPaymentsResult
 import paytech.practice.pay.application.port.outbound.MerchantApiKeySummary
@@ -148,7 +149,7 @@ private fun merchantResource(
 		AcceptAccountInvitationController::class,
 	],
 )
-@Import(SecurityConfig::class)
+@Import(SecurityConfig::class, FixedClockConfiguration::class)
 @AutoConfigureRestDocs
 @TestPropertySource(properties = ["app.merchant-console.allowed-origins=http://localhost:5174"])
 class MerchantApiDocumentationTest : FunSpec() {
@@ -178,6 +179,9 @@ class MerchantApiDocumentationTest : FunSpec() {
 
 	@MockkBean
 	lateinit var listMerchantPaymentsUseCase: ListMerchantPaymentsUseCase
+
+	@MockkBean
+	lateinit var exportMerchantPaymentsUseCase: ExportMerchantPaymentsUseCase
 
 	@MockkBean
 	lateinit var acceptAccountInvitationUseCase: AcceptAccountInvitationUseCase

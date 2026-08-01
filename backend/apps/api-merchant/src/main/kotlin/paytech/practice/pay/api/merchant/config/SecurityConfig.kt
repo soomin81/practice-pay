@@ -101,6 +101,12 @@ class SecurityConfig {
 				allowedMethods = listOf("GET", "POST", "DELETE", "OPTIONS")
 				// X-XSRF-TOKEN은 SPA가 CSRF 토큰을 되돌려주는 헤더라 반드시 허용해야 한다.
 				allowedHeaders = listOf("Content-Type", "X-XSRF-TOKEN")
+				// 교차 출처에서는 JS가 기본적으로 몇 개의 표준 헤더만 읽을 수 있다. 결제 내역
+				// 내보내기가 "상한을 넘어 잘렸다"를 이 헤더로 알리므로 명시적으로 노출한다 —
+				// 빠뜨리면 프론트가 잘림을 알 수 없어 사용자가 일부만 담긴 파일을 그냥 받아간다.
+				// Content-Disposition도 노출해야 프론트가 서버가 정한 파일 이름을 그대로 쓴다
+				// (이름 규칙이 두 곳으로 갈리지 않게 한다).
+				exposedHeaders = listOf("X-Export-Truncated", "Content-Disposition")
 				allowCredentials = true
 				maxAge = CORS_MAX_AGE_SECONDS
 			}

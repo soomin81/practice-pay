@@ -53,6 +53,7 @@ import paytech.practice.pay.application.identity.RegisterMerchantResult
 import paytech.practice.pay.application.identity.RegisterMerchantUseCase
 import paytech.practice.pay.application.merchant.ListMerchantsResult
 import paytech.practice.pay.application.merchant.ListMerchantsUseCase
+import paytech.practice.pay.application.payment.ExportPaymentsUseCase
 import paytech.practice.pay.application.payment.ListPaymentsResult
 import paytech.practice.pay.application.payment.ListPaymentsUseCase
 import paytech.practice.pay.application.port.outbound.InternalLoginAuditEntry
@@ -148,7 +149,7 @@ private fun adminResource(
 		AcceptAccountInvitationController::class,
 	],
 )
-@Import(SecurityConfig::class)
+@Import(SecurityConfig::class, FixedClockConfiguration::class)
 @AutoConfigureRestDocs
 class AdminApiDocumentationTest : FunSpec() {
 	@Autowired
@@ -198,6 +199,9 @@ class AdminApiDocumentationTest : FunSpec() {
 
 	@MockkBean
 	lateinit var listPaymentsUseCase: ListPaymentsUseCase
+
+	@MockkBean
+	lateinit var exportPaymentsUseCase: ExportPaymentsUseCase
 
 	init {
 		extensions(SpringExtension)

@@ -55,6 +55,7 @@ PG 내부 운영자용 콘솔(브라우저 SPA, `frontend/admin`)이 호출하�
 | `POST /admin/internal-users/{id}/terminate` | **SUPER_ADMIN만** | 필요 | 200 상태(TERMINATED) | 401, 403(자기 자신), 404, 409(마지막 SUPER_ADMIN·잘못된 전이) |
 | `POST /admin/internal-users/{id}/role` | **SUPER_ADMIN만** | 필요 | 200 역할 | **400 `role=SUPER_ADMIN`**, 401, 403(자기 자신), 404, 409(마지막 SUPER_ADMIN 강등·종료된 계정) |
 | `GET /admin/payments` | **내부 운영자 전원**(VIEWER 포함) | — | 200 결제 내역(전 가맹점, 최신순) | 400 잘못된 status, 401 |
+| `GET /admin/payments/export` | **내부 운영자 전원**(VIEWER 포함) | — | 200 `.xlsx` 첨부 | 400 잘못된 status, 401 |
 | `GET /admin/merchants/{merchantId}/users` | **내부 운영자 전원**(VIEWER 포함) | — | 200 명부 | 401 |
 | `POST /admin/merchants/{merchantId}/users/{id}/suspend` | SUPER_ADMIN/OPERATOR | 필요 | 200 상태(SUSPENDED) | 401, 403, 404, 409(마지막 OWNER·잘못된 전이) |
 | `POST /admin/merchants/{merchantId}/users/{id}/reactivate` | SUPER_ADMIN/OPERATOR | 필요 | 200 상태(ACTIVE) | 401, 403, 404, 409(잘못된 전이) |
@@ -124,7 +125,38 @@ PG 내부 운영자용 콘솔(브라우저 SPA, `frontend/admin`)이 호출하�
 - **`transactionHash`는 고객이 제출하기 전이면 `null`**이고, `failureReason`은 `FAILED`일
   때만, `paidAt`은 `SUCCEEDED`일 때만 값이 있다.
 - 정렬은 생성 시각 최신순으로 고정이다(정렬 파라미터를 두지 않았다).
-- **엑셀 다운로드는 아직 없다** — 다음 슬라이스에서 별도 경로로 붙인다(6절).
+- 엑셀 다운로드는 아래 4.2에 있다.
+
+### 4.2 결제 내역 엑셀 다운로드
+
+`GET /admin/payments/export`(가맹점 콘솔은 `GET /merchant/payments/export`)가 `.xlsx`를
+첨부 파일로 내려준다. **조회(4.1)와 같은 필터를 받되 `page`/`size`는 받지 않는다** —
+내보내기는 현재 페이지가 아니라 조건 전체가 대상이다.
+
+| 응답 요소 | 값 |
+|---|---|
+| `Content-Type` | `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` |
+| `Content-Disposition` | `attachment; filename="payments-YYYYMMDD-HHmmss.xlsx"`(KST) |
+| `X-Export-Truncated` | `true`면 상한에 걸려 **일부만 담긴 파일**이다 |
+
+- **최대 10,000행에서 자른다**(`PaymentExportPolicy.MAX_EXPORT_ROWS`). 화면 페이징 상한
+  (200)과 일부러 다르다 — "한 화면에 그릴 양"과 "한 파일로 받아갈 양"은 요구 조건이 다르다.
+  그렇다고 무제한은 아닌데, 전체를 메모리에 담아 바이트로 만들기 때문에 상한이 곧 메모리
+  상한이기 때문이다.
+- **잘렸다는 사실은 반드시 사용자에게 보여야 한다.** 본문이 바이너리라 JSON 필드로 전할
+  수 없어 헤더를 쓴다. **교차 출처에서 이 헤더를 읽으려면 CORS `exposedHeaders`에 있어야
+  한다** — 빠뜨리면 프론트가 잘림을 알 수 없고, 사용자는 일부만 담긴 파일을 그냥 받아간다.
+  `Content-Disposition`도 같은 이유로 노출한다(프론트가 서버가 정한 이름을 그대로 쓴다).
+- **파일 이름은 ASCII만 쓴다.** 한글 이름은 RFC 5987 인코딩(`filename*=UTF-8''...`)이
+  필요하고 브라우저마다 처리가 갈린다 — 날짜만으로 충분해서 그 복잡도를 사지 않는다.
+- **시각 열은 KST로 적는다**(API는 UTC로 준다). 사람이 바로 읽는 산출물이라 시차 계산을
+  시키지 않는다 — 열 제목에 시간대를 밝힌다.
+- **금액은 문자열이 아니라 숫자 셀이다.** 받는 사람이 엑셀에서 합계·정렬을 하기 때문이다.
+  JSON 응답이 문자열인 것과 다른 판단인데, 그쪽은 JavaScript `Number`의 안전 정수 범위가
+  문제였고 여기서는 그 제약이 없다.
+- **이 엔드포인트는 OpenAPI 스펙에 없다.** 응답이 바이너리라 스키마로 적을 것이 없고 실제와
+  어긋난 스키마를 만들 위험만 남는다 — 오류 응답·CSRF 계약을 스펙이 아니라 이 문서에 두는
+  것과 같은 판단이다.
 
 ## 5. 초대 링크가 **두 종류**다 — 가리키는 콘솔이 다르다
 
@@ -170,6 +202,6 @@ PG 내부 운영자용 콘솔(브라우저 SPA, `frontend/admin`)이 호출하�
   SUPER_ADMIN 전용)와 **가맹점 로그인 감사**(`GET /admin/merchant-login-audit`, SUPER_ADMIN/OPERATOR,
   기록은 api-merchant·조회는 이 콘솔)도 붙었다. 남은 후속 후보는 **API Key 사용 감사**(같은 감사
   인프라를 확장 — [identity-access-api-key.md](identity-access-api-key.md)의 9절 후속)다.
-- **결제 내역 엑셀(.xlsx) 다운로드** — 조회(4.1)는 붙었고 내보내기는 다음 슬라이스다. 화면
-  페이징과 요구 조건이 달라(한 번에 훨씬 많은 행) `size` 상한을 그대로 쓰지 않고 별도
-  경로로 스트리밍한다. 두 콘솔 모두에 붙인다.
+- **결제 내역 엑셀 내보내기의 후속**: 상한(10,000행)을 넘는 대량 내보내기. 지금은 잘라내고
+  헤더로 알리는데, 실제로 그만큼 필요해지면 **비동기 생성 + 다운로드 링크 통지**로 가야 한다
+  (요청-응답 안에서 만드는 한 상한은 곧 메모리 상한이다).

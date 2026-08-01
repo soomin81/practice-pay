@@ -513,3 +513,44 @@ ADR-007이 후속으로 미뤄 둔 `REORGED`를 보러 갔다가, **문서 공�
   3개(유예 안, 유예 후 `REORGED`+`FAILED`, 오래된 `SUBMITTED`는 그대로).
 - **실물 검증은 하지 않았다** — 테스트넷에서 reorg를 일부러 일으킬 방법이 없다. 유예
   경계는 고정 `Clock`으로만 검증했다.
+
+## 결제 내역 엑셀(.xlsx) 내보내기(`XlsxPaymentExportWriter`)
+
+조회 슬라이스에 이어 붙인 내보내기다. 계약은 `docs/architecture/admin-console-api.md`의 4.2.
+
+- **POI를 어디에 둘지가 첫 결정이었다.** 앱(inbound Adapter)에 두면 `HexagonalLayerTest`의
+  "앱은 outbound Port를 구현하지 않는다"에 걸리고 두 콘솔에 복제된다. `modules:application`에
+  두면 `ApplicationPurityTest`(인프라 라이브러리 금지)에 걸린다. 그래서 **Port를
+  `application.port.outbound`에, 구현을 `modules:infra-support`에** 뒀다 — 두 앱이 컴포넌트
+  스캔으로 같은 구현을 공유한다.
+  - JSON 직렬화는 Port를 거치지 않는데 이건 거치는 이유: JSON은 프레임워크가 응답 표현으로
+    알아서 처리하지만, 스프레드시트는 **우리가 라이브러리를 직접 불러 만드는 산출물**이라
+    그 의존성이 어느 계층에 있는지가 드러나야 한다.
+- **`SXSSFWorkbook`(스트리밍)을 쓴다.** 일반 `XSSFWorkbook`은 모든 셀을 힙에 들고 있다.
+  **`dispose()`를 빠뜨리면 임시 파일이 서버에 쌓인다** — `finally`에서 부른다.
+- **상한 10,000행, 그리고 상한+1건을 조회한다.** 정확히 상한만큼 조회하면 "딱 맞게 채워진
+  것"과 "넘쳐서 잘린 것"을 구분할 수 없다. `COUNT`를 한 번 더 돌리는 것보다 싸다.
+- **잘림을 반드시 알린다**(`X-Export-Truncated` 헤더 → 화면 경고). 본문이 바이너리라 JSON
+  필드로 전할 수 없다. **교차 출처에서 읽으려면 CORS `exposedHeaders`에 있어야 한다** —
+  빠뜨리면 프론트가 잘림을 모르고, 사용자는 일부만 담긴 파일을 그냥 받아간다. 이 기능에서
+  가장 위험한 실패라 백엔드·프론트 양쪽에 회귀 테스트를 뒀다.
+- **프론트가 `<a href>`가 아니라 `fetch`로 받는다**(`http.ts`의 `createDownload`) — 세션
+  쿠키(`credentials: 'include'`)와 위 헤더 둘 다 필요해서다. 링크로 받으면 브라우저가
+  파일만 저장하고 헤더는 화면 코드에 닿지 않는다.
+- **엑셀에서는 금액을 숫자 셀로 쓴다.** JSON 응답이 문자열인 것과 다른 판단인데, 그쪽은
+  JavaScript `Number`의 안전 정수 범위가 문제였고 여기서는 그 제약이 없다 — 받는 사람이
+  합계·정렬을 해야 한다. 환산은 `BigDecimal.movePointLeft`로 하고 `Double` 연산을 거치지
+  않는다.
+- **시각은 KST로 적는다**(API는 UTC). 사람이 바로 읽는 산출물이라 시차 계산을 시키지 않고,
+  열 제목에 시간대를 밝힌다.
+- **파일 이름은 ASCII만 쓴다** — 한글은 RFC 5987 인코딩이 필요하고 브라우저마다 갈린다.
+- **이 엔드포인트는 OpenAPI 스펙에 넣지 않았다** — 응답이 바이너리라 스키마로 적을 것이 없고
+  실제와 어긋난 스키마를 만들 위험만 남는다(오류 응답을 스펙에서 빼는 것과 같은 판단).
+- **`@WebMvcTest` 슬라이스에 `Clock` Bean이 필요해졌다** — 컨트롤러가 파일 이름에 현재
+  시각을 넣는다. `UseCaseConfiguration`이 로드되지 않는 슬라이스라 `FixedClockConfiguration`을
+  테스트에 직접 뒀고, 덕분에 파일 이름을 문자열로 고정 검증할 수 있다.
+- **실물 검증 완료(`bootRun` + 로그인 + 다운로드)**: 로그인은 CSRF 때문에 GET으로 XSRF
+  쿠키를 먼저 받아야 했다. 받은 파일이 실제 OOXML(zip, `PK` 매직, 9개 엔트리)이고,
+  **한글 헤더가 깨지지 않았으며**(`inlineStr`로 들어간다 — SXSSF는 sharedStrings를 쓰지
+  않는다), 금액 셀이 `t="n"`(숫자)로, 나머지는 문자열로 들어간 것을 sheet XML에서 직접
+  확인했다. 검증에 쓴 파일은 삭제했다.

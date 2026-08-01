@@ -21,6 +21,8 @@ import org.springframework.boot.runApplication
 		// 만드는 ID는 id 하위 패키지에, API Key 해시(HmacApiKeySecretHasher)는
 		// apikey 하위 패키지에 있다.
 		"paytech.practice.pay.infra.support.security",
+		// 결제 내역 .xlsx 내보내기(XlsxPaymentExportWriter).
+		"paytech.practice.pay.infra.support.export",
 		"paytech.practice.pay.infra.support.id",
 		"paytech.practice.pay.infra.support.apikey",
 	],

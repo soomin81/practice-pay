@@ -7,17 +7,22 @@ import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.slot
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest
+import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Import
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.header
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import paytech.practice.pay.api.admin.config.SecurityConfig
 import paytech.practice.pay.api.admin.security.InternalUserPrincipal
+import paytech.practice.pay.application.payment.ExportPaymentsResult
+import paytech.practice.pay.application.payment.ExportPaymentsUseCase
 import paytech.practice.pay.application.payment.ListPaymentsCommand
 import paytech.practice.pay.application.payment.ListPaymentsResult
 import paytech.practice.pay.application.payment.ListPaymentsUseCase
@@ -34,7 +39,9 @@ import paytech.practice.pay.domain.shared.Asset
 import paytech.practice.pay.domain.shared.BlockchainNetwork
 import paytech.practice.pay.domain.shared.Money
 import paytech.practice.pay.domain.shared.TokenAmount
+import java.time.Clock
 import java.time.Instant
+import java.time.ZoneOffset
 
 private val SUPER_ADMIN =
 	InternalUserPrincipal(InternalUserId("iu_super"), LoginId("super"), InternalUserRole.SUPER_ADMIN)
@@ -66,14 +73,27 @@ private fun sampleEntry() =
 		createdAt = Instant.parse("2026-07-20T10:00:00Z"),
 	)
 
+/**
+ * 컨트롤러가 다운로드 파일 이름에 현재 시각을 넣으므로 [Clock] Bean이 필요하다 —
+ * `@WebMvcTest` 슬라이스는 `UseCaseConfiguration`을 로드하지 않아 직접 준다.
+ */
+@TestConfiguration
+class FixedClockConfiguration {
+	@Bean
+	fun clock(): Clock = Clock.fixed(Instant.parse("2026-08-01T06:30:00Z"), ZoneOffset.UTC)
+}
+
 @WebMvcTest(AdminPaymentController::class)
-@Import(SecurityConfig::class)
+@Import(SecurityConfig::class, FixedClockConfiguration::class)
 class AdminPaymentControllerTest : FunSpec() {
 	@Autowired
 	lateinit var mockMvc: MockMvc
 
 	@MockkBean
 	lateinit var listPaymentsUseCase: ListPaymentsUseCase
+
+	@MockkBean
+	lateinit var exportPaymentsUseCase: ExportPaymentsUseCase
 
 	init {
 		extensions(SpringExtension)
@@ -139,6 +159,57 @@ class AdminPaymentControllerTest : FunSpec() {
 
 			commandSlot.captured.merchantId shouldBe null
 			commandSlot.captured.status shouldBe null
+		}
+
+		test("export returns an xlsx attachment with a dated file name") {
+			every { exportPaymentsUseCase.execute(any()) } returns
+				ExportPaymentsResult(spreadsheet = byteArrayOf(1, 2, 3), rowCount = 1, truncated = false)
+
+			mockMvc
+				.perform(get("/admin/payments/export").with(authenticatedAs(SUPER_ADMIN)))
+				.andExpect(status().isOk)
+				.andExpect(
+					header().string(
+						"Content-Type",
+						"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+					),
+				).andExpect(header().string("Content-Disposition", """attachment; filename="payments-20260801-153000.xlsx""""))
+				.andExpect(header().string("X-Export-Truncated", "false"))
+		}
+
+		/**
+		 * **조용히 잘린 파일을 받아가는 것이 이 기능에서 가장 위험한 실패다** — 본문이
+		 * 바이너리라 JSON 필드로 알릴 수 없어 헤더로 전한다.
+		 */
+		test("export flags truncation in a response header") {
+			every { exportPaymentsUseCase.execute(any()) } returns
+				ExportPaymentsResult(spreadsheet = byteArrayOf(1), rowCount = 10_000, truncated = true)
+
+			mockMvc
+				.perform(get("/admin/payments/export").with(authenticatedAs(SUPER_ADMIN)))
+				.andExpect(status().isOk)
+				.andExpect(header().string("X-Export-Truncated", "true"))
+		}
+
+		test("export passes the same filters as the list endpoint") {
+			val commandSlot = slot<ListPaymentsCommand>()
+			every { exportPaymentsUseCase.execute(capture(commandSlot)) } returns
+				ExportPaymentsResult(spreadsheet = byteArrayOf(), rowCount = 0, truncated = false)
+
+			mockMvc
+				.perform(
+					get("/admin/payments/export")
+						.param("merchantId", "mrc_001")
+						.param("status", "FAILED")
+						.with(authenticatedAs(VIEWER)),
+				).andExpect(status().isOk)
+
+			commandSlot.captured.merchantId shouldBe MerchantId("mrc_001")
+			commandSlot.captured.status shouldBe PaymentStatus.FAILED
+		}
+
+		test("export requires authentication") {
+			mockMvc.perform(get("/admin/payments/export")).andExpect(status().isUnauthorized)
 		}
 
 		test("an unknown status returns 400") {

@@ -1,15 +1,18 @@
 package paytech.practice.pay.api.merchant.web
 
 import org.springframework.format.annotation.DateTimeFormat
+import org.springframework.http.ResponseEntity
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import paytech.practice.pay.api.merchant.security.MerchantUserPrincipal
+import paytech.practice.pay.application.payment.ExportMerchantPaymentsUseCase
 import paytech.practice.pay.application.payment.ListMerchantPaymentsUseCase
 import paytech.practice.pay.application.payment.ListPaymentsCommand
 import paytech.practice.pay.domain.payment.PaymentStatus
+import java.time.Clock
 import java.time.Instant
 
 /**
@@ -29,7 +32,37 @@ import java.time.Instant
 @RequestMapping("/merchant/payments")
 class MerchantPaymentController(
 	private val listMerchantPaymentsUseCase: ListMerchantPaymentsUseCase,
+	private val exportMerchantPaymentsUseCase: ExportMerchantPaymentsUseCase,
+	private val clock: Clock,
 ) {
+	/**
+	 * 현재 필터에 걸린 **자기 가맹점** 결제를 `.xlsx`로 내려준다. 조회와 같은 필터를 받되
+	 * 페이징 파라미터는 받지 않는다(내보내기는 조건 전체가 대상이다).
+	 *
+	 * 조회와 마찬가지로 `merchantId`는 인증 주체에서 온다 — **내보내기에서는 이 구분이 더
+	 * 중요하다**: 범위가 새면 남의 가맹점 결제가 파일로 통째로 빠져나간다.
+	 */
+	@GetMapping("/export")
+	fun exportPayments(
+		@AuthenticationPrincipal principal: MerchantUserPrincipal,
+		@RequestParam(required = false) status: String?,
+		@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) from: Instant?,
+		@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) to: Instant?,
+	): ResponseEntity<ByteArray> {
+		val result =
+			exportMerchantPaymentsUseCase.execute(
+				merchantId = principal.merchantId,
+				command =
+					ListPaymentsCommand(
+						status = status?.takeIf { it.isNotBlank() }?.let { PaymentStatus.valueOf(it) },
+						createdFrom = from,
+						createdTo = to,
+					),
+			)
+
+		return spreadsheetDownload(result, filePrefix = "payments", clock = clock)
+	}
+
 	@GetMapping
 	fun listPayments(
 		@AuthenticationPrincipal principal: MerchantUserPrincipal,

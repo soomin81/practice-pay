@@ -25,7 +25,7 @@ import type {
 	RegisterMerchantResponse,
 } from './types'
 
-import { ConsoleApiError, createRequest } from './http'
+import { ConsoleApiError, createDownload, createRequest } from './http'
 
 const BASE_URL: string = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8082'
 
@@ -46,6 +46,15 @@ export class AdminApiError extends ConsoleApiError {
  * 변환은 전부 거기서 처리한다. CSRF 부트스트랩은 `GET /admin/me`를 쓴다(그 응답에 백엔드가
  * `XSRF-TOKEN` 쿠키를 실어 준다).
  */
+const downloadConfig = {
+	baseUrl: BASE_URL,
+	csrfBootstrapPath: '/admin/me',
+	createError: (status: number, message: string, options?: ErrorOptions) => new AdminApiError(status, message, options),
+}
+
+/** 파일 다운로드 전용 요청. JSON이 아니라 Blob과 응답 헤더를 읽는다(`http.ts` 참고). */
+const download = createDownload(downloadConfig)
+
 const request = createRequest({
 	baseUrl: BASE_URL,
 	csrfBootstrapPath: '/admin/me',
@@ -85,6 +94,14 @@ export const adminApi = {
 	 */
 	listPayments: (filters: PaymentListFilters = {}) =>
 		request<ListPaymentsResponse>(`/admin/payments${paymentQueryString(filters)}`),
+
+	/**
+	 * 현재 필터에 걸린 결제를 `.xlsx`로 받는다. **페이징 파라미터는 보내지 않는다** —
+	 * 내보내기는 페이지가 아니라 조건 전체가 대상이다(서버가 최대 10,000행에서 자르고,
+	 * 잘렸으면 응답의 `truncated`로 알려준다).
+	 */
+	exportPayments: (filters: PaymentListFilters = {}) =>
+		download(`/admin/payments/export${paymentQueryString({ ...filters, page: undefined, size: undefined })}`),
 
 	listInternalUsers: () => request<ListInternalUsersResponse>('/admin/internal-users'),
 

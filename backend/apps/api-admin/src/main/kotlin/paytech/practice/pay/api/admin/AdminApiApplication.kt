@@ -22,6 +22,8 @@ import org.springframework.boot.runApplication
 		// (PaymentApiApplication의 같은 주석 참고 — 환율 Provider는 이 앱에 필요 없다).
 		"paytech.practice.pay.infra.support.id",
 		"paytech.practice.pay.infra.support.security",
+		// 결제 내역 .xlsx 내보내기(XlsxPaymentExportWriter).
+		"paytech.practice.pay.infra.support.export",
 	],
 )
 class AdminApiApplication

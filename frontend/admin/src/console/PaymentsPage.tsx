@@ -3,9 +3,10 @@ import { AdminApiError } from '@/api/client'
 import { PAYMENT_STATUSES, type PaymentListFilters, type PaymentStatus } from '@/api/types'
 import { PaymentTable } from '@/console/PaymentTable'
 import { usePayments } from '@/console/usePayments'
+import { exportErrorMessage, usePaymentExport } from '@/console/usePaymentExport'
 import { useMerchants } from '@/console/useMerchants'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 
@@ -21,6 +22,7 @@ const PAGE_SIZE = 20
 export function PaymentsPage() {
 	const [filters, setFilters] = useState<PaymentListFilters>({ page: 0, size: PAGE_SIZE })
 	const payments = usePayments(filters)
+	const exportPayments = usePaymentExport()
 	const merchants = useMerchants()
 
 	// 필터를 바꾸면 항상 첫 페이지로 돌아간다 — 3페이지를 보다가 좁히면 결과가 없는데
@@ -42,7 +44,26 @@ export function PaymentsPage() {
 						전 가맹점의 결제를 생성 시각 최신순으로 보여줍니다. 기간은 결제 <strong>생성</strong> 시각 기준입니다.
 					</CardDescription>
 				</CardHeader>
+				<CardAction>
+					<Button
+						variant="outline"
+						size="sm"
+						disabled={exportPayments.isPending}
+						onClick={() => exportPayments.mutate(filters)}
+					>
+						{exportPayments.isPending ? '만드는 중…' : '엑셀 다운로드'}
+					</Button>
+				</CardAction>
 				<CardContent className="flex flex-col gap-4">
+					{exportPayments.isError && (
+						<p className="text-sm text-destructive">{exportErrorMessage(exportPayments.error)}</p>
+					)}
+					{/* 잘린 파일을 그냥 받아가지 않도록 반드시 알린다. */}
+					{exportPayments.data === true && (
+						<p className="text-sm text-destructive">
+							결과가 너무 많아 최대 10,000건까지만 담았습니다. 기간이나 조건을 좁혀 다시 받으세요.
+						</p>
+					)}
 					<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
 						<div className="flex flex-col gap-1.5">
 							<Label htmlFor="filter-merchant">가맹점</Label>

@@ -1,14 +1,17 @@
 package paytech.practice.pay.api.admin.web
 
 import org.springframework.format.annotation.DateTimeFormat
+import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
+import paytech.practice.pay.application.payment.ExportPaymentsUseCase
 import paytech.practice.pay.application.payment.ListPaymentsCommand
 import paytech.practice.pay.application.payment.ListPaymentsUseCase
 import paytech.practice.pay.domain.merchant.MerchantId
 import paytech.practice.pay.domain.payment.PaymentStatus
+import java.time.Clock
 import java.time.Instant
 
 /**
@@ -26,7 +29,34 @@ import java.time.Instant
 @RequestMapping("/admin/payments")
 class AdminPaymentController(
 	private val listPaymentsUseCase: ListPaymentsUseCase,
+	private val exportPaymentsUseCase: ExportPaymentsUseCase,
+	private val clock: Clock,
 ) {
+	/**
+	 * 현재 필터에 걸린 결제를 `.xlsx`로 내려준다. 조회와 **같은 필터**를 받되 페이징
+	 * 파라미터는 받지 않는다 — 내보내기는 페이지 단위가 아니라 조건 전체가 대상이다
+	 * (상한은 `PaymentExportPolicy.MAX_EXPORT_ROWS`, 넘치면 응답 헤더로 알린다).
+	 */
+	@GetMapping("/export")
+	fun exportPayments(
+		@RequestParam(required = false) merchantId: String?,
+		@RequestParam(required = false) status: String?,
+		@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) from: Instant?,
+		@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) to: Instant?,
+	): ResponseEntity<ByteArray> {
+		val result =
+			exportPaymentsUseCase.execute(
+				ListPaymentsCommand(
+					merchantId = merchantId?.takeIf { it.isNotBlank() }?.let { MerchantId(it) },
+					status = status?.takeIf { it.isNotBlank() }?.let { PaymentStatus.valueOf(it) },
+					createdFrom = from,
+					createdTo = to,
+				),
+			)
+
+		return spreadsheetDownload(result, filePrefix = "payments", clock = clock)
+	}
+
 	@GetMapping
 	fun listPayments(
 		@RequestParam(required = false) merchantId: String?,

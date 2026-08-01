@@ -13,6 +13,7 @@ import paytech.practice.pay.application.identity.InviteMerchantSubAccountUseCase
 import paytech.practice.pay.application.identity.ListMerchantUsersUseCase
 import paytech.practice.pay.application.identity.ResendMerchantUserInvitationUseCase
 import paytech.practice.pay.application.identity.RevokeMerchantUserInvitationUseCase
+import paytech.practice.pay.application.payment.ExportMerchantPaymentsUseCase
 import paytech.practice.pay.application.payment.ListMerchantPaymentsUseCase
 import paytech.practice.pay.application.port.outbound.AccountInvitationRepository
 import paytech.practice.pay.application.port.outbound.ApiKeySecretHasher
@@ -26,6 +27,7 @@ import paytech.practice.pay.application.port.outbound.MerchantRepository
 import paytech.practice.pay.application.port.outbound.MerchantUserListProjection
 import paytech.practice.pay.application.port.outbound.MerchantUserRepository
 import paytech.practice.pay.application.port.outbound.PasswordEncoder
+import paytech.practice.pay.application.port.outbound.PaymentExportWriter
 import paytech.practice.pay.application.port.outbound.PaymentListProjection
 import paytech.practice.pay.application.port.outbound.TransactionManager
 import java.time.Clock
@@ -189,4 +191,10 @@ class UseCaseConfiguration {
 	@Bean
 	fun listMerchantPaymentsUseCase(paymentListProjection: PaymentListProjection): ListMerchantPaymentsUseCase =
 		ListMerchantPaymentsUseCase(paymentListProjection)
+
+	@Bean
+	fun exportMerchantPaymentsUseCase(
+		paymentListProjection: PaymentListProjection,
+		paymentExportWriter: PaymentExportWriter,
+	): ExportMerchantPaymentsUseCase = ExportMerchantPaymentsUseCase(paymentListProjection, paymentExportWriter)
 }
