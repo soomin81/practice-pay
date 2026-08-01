@@ -42,30 +42,57 @@ USDC 매도 요청, 거래소 주문번호, 체결 수량, 체결 환율, 확보
 ### WebhookDelivery
 전송 URL, Payload, 시도 횟수, 재시도 일정, 최종 상태를 관리한다.
 
+### PaymentQuote
+`Payment`에 1:1로 붙는 **불변 견적 스냅샷**이다 — 시장 환율, 적용 환율, 스프레드, 주문 금액,
+USDC 결제 금액, 유효 기간을 확정 시점 그대로 고정한다.
+
+상태도 전이 메서드도 없어서 다른 Aggregate와 달리 **공개 생성자를 가진 `data class`**다
+(`payment_quote` 테이블에도 `updated_at`/`version`이 없다).
+
+### OutboxEvent
+결제 완료 같은 도메인 사실을 **같은 트랜잭션에서 함께 기록**해 두고, 발행 Worker가 나중에
+Webhook으로 내보내게 하는 Transactional Outbox다. 발행 상태와 재시도 일정을 관리한다.
+
+### InternalLoginAudit / MerchantLoginAudit
+내부 운영자·가맹점 관리자의 로그인 시도를 남기는 **append-only 감사 기록**이다(성공·실패·잠김,
+없는 계정으로의 시도 포함, 클라이언트 IP). `PaymentQuote`와 같은 이유로 상태 전이가 없는
+`data class`다. 결과 값(`LoginOutcome`)은 두 영역이 공유한다.
+
 ## 주요 Value Object
 
 - `PaymentId`
 - `MerchantId`
 - `MerchantOrderId`
-- `Money`
-- `TokenAmount`
+- `Money` — KRW(Minor Unit 없이 원 단위 `BIGINT`)
+- `SignedMoney` — 음수를 허용해야 하는 KRW(정산 조정액, 환전 손익)
+- `TokenAmount` — USDC Minor Unit
 - `ExchangeRate`
 - `WalletAddress`
 - `TransactionHash`
 - `ContractAddress`
+- `ChainId`
 - `BlockchainNetwork`
 - `Asset`
+- `HttpUrl` — Webhook/Redirect URL
+
+계정 영역은 `LoginId`/`Email`/`AccountStatus`를 내부 운영자와 가맹점 사용자가 **공유**하고,
+역할(`InternalUserRole`/`MerchantUserRole`)은 값이 달라 공유하지 않는다.
 
 ## Domain Service
 
-### PaymentAmountCalculator
-KRW 주문 금액과 적용 환율로 USDC 수량을 계산한다.
-
 ### PaymentTransactionValidator
-Network, Chain ID, Contract, Wallet, Amount, Receipt, Confirm, 중복 여부를 검증한다.
+Network, Chain ID, Contract, Wallet, Amount, Receipt를 검증한다.
 
-### SettlementAmountCalculator
-Gross, Fee, Adjustment, Net Amount를 계산한다.
+**물리적으로는 `modules:application`에 있다** — 검증 대상인 `OnChainTransaction`이
+`BlockchainClient` Port의 반환 타입이라 `modules:domain`에 둘 수 없다(의존 방향은
+`application → domain`으로만 흐른다). 부수효과 없는 순수 함수라는 성격은 그대로다.
+Confirm 충족 여부와 Transaction Hash 중복은 여기서 보지 않는다 — 이유는 그 클래스의 KDoc 참고.
+
+> **금액 계산에는 별도 도메인 서비스를 두지 않았다.** KRW→USDC 환산은 `CreatePaymentUseCase`가,
+> 정산 금액(Gross/Fee/Adjustment/Net)은 `SellToFakeExchangeUseCase`가 계산한다 — 계산식이
+> 한 Use Case에서만 쓰여서 서비스로 분리할 이유가 없었다. 대신 **`SettlementReceivable`이
+> `net = gross - fee + adjustment` 공식을 `require`로 직접 검증**해, 계산 주체가 어디든 잘못된
+> 금액 조합으로는 애그리게이트를 만들 수 없게 한다. 두 번째 호출부가 생기면 그때 서비스로 뽑는다.
 
 # 계정 및 API 연동 Aggregate
 
