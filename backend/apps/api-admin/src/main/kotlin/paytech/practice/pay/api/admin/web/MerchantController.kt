@@ -36,7 +36,7 @@ import paytech.practice.pay.domain.shared.HttpUrl
  *
  * 등록자(`registeredByInternalUserId`)는 요청 본문이 아니라
  * `@AuthenticationPrincipal`로 주입받는 [InternalUserPrincipal]에서 가져온다
- * (`InternalUserIssuanceController`와 같은 이유) — 목록 조회는 감사 정보가
+ * (`InternalUserController`와 같은 이유) — 목록 조회는 감사 정보가
  * 필요 없어 `principal`을 받지 않는다.
  */
 @RestController

@@ -29,26 +29,19 @@ import paytech.practice.pay.domain.identity.LoginId
  * (`docs/architecture/identity-access-api-key.md`의 "3.3 발급 정책": "내부 운영자 계정은
  * `SUPER_ADMIN`만 발급할 수 있다").
  *
- * 원래 이름은 `InternalUserIssuanceController`였는데 목록 조회가 생기면서 바꿨다
- * (`MerchantController`가 등록·목록을 함께 갖는 것과 같은 모양 — "Issuance"라는 이름이
- * 목록까지 포함하면 어긋난다).
+ * 발급·목록에 더해 계정 관리 액션(`/{id}/suspend|reactivate|terminate|role`)도 여기 둔다
+ * (가맹점 쪽 `MerchantSubAccountController`가 발급·목록·관리를 함께 갖는 것과 같은 모양).
  *
- * **인가는 전적으로 `SecurityConfig`가 한다.** `authorize("/admin/internal-users",
- * hasRole("SUPER_ADMIN"))`이 `HttpMethod`로 좁혀져 있지 않아 **새로 추가한 `GET`도 함께
- * 덮는다** — `/admin/merchants`가 `POST`로 좁혀 `GET`을 `VIEWER`에게 연 것과 정반대
- * 상황이고, 여기서는 그게 맞다: 내부 직원 명부에는 직원 이메일·마지막 로그인·누가
- * `SUPER_ADMIN`인지가 담기고, 계정 관리 자체가 `SUPER_ADMIN`의 영역이다("3.3").
- * 그래서 `ListInternalUsersUseCase`도 요청자를 받지 않는다(그 KDoc 참고).
+ * **인가는 전적으로 `SecurityConfig`가 한다** — `/admin/internal-users` 하위 경로 와일드카드
+ * 규칙이 `GET`·`POST`와 관리 액션까지 전부 `SUPER_ADMIN` 전용으로 잠근다. `/admin/merchants`가
+ * `POST`로만 좁혀 `GET`을 `VIEWER`에게 여는 것과 정반대이고, 여기서는 그게 맞다: 내부 직원
+ * 명부에는 직원 이메일·마지막 로그인·누가 `SUPER_ADMIN`인지가 담기고 계정 관리 자체가
+ * `SUPER_ADMIN`의 영역이다("3.3"). 그래서 `ListInternalUsersUseCase`는 요청자를 받지 않고,
+ * 요청자([InternalUserManagementGuard]가 받는 `requestedBy`)는 인가가 아니라 **자기 자신
+ * 차단**에만 쓴다.
  *
  * 발급자(`issuedByInternalUserId`)는 요청 본문이 아니라 `@AuthenticationPrincipal`로
  * 주입받는 [InternalUserPrincipal]에서 가져온다.
- *
- * **계정 관리 액션(`/{id}/suspend|reactivate|terminate|role`)도 같은 컨트롤러에 둔다**
- * (가맹점 쪽 `MerchantSubAccountController`가 발급·목록·관리를 함께 갖는 것과 같은 모양).
- * 이 하위 경로들은 base 경로 정확 매칭으로는 덮이지 않으므로 `SecurityConfig`의 규칙을
- * `/admin/internal-users` 하위 경로 와일드카드로 넓혀 `SUPER_ADMIN` 전용을 유지했다 — 그래서
- * 요청자([InternalUserManagementGuard]가 받는 `requestedBy`)는 인가가 아니라 **자기 자신
- * 차단**에만 쓴다(그 Guard의 KDoc 참고).
  */
 @RestController
 @RequestMapping("/admin/internal-users")

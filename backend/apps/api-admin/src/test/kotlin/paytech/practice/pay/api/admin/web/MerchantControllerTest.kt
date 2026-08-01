@@ -60,7 +60,7 @@ private fun authenticatedAs(principal: InternalUserPrincipal) =
  * `@WebMvcTest`는 `SecurityConfig`를 자동으로 스캔하지 않으므로 명시적으로
  * Import한다 — 그래야 `POST /admin/merchants`가 `SUPER_ADMIN`/`OPERATOR` 역할을
  * 요구하고 `GET /admin/merchants`는 인증된 누구나(`VIEWER` 포함) 호출할 수 있는
- * 실제 인가 규칙까지 검증할 수 있다(`InternalUserIssuanceControllerTest`와
+ * 실제 인가 규칙까지 검증할 수 있다(`InternalUserControllerTest`와
  * 같은 이유, `SecurityConfig`의 메서드 스코핑 KDoc 참고).
  */
 @WebMvcTest(MerchantController::class)

@@ -42,9 +42,9 @@ class OutboxEventRepositoryAdapterTest :
 			record.eventType shouldBe "payment.created"
 			record.eventStatus shouldBe "PENDING"
 			record.retryCount shouldBe 0
-			// MySQL's JSON column type re-serializes the value on write (e.g. inserts a
-			// space after ':') rather than preserving the exact literal we sent, so this
-			// only checks the content round-tripped, not byte-for-byte formatting.
+			// MySQL의 JSON 컬럼은 쓰기 시점에 값을 다시 직렬화해서(예: `:` 뒤에 공백을 넣는다)
+			// 우리가 보낸 리터럴을 그대로 보존하지 않는다 — 그래서 바이트 단위 형식이 아니라
+			// 내용이 왕복했는지만 확인한다.
 			record.payload!!.data() shouldContain "pay_test_001"
 		}
 

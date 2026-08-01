@@ -25,7 +25,7 @@ private fun validRequest(): AcceptAccountInvitationRequest =
 
 /**
  * `SecurityConfig`를 명시적으로 Import해서 `/admin/account-invitations/accept`가
- * 실제로 `permitAll`인지까지 검증한다(`InternalUserIssuanceControllerTest`와
+ * 실제로 `permitAll`인지까지 검증한다(`InternalUserControllerTest`와
  * 같은 이유).
  */
 @WebMvcTest(AcceptAccountInvitationController::class)
