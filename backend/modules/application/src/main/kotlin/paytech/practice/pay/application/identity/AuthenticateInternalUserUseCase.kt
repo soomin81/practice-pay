@@ -10,16 +10,15 @@ import paytech.practice.pay.domain.identity.InternalLoginAuditId
 import paytech.practice.pay.domain.identity.InternalUser
 import paytech.practice.pay.domain.identity.LoginOutcome
 import java.time.Clock
-import java.time.Duration
 import java.time.Instant
 
 /**
  * "내부 운영자 로그인" Use Case다(`docs/architecture/identity-access-api-key.md`의
  * "3.4 로그인 경로").
  *
- * [MAX_FAILED_LOGIN_ATTEMPTS]/[LOCK_DURATION]은 `docs/`에 값이 정해져 있지 않아
- * 이 Use Case가 상수로 고정했다 — [paytech.practice.pay.application.payment.CreatePaymentUseCase]의
- * `SPREAD_RATE`/`PAYMENT_VALIDITY`와 같은 성격의 MVP 단순화다.
+ * 실패 누적 잠금 기준(횟수·기간)은 [LoginLockoutPolicy]가 갖는다 —
+ * [AuthenticateMerchantUserUseCase]와 **같은 값을 공유한다**(원래 두 Use Case가 각자
+ * 복제하고 있었다).
  *
  * 계정이 존재하지 않거나, `ACTIVE`가 아니거나(잠금이 아직 안 풀린 `LOCKED`는
  * [AccountLockedException]으로 구분), 비밀번호가 틀리면 [InvalidCredentialsException]을
@@ -100,8 +99,7 @@ class AuthenticateInternalUserUseCase(
 		internalUser: InternalUser,
 		now: Instant,
 	) {
-		val lockedUntil = internalUser.lockedUntil
-		if (internalUser.status == AccountStatus.LOCKED && lockedUntil != null && !now.isBefore(lockedUntil)) {
+		if (LoginLockoutPolicy.isLockExpired(internalUser.status, internalUser.lockedUntil, now)) {
 			internalUser.unlock(now)
 		}
 	}
@@ -111,14 +109,9 @@ class AuthenticateInternalUserUseCase(
 		now: Instant,
 	) {
 		internalUser.recordFailedLogin(now)
-		if (internalUser.failedLoginCount >= MAX_FAILED_LOGIN_ATTEMPTS) {
-			internalUser.lock(now.plus(LOCK_DURATION), now)
+		if (LoginLockoutPolicy.shouldLock(internalUser.failedLoginCount)) {
+			internalUser.lock(LoginLockoutPolicy.lockUntil(now), now)
 		}
 		internalUserRepository.save(internalUser)
-	}
-
-	companion object {
-		private const val MAX_FAILED_LOGIN_ATTEMPTS = 5
-		private val LOCK_DURATION: Duration = Duration.ofMinutes(15)
 	}
 }

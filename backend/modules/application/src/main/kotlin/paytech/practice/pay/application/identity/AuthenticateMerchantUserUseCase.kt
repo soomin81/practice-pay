@@ -12,7 +12,6 @@ import paytech.practice.pay.domain.identity.MerchantLoginAuditId
 import paytech.practice.pay.domain.identity.MerchantUser
 import paytech.practice.pay.domain.merchant.MerchantId
 import java.time.Clock
-import java.time.Duration
 import java.time.Instant
 
 /**
@@ -20,7 +19,7 @@ import java.time.Instant
  * "4.5 로그인 경로").
  *
  * [AuthenticateInternalUserUseCase]와 거의 같은 모양이다 — 계정 상태 확인, 잠금
- * 정책([MAX_FAILED_LOGIN_ATTEMPTS]/[LOCK_DURATION], 같은 값), 자격증명 실패를
+ * 정책([LoginLockoutPolicy]를 **공유한다**), 자격증명 실패를
  * 하나의 [InvalidCredentialsException]으로 묶는 것까지 동일하다. 다른 점은
  * `login_id`가 가맹점 안에서만 유일해서([MerchantUserRepository][paytech.practice.pay.application.port.outbound.MerchantUserRepository]의
  * KDoc 참고) 먼저 [MerchantCode][paytech.practice.pay.domain.merchant.MerchantCode]로
@@ -115,8 +114,7 @@ class AuthenticateMerchantUserUseCase(
 		merchantUser: MerchantUser,
 		now: Instant,
 	) {
-		val lockedUntil = merchantUser.lockedUntil
-		if (merchantUser.status == AccountStatus.LOCKED && lockedUntil != null && !now.isBefore(lockedUntil)) {
+		if (LoginLockoutPolicy.isLockExpired(merchantUser.status, merchantUser.lockedUntil, now)) {
 			merchantUser.unlock(now)
 		}
 	}
@@ -126,14 +124,9 @@ class AuthenticateMerchantUserUseCase(
 		now: Instant,
 	) {
 		merchantUser.recordFailedLogin(now)
-		if (merchantUser.failedLoginCount >= MAX_FAILED_LOGIN_ATTEMPTS) {
-			merchantUser.lock(now.plus(LOCK_DURATION), now)
+		if (LoginLockoutPolicy.shouldLock(merchantUser.failedLoginCount)) {
+			merchantUser.lock(LoginLockoutPolicy.lockUntil(now), now)
 		}
 		merchantUserRepository.save(merchantUser)
-	}
-
-	companion object {
-		private const val MAX_FAILED_LOGIN_ATTEMPTS = 5
-		private val LOCK_DURATION: Duration = Duration.ofMinutes(15)
 	}
 }
