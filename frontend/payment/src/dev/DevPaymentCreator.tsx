@@ -45,7 +45,10 @@ export function DevPaymentCreator({ onCreated }: { onCreated: (sessionId: string
 				body: JSON.stringify({
 					merchantOrderId: `dev-${Date.now()}`,
 					orderName: '개발용 테스트 주문',
-					orderAmount: 50000,
+					// Faucet 한 번(2시간에 20 USDC)으로 결제 한 건이 끝나도록 정한 금액이다.
+					// 20,000원 ÷ 1,393(적용 환율) = 14.357502 USDC — 50,000원이면 35.89 USDC라
+					// 두 번 받아야 해서 테스트 한 바퀴에 2시간이 걸렸다.
+					orderAmount: 20000,
 					network: 'BASE_SEPOLIA',
 					successUrl: 'https://merchant.example.com/done',
 					cancelUrl: 'https://merchant.example.com/cancel',

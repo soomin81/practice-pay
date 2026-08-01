@@ -85,9 +85,9 @@ MetaMask → 네트워크 선택 → **네트워크 추가** → 수동 추가�
 | 스프레드 | `0.005` (0.5%) | `CreatePaymentUseCase.SPREAD_RATE` |
 | **적용 환율** | **1393 KRW/USDC** | `1400 × (1 − 0.005)` |
 
-DEV 버튼의 기본 주문이 **50,000원**이므로 필요한 금액은 **35.893755 USDC**다. Faucet 한도가 20 USDC라 **두 번(2시간 간격) 받아야 한 건을 결제할 수 있다.**
+DEV 버튼의 기본 주문은 **20,000원**이라 필요한 금액은 **14.357502 USDC**다 — **Faucet 한 번(20 USDC)으로 결제 한 건이 끝나도록** 정한 값이다.
 
-> **한 번의 Faucet 요청으로 끝내려면** `frontend/payment/src/dev/DevPaymentCreator.tsx`의 `orderAmount`를 `20000` 이하로 낮춘다(20,000원 ≈ 14.36 USDC). 테스트를 여러 번 돌릴 거라면 이쪽을 권한다.
+> 원래 50,000원(35.893755 USDC)이었는데, 그러면 Faucet을 2시간 간격으로 **두 번** 받아야 한 건을 결제할 수 있어서 테스트 한 바퀴에 2시간이 걸렸다. 금액을 키우려면 `frontend/payment/src/dev/DevPaymentCreator.tsx`의 `orderAmount`를 고친다.
 
 ---
 
@@ -186,7 +186,7 @@ IntelliJ HTTP Client(`backend/apps/api-payment/requests.http`)로 테스트할 �
 1. `http://localhost:5173` 접속
 2. 상단 **DEV** 영역의 **"테스트 결제 생성"** 클릭 → 주소에 `?session=cs_...`가 붙고 결제 화면이 뜬다
 3. 화면에 나온 값을 확인한다:
-   - **보낼 금액** (기본 주문 50,000원이면 `35.893755 USDC`)
+   - **보낼 금액** (기본 주문 20,000원이면 `14.357502 USDC`)
    - **네트워크** `BASE_SEPOLIA (chainId 84532)`
    - **수취 지갑** — 7절에서 넣은 본인 계정 주소인지 확인 (마우스를 올리면 전체 주소가 보인다)
    - **토큰 Contract** — `0x036C…CF7e`
@@ -245,7 +245,7 @@ SELECT settlement_receivable_id, receivable_status FROM settlement_receivable OR
 
 ## 11. 남은 개선
 
-- **DEV 주문 금액이 코드에 고정돼 있다**(50,000원 = 35.893755 USDC). Faucet 한도가 2시간에 20 USDC라 한 건 테스트에 두 번 요청이 필요하다. API Key처럼 `.env.local`로 빼면 매번 코드를 고치지 않아도 된다.
+- **DEV 주문 금액이 코드에 고정돼 있다**(20,000원 = 14.357502 USDC — Faucet 한 번으로 끝나는 값). 금액을 바꿔가며 테스트하려면 API Key처럼 `.env.local`로 빼는 편이 낫다.
 
 ---
 
