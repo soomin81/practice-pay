@@ -28,4 +28,17 @@ enum class PaymentFailureReason {
 
 	/** 이미 다른 결제에 사용된 Transaction Hash다. */
 	DUPLICATE_TRANSACTION_HASH,
+
+	/**
+	 * 블록에 들어갔던 거래가 체인 재구성(reorg)으로 사라졌다.
+	 *
+	 * **이 값만은 "돈이 오지 않았다"가 실제로 맞다** — 다른 값들과 달리 전송 자체가
+	 * 체인에서 없어졌으므로 수취 지갑에 남은 것이 없다(ADR-007의 자금 위치 분류에서
+	 * "고객 지갑" 쪽이다).
+	 *
+	 * 다만 사라진 거래가 나중에 다시 채굴될 수 있다 — 그래서 즉시 실패시키지 않고
+	 * 유예를 둔다(`ConfirmBlockchainTransactionUseCase`의 `REORG_GRACE`). 유예 후의
+	 * 재채굴은 자동으로 처리하지 않고 운영 절차로 본다.
+	 */
+	TRANSACTION_REORGED,
 }

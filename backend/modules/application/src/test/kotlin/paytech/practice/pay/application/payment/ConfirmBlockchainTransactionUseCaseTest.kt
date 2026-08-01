@@ -66,7 +66,10 @@ private fun newPaymentProcessing(): Payment {
 	return payment
 }
 
-private fun newBlockchainTransactionSubmitted(requiredConfirmationCount: Int = 12): BlockchainTransaction =
+private fun newBlockchainTransactionSubmitted(
+	requiredConfirmationCount: Int = 12,
+	submittedAt: Instant = NOW.minusSeconds(30),
+): BlockchainTransaction =
 	BlockchainTransaction.create(
 		id = BTX_ID,
 		paymentId = PAYMENT_ID,
@@ -80,8 +83,23 @@ private fun newBlockchainTransactionSubmitted(requiredConfirmationCount: Int = 1
 		tokenAsset = Asset.USDC,
 		amountMinor = null,
 		requiredConfirmationCount = requiredConfirmationCount,
-		submittedAt = NOW.minusSeconds(30),
+		submittedAt = submittedAt,
 	)
+
+/** 마지막으로 온체인에서 본 시각이 [lastSeenAt]인 `CONFIRMING` 거래. reorg 유예 계산의 기준이 된다. */
+private fun newBlockchainTransactionConfirming(lastSeenAt: Instant): BlockchainTransaction {
+	val tx = newBlockchainTransactionSubmitted()
+	tx.detect(1_000L, lastSeenAt)
+	tx.startConfirming(lastSeenAt)
+	tx.recordConfirmation(3, lastSeenAt)
+	return tx
+}
+
+private fun newPaymentConfirming(): Payment {
+	val payment = newPaymentProcessing()
+	payment.startConfirmation(NOW.minusSeconds(35))
+	return payment
+}
 
 private fun onChainTransaction(
 	confirmationCount: Int,
@@ -147,6 +165,71 @@ class ConfirmBlockchainTransactionUseCaseTest :
 			result.paymentStatus shouldBe PaymentStatus.PROCESSING
 			verify(exactly = 0) { blockchainTransactionRepository.save(any()) }
 			verify(exactly = 0) { paymentRepository.save(any()) }
+		}
+
+		// 블록에서 이미 본 거래가 사라진 것은 미채굴과 뜻이 전혀 다르다(reorg 또는 교체).
+		// 다만 한 번의 null로 결제를 죽이지 않는다 — RPC 노드가 잠시 뒤처져도 null이 나온다.
+		test("a transaction missing on-chain within the grace period is left untouched") {
+			val blockchainTransactionRepository = mockk<BlockchainTransactionRepository>(relaxed = true)
+			val paymentRepository = mockk<PaymentRepository>(relaxed = true)
+			val blockchainClient = mockk<BlockchainClient>()
+			every { blockchainTransactionRepository.findById(BTX_ID) } returns
+				newBlockchainTransactionConfirming(lastSeenAt = NOW.minusSeconds(60))
+			every { paymentRepository.findById(PAYMENT_ID) } returns newPaymentConfirming()
+			every { blockchainClient.findTransaction(BlockchainNetwork.BASE_SEPOLIA, HASH) } returns null
+
+			val result =
+				newUseCase(blockchainTransactionRepository, paymentRepository, blockchainClient).execute(
+					ConfirmBlockchainTransactionCommand(BTX_ID),
+				)
+
+			result.blockchainTransactionStatus shouldBe BlockchainTransactionStatus.CONFIRMING
+			result.paymentStatus shouldBe PaymentStatus.CONFIRMING
+			verify(exactly = 0) { blockchainTransactionRepository.save(any()) }
+			verify(exactly = 0) { paymentRepository.save(any()) }
+		}
+
+		// 유예가 지나도 돌아오지 않으면 REORGED로 끝낸다. 이걸 하지 않으면 그 결제는
+		// CONFIRMING에 영원히 갇힌다 — 만료 Sweep은 CREATED/READY만 고르기 때문이다.
+		test("a transaction missing past the grace period becomes REORGED and fails the payment") {
+			val blockchainTransactionRepository = mockk<BlockchainTransactionRepository>(relaxed = true)
+			val paymentRepository = mockk<PaymentRepository>(relaxed = true)
+			val blockchainClient = mockk<BlockchainClient>()
+			val savedPayments = mutableListOf<Payment>()
+			every { blockchainTransactionRepository.findById(BTX_ID) } returns
+				newBlockchainTransactionConfirming(lastSeenAt = NOW.minusSeconds(11 * 60))
+			every { paymentRepository.findById(PAYMENT_ID) } returns newPaymentConfirming()
+			every { paymentRepository.save(capture(savedPayments)) } returns Unit
+			every { blockchainClient.findTransaction(BlockchainNetwork.BASE_SEPOLIA, HASH) } returns null
+
+			val result =
+				newUseCase(blockchainTransactionRepository, paymentRepository, blockchainClient).execute(
+					ConfirmBlockchainTransactionCommand(BTX_ID),
+				)
+
+			result.blockchainTransactionStatus shouldBe BlockchainTransactionStatus.REORGED
+			result.paymentStatus shouldBe PaymentStatus.FAILED
+			savedPayments.single().failureReason shouldBe PaymentFailureReason.TRANSACTION_REORGED
+			verify(exactly = 1) { blockchainTransactionRepository.save(any()) }
+		}
+
+		// SUBMITTED는 아무리 오래돼도 reorg가 아니다 — 블록에서 본 적이 없다.
+		test("a long-unmined SUBMITTED transaction never becomes REORGED") {
+			val blockchainTransactionRepository = mockk<BlockchainTransactionRepository>(relaxed = true)
+			val paymentRepository = mockk<PaymentRepository>(relaxed = true)
+			val blockchainClient = mockk<BlockchainClient>()
+			every { blockchainTransactionRepository.findById(BTX_ID) } returns
+				newBlockchainTransactionSubmitted(submittedAt = NOW.minusSeconds(60 * 60))
+			every { paymentRepository.findById(PAYMENT_ID) } returns newPaymentProcessing()
+			every { blockchainClient.findTransaction(BlockchainNetwork.BASE_SEPOLIA, HASH) } returns null
+
+			val result =
+				newUseCase(blockchainTransactionRepository, paymentRepository, blockchainClient).execute(
+					ConfirmBlockchainTransactionCommand(BTX_ID),
+				)
+
+			result.blockchainTransactionStatus shouldBe BlockchainTransactionStatus.SUBMITTED
+			verify(exactly = 0) { blockchainTransactionRepository.save(any()) }
 		}
 
 		test("detected but not enough confirmations moves to CONFIRMING without succeeding") {

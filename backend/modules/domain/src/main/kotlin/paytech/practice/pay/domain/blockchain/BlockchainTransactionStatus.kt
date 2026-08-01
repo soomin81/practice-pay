@@ -5,9 +5,10 @@ package paytech.practice.pay.domain.blockchain
  *
  * 정상 흐름: `SUBMITTED → DETECTED → CONFIRMING → CONFIRMED`
  *
- * 예외 상태는 `FAILED`다. `REORGED`는 향후 블록 재구성(reorg) 대응을 위해 스키마가
- * 이미 예약해 둔 값이며, 현재는 어떤 전이 메서드도 이 상태로 보내지 않는다
- * (`docs/domain/state-transitions.md` 참고).
+ * 예외 상태는 `FAILED`와 `REORGED`다. `REORGED`는 **블록에 들어간 것을 이미 확인했는데
+ * 그 거래가 체인에서 사라진 경우**이며, [BlockchainTransaction.markReorged]로만 도달한다
+ * (`DETECTED`/`CONFIRMING`에서만 — `CONFIRMED` 이후의 reorg는 정산까지 되돌려야 해서
+ * MVP 범위 밖이다. `docs/domain/state-transitions.md` 참고).
  *
  * `CONFIRMED`, `FAILED`, `REORGED`는 종료 상태다.
  *

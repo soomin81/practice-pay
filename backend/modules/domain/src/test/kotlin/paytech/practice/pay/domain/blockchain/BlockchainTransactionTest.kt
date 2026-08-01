@@ -178,6 +178,38 @@ class BlockchainTransactionTest :
 			shouldThrow<IllegalStateException> { tx.fail(null, null, SUBMITTED_AT.plusSeconds(40)) }
 		}
 
+		test("markReorged moves DETECTED or CONFIRMING to REORGED") {
+			val fromDetected = newTransaction()
+			fromDetected.detect(1_000L, SUBMITTED_AT.plusSeconds(1))
+			val reorgedAt = SUBMITTED_AT.plusSeconds(2)
+			fromDetected.markReorged(reorgedAt)
+			fromDetected.status shouldBe BlockchainTransactionStatus.REORGED
+			fromDetected.updatedAt shouldBe reorgedAt
+
+			val fromConfirming = newTransaction()
+			fromConfirming.detect(1_000L, SUBMITTED_AT.plusSeconds(1))
+			fromConfirming.startConfirming(SUBMITTED_AT.plusSeconds(2))
+			fromConfirming.markReorged(SUBMITTED_AT.plusSeconds(3))
+			fromConfirming.status shouldBe BlockchainTransactionStatus.REORGED
+		}
+
+		// 한 번도 블록에서 본 적이 없으면 "사라졌다"가 성립하지 않는다 — 그냥 미채굴이다.
+		test("markReorged fails from SUBMITTED") {
+			val tx = newTransaction()
+
+			shouldThrow<IllegalStateException> { tx.markReorged(SUBMITTED_AT.plusSeconds(10)) }
+		}
+
+		// CONFIRMED 이후의 reorg는 환전·정산까지 되돌려야 해서 MVP 범위 밖이다(ADR-007).
+		test("markReorged fails once CONFIRMED") {
+			val tx = newTransaction()
+			tx.detect(1_000L, SUBMITTED_AT.plusSeconds(10))
+			tx.startConfirming(SUBMITTED_AT.plusSeconds(20))
+			tx.confirm(SUBMITTED_AT.plusSeconds(30))
+
+			shouldThrow<IllegalStateException> { tx.markReorged(SUBMITTED_AT.plusSeconds(40)) }
+		}
+
 		test("reconstitute rejects CONFIRMED without confirmedAt") {
 			shouldThrow<IllegalArgumentException> {
 				BlockchainTransaction.reconstitute(

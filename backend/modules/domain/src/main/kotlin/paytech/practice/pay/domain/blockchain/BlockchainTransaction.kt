@@ -145,6 +145,27 @@ class BlockchainTransaction private constructor(
 		updatedAt = failedAt
 	}
 
+	/**
+	 * (`DETECTED` 또는 `CONFIRMING`) → `REORGED`. 블록에 들어간 것을 확인했던 거래가
+	 * 체인 재구성(reorg)으로 사라졌다.
+	 *
+	 * **`SUBMITTED`에서는 전이할 수 없다** — 아직 한 번도 블록에서 본 적이 없으므로
+	 * "사라졌다"가 성립하지 않는다(그냥 미채굴이다). **`CONFIRMED`에서도 전이할 수
+	 * 없다** — 그 시점에는 `Payment`가 이미 `SUCCEEDED`이고 환전·정산채권까지 만들어져
+	 * 있어서, 되돌리려면 이 애그리게이트 하나가 아니라 그 뒤의 개념들을 함께 뒤집는
+	 * 보상 흐름이 필요하다. 그 설계는 MVP 범위 밖이다
+	 * (`docs/decisions/ADR-007-onchain-irreversibility.md`).
+	 */
+	fun markReorged(reorgedAt: Instant) {
+		checkTransition(
+			status == BlockchainTransactionStatus.DETECTED ||
+				status == BlockchainTransactionStatus.CONFIRMING,
+			BlockchainTransactionStatus.REORGED,
+		)
+		status = BlockchainTransactionStatus.REORGED
+		updatedAt = reorgedAt
+	}
+
 	private fun checkTransition(
 		allowed: Boolean,
 		target: BlockchainTransactionStatus,

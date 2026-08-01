@@ -479,3 +479,37 @@
   데몬은 나중의 `export`를 모른다. `gradlew --stop` 후 다시 띄워야 한다. 증상이 "설정했는데
   적용이 안 된다"라 원인이 드러나지 않아서, `backend/CLAUDE.md`의 "테스트가 잡지 못하는
   층" 표와 `docs/guides/testnet-wallet-setup.md` 7절에 함께 남겼다.
+
+## 확정 이전 reorg 처리(`BlockchainTransaction.markReorged`)
+
+ADR-007이 후속으로 미뤄 둔 `REORGED`를 보러 갔다가, **문서 공백이 아니라 도달 가능한
+버그였다는 것을 발견했다.**
+
+- **증상**: `ConfirmBlockchainTransactionUseCase`는 온체인 조회가 `null`이면 상태를 그대로
+  두고 돌아간다. `SUBMITTED`(미채굴)에는 맞지만, 이미 블록 번호를 기록해 둔
+  `DETECTED`/`CONFIRMING` 거래가 사라진 것은 뜻이 전혀 다르다 — reorg나 거래 교체다.
+  그런데 그 결제는 **`CONFIRMING`에 영원히 갇혔다**: 만료 Sweep은 `CREATED`/`READY`만
+  고르고, Confirm Worker는 계속 `null`만 받는다.
+- **같은 `null`을 상태로 구분한다**가 이 슬라이스의 핵심이다(`handleMissingOnChain`).
+- **유예를 둔다(`REORG_GRACE` = 10분).** 한 번의 `null`로 결제를 죽이지 않기 위해서다 —
+  뒤처진 RPC 노드도 `null`을 돌려주고, reorg된 거래가 다음 블록에 다시 들어가는 것이
+  오히려 흔하다. 반면 `Payment.FAILED`는 종료 상태라 오판을 되돌릴 수 없다. **짧게 잡아
+  얻는 것(빠른 실패 판정)보다 길게 잡아 피하는 것(정상 결제의 회복 불가능한 실패)이 크다.**
+- **마지막으로 온체인에서 본 시각은 `updatedAt`이다** — 별도 컬럼을 추가하지 않았다.
+  거래를 볼 때마다 `detect`/`recordConfirmation`이 갱신하고, 못 찾은 폴링은 아무것도
+  저장하지 않아 그 값이 그대로 남는다.
+- **`markReorged`는 `DETECTED`/`CONFIRMING`에서만 허용한다.** `SUBMITTED`는 블록에서 본
+  적이 없어 "사라졌다"가 성립하지 않고, `CONFIRMED` 이후는 `Payment = SUCCEEDED`와
+  `ExchangeOrder`·`SettlementReceivable`까지 뒤집는 보상 흐름이 필요해 범위 밖이다
+  (ADR-007에 그대로 남겨 뒀다).
+- **마이그레이션이 필요 없었다**: 스키마의 `ck_blockchain_transaction_status`가 `REORGED`를
+  이미 허용하고, `payment.failure_code`는 `VARCHAR(50)`에 CHECK 제약이 없어 새
+  `PaymentFailureReason.TRANSACTION_REORGED`가 그대로 들어간다.
+- **`TRANSACTION_REORGED`는 ADR-007의 자금 위치 분류에서 유일하게 "고객 지갑" 쪽이다** —
+  전송 자체가 없어졌으므로 이 실패 사유만은 "돈이 오지 않았다"가 실제로 맞다.
+- 조회 쿼리는 손대지 않아도 됐다 — `PENDING_CONFIRMATION_STATUSES`가 이미
+  `SUBMITTED`/`DETECTED`/`CONFIRMING`만 고르므로 `REORGED`가 되면 Worker가 자동으로 뺀다.
+- **테스트**: 도메인 3개(허용 전이, `SUBMITTED`에서 거부, `CONFIRMED`에서 거부), Use Case
+  3개(유예 안, 유예 후 `REORGED`+`FAILED`, 오래된 `SUBMITTED`는 그대로).
+- **실물 검증은 하지 않았다** — 테스트넷에서 reorg를 일부러 일으킬 방법이 없다. 유예
+  경계는 고정 `Clock`으로만 검증했다.

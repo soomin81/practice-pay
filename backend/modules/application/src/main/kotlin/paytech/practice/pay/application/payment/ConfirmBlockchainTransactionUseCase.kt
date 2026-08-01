@@ -10,8 +10,10 @@ import paytech.practice.pay.domain.blockchain.BlockchainTransaction
 import paytech.practice.pay.domain.blockchain.BlockchainTransactionStatus
 import paytech.practice.pay.domain.outbox.OutboxEvent
 import paytech.practice.pay.domain.payment.Payment
+import paytech.practice.pay.domain.payment.PaymentFailureReason
 import paytech.practice.pay.domain.shared.EventId
 import java.time.Clock
+import java.time.Duration
 
 /**
  * "BlockchainTransaction 감지·Confirm" Use Case다. `docs/architecture/mvp-scope.md`의
@@ -30,8 +32,10 @@ import java.time.Clock
  * 범위 밖이다 — 별도 Use Case가 필요하다.
  *
  * 상태 전이 흐름:
- * 1. 아직 온체인에서 못 찾았으면([BlockchainClient.findTransaction]이 `null`) 아무
- *    것도 바꾸지 않고 현재 상태를 그대로 돌려준다.
+ * 1. 온체인에서 못 찾았으면([BlockchainClient.findTransaction]이 `null`) [handleMissingOnChain]이
+ *    처리한다 — `SUBMITTED`면 아직 미채굴이라 아무것도 바꾸지 않지만, 이미 블록에서 본
+ *    거래(`DETECTED`/`CONFIRMING`)가 사라진 것이면 체인 재구성(reorg)이라 유예 후
+ *    `REORGED`로 끝낸다.
  * 2. `SUBMITTED`였다면 `detect()`로 넘어간다 — `Payment`도 같은 순간
  *    `startConfirmation()`으로 함께 넘어간다(`Payment.startConfirmation`의 KDoc:
  *    "온체인 거래가 감지되어 Confirm 대기 상태로 전이한다" — 검증 통과 여부와
@@ -79,7 +83,7 @@ class ConfirmBlockchainTransactionUseCase(
 
 		val onChainTransaction =
 			blockchainClient.findTransaction(blockchainTransaction.network, blockchainTransaction.transactionHash)
-				?: return resultOf(blockchainTransaction, payment)
+				?: return handleMissingOnChain(blockchainTransaction, payment)
 
 		val now = clock.instant()
 
@@ -131,6 +135,46 @@ class ConfirmBlockchainTransactionUseCase(
 		}
 	}
 
+	/**
+	 * 온체인에서 거래를 찾지 못했을 때의 처리다. **같은 `null`이 상태에 따라 전혀 다른
+	 * 뜻이다.**
+	 *
+	 * - `SUBMITTED`: 아직 채굴되지 않았다는 정상 대기다 — 아무것도 바꾸지 않는다.
+	 * - `DETECTED`/`CONFIRMING`: 우리가 **블록에서 이미 본** 거래가 사라졌다는 뜻이라
+	 *   체인 재구성(reorg)이나 거래 교체(replace)다. [REORG_GRACE]가 지나도록 다시
+	 *   나타나지 않으면 `REORGED`로 끝내고 `Payment`도 실패시킨다.
+	 *
+	 * 유예를 두는 이유는 **한 번의 `null`을 근거로 결제를 죽이지 않기 위해서다** — RPC
+	 * 노드가 잠시 뒤처져 있어도 `null`이 나올 수 있고, reorg된 거래가 곧바로 다음 블록에
+	 * 다시 들어가는 것이 오히려 흔하다. 마지막으로 온체인에서 확인한 시각은
+	 * `updatedAt`이다(거래를 볼 때마다 `detect`/`recordConfirmation`이 갱신하고, 못
+	 * 찾은 폴링은 아무것도 저장하지 않아 그 값이 그대로 남는다).
+	 *
+	 * 유예가 지난 뒤 거래가 다시 채굴되는 경우는 자동으로 처리하지 않는다 — 수령 사실은
+	 * `blockchain_transaction`에 남아 있으므로 운영 절차로 판단한다(ADR-007과 같은 규율).
+	 */
+	private fun handleMissingOnChain(
+		blockchainTransaction: BlockchainTransaction,
+		payment: Payment,
+	): ConfirmBlockchainTransactionResult {
+		if (blockchainTransaction.status == BlockchainTransactionStatus.SUBMITTED) {
+			return resultOf(blockchainTransaction, payment)
+		}
+
+		val now = clock.instant()
+		if (now < blockchainTransaction.updatedAt.plus(REORG_GRACE)) {
+			return resultOf(blockchainTransaction, payment)
+		}
+
+		blockchainTransaction.markReorged(now)
+		payment.fail(PaymentFailureReason.TRANSACTION_REORGED, now)
+		return transactionManager.runInTransaction {
+			blockchainTransactionRepository.save(blockchainTransaction)
+			paymentRepository.save(payment)
+			resultOf(blockchainTransaction, payment)
+		}
+	}
+
 	private fun resultOf(
 		blockchainTransaction: BlockchainTransaction,
 		payment: Payment,
@@ -151,5 +195,17 @@ class ConfirmBlockchainTransactionUseCase(
 
 	companion object {
 		private const val PAYMENT_SUCCEEDED_EVENT_TYPE = "payment.succeeded"
+
+		/**
+		 * 온체인에서 사라진 거래를 `REORGED`로 끝내기까지 기다리는 시간.
+		 *
+		 * `docs/`에 값이 없어 고정한 MVP 상수다. Base는 블록 주기가 ~2초인 L2라 실제
+		 * reorg 깊이는 몇 블록 수준이고, 필요 Confirm 수 12를 채우는 데도 ~24초면
+		 * 충분하다 — 10분은 그보다 두 자릿수 크게 잡은 값이다. **짧게 잡을 이유보다
+		 * 길게 잡을 이유가 크다**: 너무 짧으면 잠시 뒤처진 RPC 노드의 응답 하나로
+		 * 정상 결제를 실패시키고, 그 실패는 되돌릴 수 없다(`Payment`의 `FAILED`는
+		 * 종료 상태다). 반대로 길어서 생기는 손해는 실패 판정이 늦어지는 것뿐이다.
+		 */
+		private val REORG_GRACE: Duration = Duration.ofMinutes(10)
 	}
 }

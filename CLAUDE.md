@@ -56,7 +56,7 @@ Payment 생성 → PaymentQuote 확정 → CheckoutSession 생성 → 고객 지
 |---|---|
 | `Payment`(Root) | `CREATED → READY → PROCESSING → CONFIRMING → SUCCEEDED`, `CREATED`/`READY`에서 `EXPIRED`로, `PROCESSING`/`CONFIRMING`에서 `FAILED`로 |
 | `CheckoutSession` | `CREATED → OPEN → WALLET_CONNECTED → PAYMENT_SUBMITTED → COMPLETED`(`PAYMENT_SUBMITTED` 이후에는 고객 취소 불가) |
-| `BlockchainTransaction` | `SUBMITTED → DETECTED → CONFIRMING → CONFIRMED`, 예외 `FAILED`, 향후 `REORGED` |
+| `BlockchainTransaction` | `SUBMITTED → DETECTED → CONFIRMING → CONFIRMED`, 예외 `FAILED`, 그리고 `DETECTED`/`CONFIRMING`에서만 `REORGED`(`CONFIRMED` 이후의 reorg는 범위 밖) |
 | `ExchangeOrder` | Fake Exchange(MVP): `REQUESTED → COMPLETED`. 실거래소(향후): `REQUESTED → SUBMITTED → PROCESSING → COMPLETED` |
 | `SettlementReceivable` | MVP: `PENDING → READY`. 향후: `READY → ASSIGNED → SETTLED` |
 | `WebhookDelivery` | `PENDING → DELIVERING → SUCCEEDED`, 실패 시 `RETRY_WAITING`을 거쳐 최대 재시도 횟수까지, 이후 `FAILED` |

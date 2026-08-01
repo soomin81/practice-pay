@@ -53,6 +53,10 @@
 - **금액 불일치를 1급 개념으로 승격**(예: `payment_discrepancy` — 결제와 실제 수령액의 차이를
   채권·채무로 기록). 지금은 `blockchain_transaction`을 사람이 조회해서 판단한다.
 - 자동 환불(ADR-001의 환불 범위와 함께).
-- **`REORGED`** — 확정된 입금이 체인 재구성으로 사라지는 경우. `state-transitions.md`에 이름만
-  예약돼 있고 전이 조건은 정하지 않았다. 같은 성격(확정 이후에 사실이 바뀌는 상황)이라 함께
-  다룬다.
+- **`CONFIRMED` 이후의 `REORGED`** — 확정된 입금이 체인 재구성으로 사라지는 경우. 되돌리려면
+  `Payment = SUCCEEDED`와 그 뒤의 `ExchangeOrder`·`SettlementReceivable`까지 뒤집는 보상
+  흐름이 필요해서 여전히 후속 범위다(필요 Confirm 수 12가 유일한 완화책이다).
+  **확정 *이전*의 reorg는 이제 다룬다** — `DETECTED`/`CONFIRMING`에서 거래가 사라지면 유예 후
+  `REORGED` + `Payment.FAILED(TRANSACTION_REORGED)`로 끝낸다(`state-transitions.md` 참고).
+  이 경우는 아직 뒤따르는 개념이 없어서 이 ADR이 말하는 "확정 이후에 사실이 바뀌는 상황"에
+  해당하지 않는다.
