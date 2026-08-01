@@ -39,6 +39,10 @@ import java.time.Duration
  * [SPREAD_RATE]/[TOKEN_DECIMALS]/[PAYMENT_VALIDITY]는 `docs/`에 값이 정해져
  * 있지 않아 이 Use Case가 상수로 고정했다 — 추후 가맹점별/플랫폼 설정으로
  * 분리할 수 있는 지점이다.
+ *
+ * **수취 지갑은 요청이 아니라 [ReceivingWalletRegistry]에서 온다** — 가맹점이 지정할 수
+ * 있으면 USDC를 직접 받으면서 정산 채권까지 받는다(`docs/architecture/mvp-scope.md`의
+ * "수취 지갑 귀속"). 네트워크는 여전히 가맹점이 고른다.
  */
 class CreatePaymentUseCase(
 	private val merchantRepository: MerchantRepository,
@@ -47,6 +51,7 @@ class CreatePaymentUseCase(
 	private val checkoutSessionRepository: CheckoutSessionRepository,
 	private val outboxEventRepository: OutboxEventRepository,
 	private val exchangeRateProvider: ExchangeRateProvider,
+	private val receivingWalletRegistry: ReceivingWalletRegistry,
 	private val idGenerator: IdGenerator,
 	private val transactionManager: TransactionManager,
 	private val clock: Clock,
@@ -85,7 +90,7 @@ class CreatePaymentUseCase(
 				paymentAmount = paymentAmount,
 				tokenDecimals = TOKEN_DECIMALS,
 				network = command.network,
-				receivingWallet = command.receivingWallet,
+				receivingWallet = receivingWalletRegistry.walletFor(command.network),
 				expiresAt = expiresAt,
 				createdAt = now,
 			)

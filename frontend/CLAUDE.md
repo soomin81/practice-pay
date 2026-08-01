@@ -120,8 +120,8 @@ src/index.css                 Tailwind import + shadcn 테마 변수
 
 - **세션은 쿼리 파라미터로 받는다**: `/?session=cs_xxx`. 화면이 하나라 라우터를 들이지 않았다(계약 문서 8절이 미정으로 남겨뒀던 부분을 여기서 정했다). 경로 방식으로 바꿔도 백엔드 계약은 영향받지 않는다.
 - **DEV 전용 "테스트 결제 생성" 버튼**이 가맹점 서버 역할을 대신한다(`src/dev/`). 체크아웃은 `checkoutSessionId`가 있어야 시작하는데 그건 API Key가 필요한 `POST /api/v1/payments`가 만들기 때문이다.
-  - **API Key와 수취 지갑(`VITE_DEV_RECEIVING_WALLET`)은 `.env.local`에서만 읽는다**(`.env.example` 복사). 둘 중 하나라도 없으면 버튼이 꺼지고 안내만 뜬다 — **어느 쪽도 코드에 기본값을 두지 않는다.**
-  - 수취 지갑에 기본값을 두지 않는 이유는 API Key와 다르다. 이 값은 원래 가맹점이 결제를 만들 때 지정하는 것이라 "그럴듯한 기본값"이 존재할 수 없고, 기본값을 두면 **그 주소로 실제 테스트넷 USDC가 전송된다.** 실제로 한동안 USDC 토큰 Contract 주소가 여기 하드코딩돼 있었다(복붙 사고) — 그리로 보낸 토큰은 되찾을 수 없다. 준비 절차는 [`docs/guides/testnet-wallet-setup.md`](../docs/guides/testnet-wallet-setup.md).
+  - **API Key는 `.env.local`에서만 읽는다**(`.env.example` 복사). 없으면 버튼이 꺼지고 안내만 뜬다 — **코드에 기본값을 두지 않는다.**
+  - **수취 지갑은 이 버튼이 보내지 않는다.** PG가 수탁하는 지갑이라 백엔드 설정(`APP_PAYMENT_RECEIVING_WALLETS_BASE_SEPOLIA`)에서만 온다 — 프론트가 지정할 수 있으면 가맹점 역할이 USDC를 직접 받으면서 정산 채권까지 받는다([`docs/architecture/mvp-scope.md`](../docs/architecture/mvp-scope.md)의 "수취 지갑 귀속"). 한때 `VITE_DEV_RECEIVING_WALLET`으로 여기서 보냈고, 그 전에는 USDC 토큰 Contract 주소가 기본값으로 하드코딩돼 있기까지 했다(복붙 사고 — 그리로 보낸 토큰은 되찾을 수 없다). **요청 본문에 `receivingWallet`이 없다는 것을 `DevPaymentCreator.test.tsx`가 회귀로 지킨다.** 백엔드 설정이 없으면 버튼이 503을 받는다 — 준비 절차는 [`docs/guides/testnet-wallet-setup.md`](../docs/guides/testnet-wallet-setup.md).
   - `import.meta.env.DEV`로 두 겹(호출부 + 컴포넌트 자신) 막는다. **프로덕션 번들에 DEV 컴포넌트와 API Key가 들어가지 않는 것을 빌드 산출물에서 직접 확인했다** — 번들을 바꾸는 변경 뒤에는 다시 확인한다.
 
 ## 테스트

@@ -15,7 +15,6 @@ import paytech.practice.pay.domain.payment.MerchantOrderId
 import paytech.practice.pay.domain.shared.BlockchainNetwork
 import paytech.practice.pay.domain.shared.HttpUrl
 import paytech.practice.pay.domain.shared.Money
-import paytech.practice.pay.domain.shared.WalletAddress
 
 /**
  * 결제 생성 API(`docs/architecture/identity-access-api-key.md`의
@@ -25,6 +24,9 @@ import paytech.practice.pay.domain.shared.WalletAddress
  * [ApiKeyPrincipal]에서 가져온다 — `SecurityConfig`가 이 경로에 `SCOPE_PAYMENT_CREATE`
  * 권한을 요구하도록 이미 막아뒀으므로, 이 메서드가 실행된다는 것 자체가 유효한
  * API Key로 인증됐다는 뜻이다.
+ *
+ * 수취 지갑도 요청 본문에 없다 — `CreatePaymentUseCase`가 `ReceivingWalletRegistry`(서버
+ * 설정)에서 꺼낸다(`docs/architecture/mvp-scope.md`의 "수취 지갑 귀속").
  *
  * [CreatePaymentRequest]의 나머지 문자열 필드를 도메인 Value Object로 바꾸는 것까지만
  * 이 계층의 책임이다 — 그 값들이 유효한지(`WalletAddress` 형식, 금액이 양수인지
@@ -49,7 +51,6 @@ class PaymentController(
 				orderName = request.orderName,
 				orderAmount = Money(request.orderAmount),
 				network = BlockchainNetwork(request.network),
-				receivingWallet = WalletAddress(request.receivingWallet),
 				successUrl = HttpUrl(request.successUrl),
 				cancelUrl = request.cancelUrl?.let { HttpUrl(it) },
 			)

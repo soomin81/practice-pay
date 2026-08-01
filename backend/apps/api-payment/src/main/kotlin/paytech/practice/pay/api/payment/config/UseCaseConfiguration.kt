@@ -1,5 +1,6 @@
 package paytech.practice.pay.api.payment.config
 
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import paytech.practice.pay.application.apikey.AuthenticateApiKeyUseCase
@@ -8,6 +9,7 @@ import paytech.practice.pay.application.checkout.ConnectCheckoutWalletUseCase
 import paytech.practice.pay.application.checkout.GetCheckoutSessionUseCase
 import paytech.practice.pay.application.checkout.GetCheckoutStatusUseCase
 import paytech.practice.pay.application.payment.CreatePaymentUseCase
+import paytech.practice.pay.application.payment.ReceivingWalletRegistry
 import paytech.practice.pay.application.payment.SubmitPaymentTransactionUseCase
 import paytech.practice.pay.application.port.outbound.ApiKeySecretHasher
 import paytech.practice.pay.application.port.outbound.BlockchainTransactionRepository
@@ -21,6 +23,8 @@ import paytech.practice.pay.application.port.outbound.OutboxEventRepository
 import paytech.practice.pay.application.port.outbound.PaymentQuoteRepository
 import paytech.practice.pay.application.port.outbound.PaymentRepository
 import paytech.practice.pay.application.port.outbound.TransactionManager
+import paytech.practice.pay.domain.shared.BlockchainNetwork
+import paytech.practice.pay.domain.shared.WalletAddress
 import java.time.Clock
 
 /**
@@ -52,6 +56,27 @@ class UseCaseConfiguration {
 			clock = clock,
 		)
 
+	/**
+	 * 네트워크별 PG 수취 지갑을 설정에서 읽어 조립한다.
+	 *
+	 * **값이 비어 있으면 그 네트워크를 등록하지 않는다** — 그럴듯한 기본값을 둘 수 없는
+	 * 종류의 설정이라서다. 실제 테스트넷 USDC가 그 주소로 전송되므로, 저장소에 적어 둔
+	 * 주소가 기본값으로 조용히 쓰이는 것보다 결제 생성이 503으로 실패하는 편이 낫다.
+	 * 그래서 설정이 없어도 앱은 정상 기동한다(`backend/CLAUDE.md`의 "환경변수 없이도
+	 * bootRun이 동작한다"를 지키면서, 실패는 실제로 결제를 만들 때 드러나게 한다).
+	 */
+	@Bean
+	fun receivingWalletRegistry(
+		@Value("\${app.payment.receiving-wallets.base-sepolia:}") baseSepoliaWallet: String,
+	): ReceivingWalletRegistry =
+		ReceivingWalletRegistry(
+			buildMap {
+				if (baseSepoliaWallet.isNotBlank()) {
+					put(BlockchainNetwork.BASE_SEPOLIA, WalletAddress(baseSepoliaWallet))
+				}
+			},
+		)
+
 	@Bean
 	fun createPaymentUseCase(
 		merchantRepository: MerchantRepository,
@@ -60,6 +85,7 @@ class UseCaseConfiguration {
 		checkoutSessionRepository: CheckoutSessionRepository,
 		outboxEventRepository: OutboxEventRepository,
 		exchangeRateProvider: ExchangeRateProvider,
+		receivingWalletRegistry: ReceivingWalletRegistry,
 		idGenerator: IdGenerator,
 		transactionManager: TransactionManager,
 		clock: Clock,
@@ -71,6 +97,7 @@ class UseCaseConfiguration {
 			checkoutSessionRepository = checkoutSessionRepository,
 			outboxEventRepository = outboxEventRepository,
 			exchangeRateProvider = exchangeRateProvider,
+			receivingWalletRegistry = receivingWalletRegistry,
 			idGenerator = idGenerator,
 			transactionManager = transactionManager,
 			clock = clock,

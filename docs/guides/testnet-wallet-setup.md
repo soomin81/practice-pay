@@ -27,7 +27,7 @@
 | Base Sepolia USDC | 실제로 보낼 금액 | 아래 4절 Circle Faucet |
 | 계정 **2개** | 보내는 쪽 / 받는 쪽 | MetaMask에서 계정 추가 |
 
-**계정이 왜 2개인가**: 이 시스템은 고객이 **PG의 수취 지갑**으로 USDC를 보내는 구조다(가맹점 지갑이 아니다 — `docs/architecture/mvp-scope.md`의 "수취 지갑 귀속"). 혼자 테스트하려면 보내는 계정과 받는 계정이 따로 있어야 흐름이 실제와 같아진다. 5절에서 수취 주소를 직접 넣는다.
+**계정이 왜 2개인가**: 이 시스템은 고객이 **PG의 수취 지갑**으로 USDC를 보내는 구조다(가맹점 지갑이 아니다 — `docs/architecture/mvp-scope.md`의 "수취 지갑 귀속"). 혼자 테스트하려면 보내는 계정과 받는 계정이 따로 있어야 흐름이 실제와 같아진다. 7절에서 수취 주소를 백엔드 설정에 넣는다.
 
 ---
 
@@ -106,7 +106,7 @@ MetaMask → 토큰 → **토큰 가져오기** → 사용자 정의 토큰:
 > [!IMPORTANT]
 > **이 주소는 "토큰 Contract"이지 "받는 사람 주소"가 아니다.** 이 프로젝트는 토큰을 Symbol이 아니라 **(네트워크, Contract 주소) 조합**으로 판별한다 — 이름이 `USDC`인 가짜 토큰이 얼마든지 있을 수 있기 때문이다. 백엔드의 허용 Contract 목록(`PaymentNetworkConfig`)에 있는 값이 바로 이것이고, 출처는 Circle 공식 문서다.
 >
-> **이 주소로 USDC를 전송하면 안 된다.** 토큰 Contract 자신에게 보낸 토큰은 되찾을 수 없다. 5절 아래의 "수취 지갑" 항목을 반드시 읽는다.
+> **이 주소로 USDC를 전송하면 안 된다.** 토큰 Contract 자신에게 보낸 토큰은 되찾을 수 없다. 7절 "수취 지갑 지정하기"를 반드시 읽는다.
 
 ---
 
@@ -139,30 +139,45 @@ cd frontend/payment
 cp .env.example .env.local
 ```
 
-`.env.local`에는 **값 두 개**가 필요하다. API Key는 시드에 들어 있는 개발용 키가 이미 적혀 있고, **수취 지갑은 비어 있으니 직접 채워야 한다**(다음 절).
+`.env.local`에 필요한 값은 **API Key 하나**이고, 시드에 들어 있는 개발용 키가 이미 적혀 있다. 수취 지갑은 프론트가 아니라 **백엔드 설정**이다(다음 절).
 
 ---
 
 ## 7. 수취 지갑 지정하기
 
-USDC를 **받을** 주소를 정해야 한다. 여기서는 **여러분이 PG 역할을 대신하는 것**이다 — 원래 이 주소는 PG가 수탁하는 지갑이지 가맹점이나 고객의 지갑이 아니다. MetaMask에서 **두 번째 계정**을 만들고(계정 메뉴 → 계정 추가) 그 주소를 복사한다.
+USDC를 **받을** 주소를 정해야 한다. 여기서는 **여러분이 PG 역할을 대신하는 것**이다 — 이 주소는 PG가 수탁하는 지갑이지 가맹점이나 고객의 지갑이 아니다(그래서 결제 생성 API가 이 값을 받지 않는다 — `docs/architecture/mvp-scope.md`의 "수취 지갑 귀속"). MetaMask에서 **두 번째 계정**을 만들고(계정 메뉴 → 계정 추가) 그 주소를 복사한다.
 
-`.env.local`에 넣는다:
+**`api-payment`를 띄우기 전에** 환경변수로 넣는다:
 
 ```bash
-VITE_DEV_RECEIVING_WALLET=0x여기에_본인의_두_번째_계정_주소
+# Git Bash
+export APP_PAYMENT_RECEIVING_WALLETS_BASE_SEPOLIA=0x여기에_본인의_두_번째_계정_주소
+cd backend && ./gradlew :apps:api-payment:bootRun
 ```
 
-**이 값이 비어 있으면 "테스트 결제 생성" 버튼이 비활성화된다.** 기본값을 두지 않는 것이 의도다 — 이 주소로 실제 테스트넷 USDC가 전송되므로, 되찾을 수 없는 주소가 기본값으로 박혀 있으면 안 된다.
+```powershell
+# PowerShell
+$env:APP_PAYMENT_RECEIVING_WALLETS_BASE_SEPOLIA = "0x여기에_본인의_두_번째_계정_주소"
+cd backend; .\gradlew.bat :apps:api-payment:bootRun
+```
 
-> 지금 이 값을 프론트가 결제 생성 요청에 실어 보낼 수 있는 것은 **API가 아직 수취 지갑을 서버에서 주입하지 않기 때문**이다(예정된 gap — `docs/architecture/mvp-scope.md`의 "수취 지갑 귀속"). 그 gap이 닫히면 이 환경변수는 사라진다.
+> [!IMPORTANT]
+> **이미 Gradle 데몬이 떠 있으면 환경변수가 앱에 전달되지 않는다.** `bootRun`이 실행하는 앱은 Gradle 데몬이 자식 프로세스로 띄우는데, 그 데몬은 **처음 시작될 때의 환경**을 그대로 물려준다 — 나중에 셸에서 `export`해도 이미 떠 있는 데몬은 모른다. 설정했는데도 503이 나오면 데몬을 먼저 내린다:
+>
+> ```bash
+> cd backend && ./gradlew --stop
+> ```
+>
+> 실제로 이 검증을 하다가 걸렸고, 증상이 "설정을 했는데 적용이 안 된다"라 원인이 드러나지 않는다.
+
+**설정하지 않으면 앱은 정상적으로 뜨지만 결제 생성이 503으로 실패한다.** 기본값을 두지 않는 것이 의도다 — 이 주소로 실제 테스트넷 USDC가 전송되므로, 되찾을 수 없는 주소가 기본값으로 박혀 있으면 안 된다.
 
 > [!CAUTION]
 > **토큰 Contract 주소(`0x036CbD…CF7e`)를 여기에 넣지 않는다.** 그건 "USDC라는 토큰"의 주소이지 사람의 지갑이 아니다. 그리로 보낸 토큰은 되찾을 수 없다.
 >
-> 실제로 이 코드에 한동안 그 주소가 `receivingWallet` 기본값으로 하드코딩돼 있었다(복붙 사고). 지금은 환경변수로 빠졌고 기본값이 없다.
+> 실제로 이 코드에 한동안 그 주소가 `receivingWallet` 기본값으로 하드코딩돼 있었다(복붙 사고). 지금은 기본값 자체가 없다.
 
-IntelliJ HTTP Client(`backend/apps/api-payment/requests.http`)로 테스트할 때도 같은 규칙이다 — 그 파일의 `receivingWallet`은 자리표시자(`0xaaaa…`)이므로, 실제로 전송까지 해볼 거라면 본인 주소로 바꾼다.
+IntelliJ HTTP Client(`backend/apps/api-payment/requests.http`)로 테스트할 때도 같은 설정을 쓴다 — 그 파일의 결제 생성 요청에는 수취 지갑이 없고, 위 환경변수가 없으면 503이 돌아온다.
 
 ---
 
@@ -230,7 +245,7 @@ SELECT settlement_receivable_id, receivable_status FROM settlement_receivable OR
 
 ## 11. 남은 개선
 
-- **DEV 주문 금액이 코드에 고정돼 있다**(50,000원 = 35.893755 USDC). Faucet 한도가 2시간에 20 USDC라 한 건 테스트에 두 번 요청이 필요하다. 수취 지갑처럼 `.env.local`로 빼면 매번 코드를 고치지 않아도 된다.
+- **DEV 주문 금액이 코드에 고정돼 있다**(50,000원 = 35.893755 USDC). Faucet 한도가 2시간에 20 USDC라 한 건 테스트에 두 번 요청이 필요하다. API Key처럼 `.env.local`로 빼면 매번 코드를 고치지 않아도 된다.
 
 ---
 

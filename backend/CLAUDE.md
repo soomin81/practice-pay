@@ -167,6 +167,7 @@ gradlew.bat ktlintFormat                                  # 모든 모듈 자동
 |---|---|---|
 | `spring.datasource.url`/`username`/`password` | `SPRING_DATASOURCE_URL`/`_USERNAME`/`_PASSWORD` | 4개 앱 전부 |
 | `app.api-key.pepper` | `APP_API_KEY_PEPPER` | api-payment/api-merchant |
+| `app.payment.receiving-wallets.base-sepolia` | `APP_PAYMENT_RECEIVING_WALLETS_BASE_SEPOLIA` | api-payment |
 | `app.invitation-token.pepper` | `APP_INVITATION_TOKEN_PEPPER` | api-admin/api-merchant |
 | `app.blockchain.base-sepolia.rpc-url` | `APP_BLOCKCHAIN_BASE_SEPOLIA_RPC_URL` | batch |
 
@@ -174,6 +175,7 @@ gradlew.bat ktlintFormat                                  # 모든 모듈 자동
 - **`app.invitation-token.pepper`는 `api-admin`과 `api-merchant`가 반드시 같은 값이어야 한다.** 초대는 발급 시점에 `hash(원문 Token)`을 `account_invitation.token_hash`에 저장하고 수락 시점에 다시 `hash(원문 Token)`으로 조회하는데(`AcceptAccountInvitationUseCase`), 발급 앱과 수락 앱이 다르기 때문이다(가맹점 등록은 `api-admin`이 발급하고 `api-merchant`가 수락한다 — `IMPLEMENTATION-NOTES.md`의 "가맹점 등록 Use Case" 절 참고). Pepper가 어긋나면 초대를 영영 찾지 못하고, 그때 나오는 예외는 원인을 숨기도록 설계된 `InvalidInvitationException`("유효하지 않은 초대")이라 추적이 매우 어렵다 — **한쪽만 교체하지 않는다.** 실제로 `bootRun`으로 발급→수락 전체 흐름을 검증했다.
 - **`app.api-key.pepper`도 같은 이유로 `api-payment`와 `api-merchant`가 반드시 같은 값이어야 한다.** `api-merchant`가 발급(`hash(rawApiKey)`)하고 `api-payment`가 인증(`matches(rawApiKey, secretHash)`)한다(`IMPLEMENTATION-NOTES.md`의 "API Key 발급/폐기 Use Case" 절 참고) — 두 앱의 Pepper가 다르면 방금 발급한 Key로 결제 API를 호출해도 401이 난다. 이것도 `bootRun`으로 발급→결제 생성 전체 흐름을 검증했다.
 - **Pepper 교체는 기존 데이터를 무효화한다.** `app.api-key.pepper`를 바꾸면 기존 API Key의 `secret_hash`가 전부 맞지 않게 되고(원문이 없어 재계산 불가), `app.invitation-token.pepper`를 바꾸면 아직 수락되지 않은 초대가 전부 무효가 된다. 교체하려면 각각 API Key 재발급/초대 재발급이 함께 필요하다.
+- **`app.payment.receiving-wallets.*`만 기본값이 없다** — 여기 적힌 다른 값과 달리 "로컬 개발용 기본값"을 만들 수 없는 종류다. 고객이 보낸 실제 테스트넷 USDC가 그 주소로 전송되고 되찾을 수 없어서, 저장소에 적힌 주소가 조용히 쓰이는 것보다 결제 생성이 503으로 실패하는 편이 낫다. 앱 기동 자체는 설정 없이도 정상이다(아래 항목의 "환경변수 없이 `bootRun`"을 지키면서 실패는 결제를 만들 때만 드러낸다). **가맹점이 이 값을 요청으로 지정하지 못하게 하는 것이 이 설정의 목적이다** — 근거는 `docs/architecture/mvp-scope.md`의 "수취 지갑 귀속".
 - 로컬 개발 기본값은 `compose.yaml`의 MySQL(`localhost:3306/stablecoin_payment`, `root`/`verysecret`)과 Base Sepolia 공개 RPC(`https://sepolia.base.org`)를 가리킨다 — 환경변수를 하나도 설정하지 않아도 `bootRun`이 그대로 동작해야 한다는 뜻이다.
 
 ## 테스트
@@ -193,6 +195,7 @@ gradlew.bat ktlintFormat                                  # 모든 모듈 자동
 | `BigInteger.toLong()`이 `Long` 범위 초과분을 조용히 잘라 `TokenAmount`가 음수가 됨 | 유닛 테스트가 Mock한 응답은 **실제 RPC 응답의 값 범위**를 재현하지 않는다(18-decimals 토큰 전송량은 흔히 `Long.MAX_VALUE`를 넘는다) | 실제 Base Sepolia RPC에 진짜 Transaction Hash로 조회(아래 "온체인 Adapter" 절) |
 | 새로 만든 DB 볼륨에서 **모든 DB 연결 실패**(`RSA public key is not available client side`) | MySQL 9의 `caching_sha2_password`는 첫 인증 성공 후 서버가 캐싱해서, **기존 볼륨에서는 원리적으로 재현되지 않는다.** Testcontainers도 매번 새 컨테이너지만 JDBC 옵션이 달라 드러나지 않았다 | `docker compose down -v` 후 README 세팅 흐름을 처음부터 따라감 |
 | 잘못된 요청 본문에 400이 아니라 **401**이 나감(404/405/500도 마찬가지) | 컨테이너의 `/error` **ERROR 디스패치**에서 벌어지는 일인데, `@WebMvcTest`의 MockMvc는 그 디스패치를 재현하지 않는다 | 실제 `bootRun` + `curl` |
+| 새 환경변수를 설정했는데 **앱에 전달되지 않음** | `bootRun`의 앱은 **Gradle 데몬의 자식**이라 데몬이 처음 뜰 때의 환경을 물려받는다 — 나중에 `export`해도 이미 떠 있는 데몬은 모른다. 테스트는 환경변수를 아예 거치지 않아 이 층이 통째로 비어 있다 | `APP_PAYMENT_RECEIVING_WALLETS_BASE_SEPOLIA` 검증 중 겪음. `gradlew --stop` 후 다시 띄우면 해결된다 |
 
 - **실물 검증이 필요한 대표적인 층**: 외부 시스템 실제 응답(RPC/HTTP), DB 연결 옵션과 드라이버 동작, Spring Security 필터 체인과 오류 디스패치, 컴포넌트 스캔 배선, 설정값(`application.yaml`) 해석. 반대로 도메인 규칙·Use Case 분기·상태 전이는 유닛 테스트가 충분히 잡는다.
 - **`spring.datasource.*`는 테스트가 아예 검증하지 않는다** — 네 앱 모두 테스트에서 Testcontainers `@ServiceConnection`이 datasource를 덮어써서, `application.yaml`의 URL/계정이 깨져 있어도 전체 테스트가 통과한다. 이 값을 건드렸으면 반드시 `bootRun`으로 확인한다.
@@ -239,7 +242,8 @@ inbound adapter → application → domain ← outbound port ← outbound adapte
 - **`TransactionManager`**(`fun <T> runInTransaction(block: () -> T): T`)는 Use Case가 애플리케이션 계층에서 Spring의 `@Transactional`에 의존하거나 어떤 영속성 프레임워크가 뒤에 있는지 몰라도, 문서화된 여러 애그리게이트에 걸친 트랜잭션 경계(`docs/architecture/persistence-jooq.md`의 "트랜잭션 경계" 절)를 만족시키는 방법이다. 나머지 두 개의 문서화된 경계(결제 완료, 환전 완료)를 위한 Use Case를 만들 때도 이 Port를 재사용한다 — Use Case마다 별도의 묶음 Repository Port를 새로 만들지 않는다.
 - **Use Case는 `execute(command): result` 메서드 하나만 있는 평범한 클래스다** — 아직 구현이 하나 이상 필요한 경우가 없어서 별도의 inbound Port 인터페이스는 두지 않는다. `Command`/`Result`는 같은 패키지에 `<UseCaseName>Command`/`<UseCaseName>Result`로 이름 붙인 작은 데이터 클래스다. 생성 Command의 `execute`가 식별자(또는 그 밖의 최소한의 데이터)를 반환하는 건 Use Case 레벨에서 허용되는 CQS 예외다 — 위의 CQS 규칙은 도메인 애그리게이트 메서드에 대한 것이지 Use Case 진입점에 대한 것이 아니다.
 - **멱등성 체크**(아래 "멱등성 키" 참고)는 Port에 아무것도 쓰기 전에 `execute` 시작 지점에서 한다 — 문서화된 키로 조회해서 이미 있으면 그 결과로 바로 반환한다. 이건 최선을 다하는 빠른 경로일 뿐 최종 보증이 아니다 — 동시 요청 사이의 경합을 막는 최후의 방어선은 여전히 DB 자체의 `UNIQUE` 제약이다.
-- `docs/`가 아직 풀지 않은 빈틈은 지금은 새 Port/테이블을 만들어내지 않고 `Command`의 입력값으로 받는다 — 나중에 쉽게 찾아 바꿀 수 있도록 그 `Command`의 KDoc에 이 단순화를 표시해둔다. **다만 그 표시를 "결정되지 않았다"로 두면 결정이 난 뒤에도 코드가 그대로 남는다** — `CreatePaymentCommand`의 `receivingWallet`이 실제로 그렇게 됐다(`docs/`는 PG 수탁으로 정해져 있었는데 KDoc은 "아직 정의돼 있지 않다"로 남아 있었고, 그 사이 가맹점이 자기 지갑을 넣을 수 있는 구멍이 생겼다). 빈틈을 표시할 때는 **무엇이 미정인지와 무엇이 위험한지를 나눠 적는다.**
+- `docs/`가 아직 풀지 않은 빈틈은 지금은 새 Port/테이블을 만들어내지 않고 `Command`의 입력값으로 받는다 — 나중에 쉽게 찾아 바꿀 수 있도록 그 `Command`의 KDoc에 이 단순화를 표시해둔다. **다만 그 표시를 "결정되지 않았다"로 두면 결정이 난 뒤에도 코드가 그대로 남는다** — `CreatePaymentCommand`의 `receivingWallet`이 실제로 그렇게 됐다(`docs/`는 PG 수탁으로 정해져 있었는데 KDoc은 "아직 정의돼 있지 않다"로 남아 있었고, 그 사이 가맹점이 자기 지갑을 넣을 수 있는 구멍이 생겼다 — 지금은 `ReceivingWalletRegistry`로 닫혔다). 빈틈을 표시할 때는 **무엇이 미정인지와 무엇이 위험한지를 나눠 적는다.**
+- **호출부가 넘긴 값이 "PG가 정해야 할 값"은 아닌지 본다.** 입력으로 받는 단순화가 편한 만큼, 그 값이 자금의 귀속·수수료·정산 대상처럼 **PG 쪽 사실**이면 입력으로 받는 순간 신뢰 경계가 뚫린다. 그런 값은 `ReceivingWalletRegistry`처럼 서버 설정에서 주입하고, 요청 필드에서 아예 없앤다(검증으로 막는 것보다 필드를 없애는 쪽이 낫다 — 검증은 빠뜨릴 수 있지만 없는 필드는 쓸 수 없다).
 
 ### 영속성 Adapter 컨벤션(`modules:infra-persistence`)
 

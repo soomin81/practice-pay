@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestControllerAdvice
 import paytech.practice.pay.application.payment.MerchantCannotAcceptPaymentsException
 import paytech.practice.pay.application.payment.MerchantNotFoundException
+import paytech.practice.pay.application.payment.ReceivingWalletNotConfiguredException
 
 /**
  * `application`/`domain` 계층이 던지는 예외를 HTTP 상태 코드로 옮긴다 — 이 매핑
@@ -24,6 +25,16 @@ class PaymentApiExceptionHandler {
 	@ResponseStatus(HttpStatus.CONFLICT)
 	fun handleMerchantCannotAcceptPayments(ex: MerchantCannotAcceptPaymentsException): ErrorResponse =
 		ErrorResponse(ex.message ?: "Merchant가 결제를 받을 수 없는 상태입니다.")
+
+	/**
+	 * 요청한 네트워크의 PG 수취 지갑이 설정돼 있지 않은 경우다. 가맹점이 요청을 고쳐서
+	 * 해결할 수 있는 것이 없으므로 4xx가 아니라 503으로 돌려준다 — 그 판단 근거는
+	 * [ReceivingWalletNotConfiguredException]의 KDoc에 있다.
+	 */
+	@ExceptionHandler(ReceivingWalletNotConfiguredException::class)
+	@ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+	fun handleReceivingWalletNotConfigured(ex: ReceivingWalletNotConfiguredException): ErrorResponse =
+		ErrorResponse("요청한 네트워크(${ex.network.code})로는 지금 결제를 받을 수 없습니다.")
 
 	/** [CreatePaymentRequest]의 `@Valid` 실패(`@NotBlank`/`@Positive` 등)를 처리한다. */
 	@ExceptionHandler(MethodArgumentNotValidException::class)

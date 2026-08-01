@@ -434,3 +434,48 @@
 - **`ConfirmBlockchainTransactionUseCase`는 의도적으로 제외했다** — 중간에 온체인 RPC 호출이 있어 잠그면 네트워크 지연 동안 행을 붙잡는다. 그 Use Case가 다루는 Payment는 이미 `PROCESSING`/`CONFIRMING`이라 만료 Sweep(`CREATED`/`READY`만 선택)·제출과 겹치지 않아 경합 창이 사실상 없다. **잠금 구간에 외부 호출을 넣지 않는다**는 규칙을 지킨 것이다.
 - **범위는 고위험 3개로 한정했다**(사용자와 확정) — 나머지 7개 어댑터도 같은 재조회 패턴이지만 두 흐름이 같은 행을 동시에 바꾸는 경로가 없다. 그런 경로가 생기면 같은 방식으로 넓힌다.
 - **실물 검증(권장)은 아직 안 했다** — `api-payment`에 같은 Key로 요청을 보내면서 `api-merchant`에서 그 Key를 폐기해, 폐기가 유지되는지 DB로 확인하는 것이 핵심이다.
+
+## 수취 지갑을 요청에서 걷어내고 서버 설정으로 옮김(`ReceivingWalletRegistry`)
+
+**문서 모순이 실제 구멍을 가리고 있던 사례다.** `docs/domain/glossary.md`는 수취 지갑을
+"PG 관리 지갑"으로 정의하는데 `docs/guides/testnet-wallet-setup.md`는 "원래 가맹점이
+지정하는 것"이라고 정반대로 적고 있었고, 코드는 후자를 따라 `POST /api/v1/payments`의
+요청 본문으로 받으면서 허용 목록 검증도 없었다.
+
+- **왜 위험한가**: 정산 흐름이 "PG가 USDC를 받아 매도하고 가맹점에 KRW 채권을 세운다"를
+  전제한다(`SellToFakeExchangeUseCase`). 수취 지갑이 가맹점 것이면 가맹점은 USDC를 직접
+  받으면서 KRW 채권까지 받아 **같은 대금이 두 번 나간다.** `ADR-007`이 실패 사유를 자금
+  위치로 분류하는 것도("우리 지갑에 들어왔다") 이 전제 위에 서 있었다.
+- **결정**: PG 수탁으로 통일하고(`docs/architecture/mvp-scope.md`의 "수취 지갑 귀속"),
+  `receivingWallet`을 요청 필드에서 **없앴다**. 검증으로 막지 않고 필드를 없앤 이유는
+  단순하다 — 검증은 빠뜨릴 수 있지만 없는 필드는 쓸 수 없다.
+- **`network`는 남겼다** — 어느 체인으로 받을지는 가맹점의 정당한 선택이고 수탁 문제와
+  무관하다. 그래서 레지스트리를 네트워크로 키잉했고, 다중 네트워크로 그대로 넓어진다.
+- **`PaymentNetworkConfig`(코드 상수)에 넣지 않고 주입받는 클래스로 만들었다** — 실제
+  자금을 보유하는 주소라 환경마다 다르고 저장소에 적을 수 없다. 조립은 `api-payment`의
+  `UseCaseConfiguration`이 `@Value`로 한다.
+- **기본값을 두지 않는다.** 다른 설정(`pepper`, DB 비밀번호)과 달리 "로컬 개발용
+  기본값"이 성립하지 않는다 — 실제 테스트넷 USDC가 그 주소로 전송되고 되찾을 수 없다.
+  비어 있으면 그 네트워크를 레지스트리에 등록하지 않아 결제 생성이 실패한다.
+- **실패는 4xx가 아니라 503이다**(`ReceivingWalletNotConfiguredException`). 가맹점이 요청을
+  고쳐서 해결할 수 있는 것이 없으므로 400으로 돌려주면 엉뚱한 곳을 고치게 만든다. 앱
+  기동 자체는 설정 없이도 정상이다 — "환경변수 없이 `bootRun`이 동작한다"를 지키면서
+  실패를 결제 생성 시점에만 드러낸다.
+- **회귀 테스트 3개**: 지갑이 레지스트리에서 온다(`CreatePaymentUseCaseTest`), 설정이
+  없으면 아무것도 저장하지 않고 예외(같은 파일), 가맹점이 옛 필드를 보내도 무시되고
+  201이다(`PaymentControllerTest`). 프론트에는 **요청 본문에 `receivingWallet`이 없다**를
+  고정하는 `DevPaymentCreator.test.tsx`가 있다.
+- **프론트의 `VITE_DEV_RECEIVING_WALLET`이 사라졌다** — DEV 결제 생성 버튼이 더 이상 그
+  값을 보내지 않는다. 로컬에서 실물 전송을 해보려면 `api-payment`를 띄우기 전에
+  `APP_PAYMENT_RECEIVING_WALLETS_BASE_SEPOLIA`를 넣는다(`docs/guides/testnet-wallet-setup.md` 7절).
+- **실물 검증 완료(`bootRun` + `curl`)**:
+  - 설정 없이 앱이 정상 기동하고, 결제 생성만 **503**으로 실패한다.
+  - 가맹점이 옛 `receivingWallet` 필드를 보내도 실제 컨테이너에서 무시된다(MockMvc 결과와 일치).
+  - 설정 후 **201**이 나오고, 가맹점이 `0xeeee…`를 보냈는데 DB의
+    `payment.receiving_wallet_address`는 설정값 `0x1111…`이었다 — **구멍이 닫힌 직접 증거다.**
+  - 검증 데이터(결제 1건과 딸린 세션·견적·Outbox)는 삭제했다.
+- **여기서 새 함정을 하나 배웠다**: 환경변수를 설정했는데 앱에 전달되지 않았다. `bootRun`의
+  앱은 **Gradle 데몬의 자식**이라 데몬이 처음 뜰 때의 환경을 물려받는다 — 이미 떠 있는
+  데몬은 나중의 `export`를 모른다. `gradlew --stop` 후 다시 띄워야 한다. 증상이 "설정했는데
+  적용이 안 된다"라 원인이 드러나지 않아서, `backend/CLAUDE.md`의 "테스트가 잡지 못하는
+  층" 표와 `docs/guides/testnet-wallet-setup.md` 7절에 함께 남겼다.

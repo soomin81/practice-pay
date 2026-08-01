@@ -38,6 +38,7 @@ import java.time.ZoneOffset
 private val NOW: Instant = Instant.parse("2026-07-17T00:00:00Z")
 private val FIXED_CLOCK: Clock = Clock.fixed(NOW, ZoneOffset.UTC)
 private val RECEIVING_WALLET = WalletAddress("0x" + "a".repeat(40))
+private val RECEIVING_WALLETS = ReceivingWalletRegistry(mapOf(BlockchainNetwork.BASE_SEPOLIA to RECEIVING_WALLET))
 
 private fun activeMerchant(): Merchant =
 	Merchant.create(
@@ -55,7 +56,6 @@ private fun newCommand(): CreatePaymentCommand =
 		orderName = "테스트 주문",
 		orderAmount = Money(10_000),
 		network = BlockchainNetwork.BASE_SEPOLIA,
-		receivingWallet = RECEIVING_WALLET,
 		successUrl = HttpUrl("https://merchant.example.com/success"),
 		cancelUrl = HttpUrl("https://merchant.example.com/cancel"),
 	)
@@ -97,6 +97,7 @@ class CreatePaymentUseCaseTest :
 					checkoutSessionRepository = checkoutSessionRepository,
 					outboxEventRepository = outboxEventRepository,
 					exchangeRateProvider = exchangeRateProvider,
+					receivingWalletRegistry = RECEIVING_WALLETS,
 					idGenerator = FakeIdGenerator(),
 					transactionManager = ImmediateTransactionManager(),
 					clock = FIXED_CLOCK,
@@ -136,6 +137,7 @@ class CreatePaymentUseCaseTest :
 					checkoutSessionRepository = checkoutSessionRepository,
 					outboxEventRepository = outboxEventRepository,
 					exchangeRateProvider = exchangeRateProvider,
+					receivingWalletRegistry = RECEIVING_WALLETS,
 					idGenerator = FakeIdGenerator(),
 					transactionManager = ImmediateTransactionManager(),
 					clock = FIXED_CLOCK,
@@ -158,6 +160,7 @@ class CreatePaymentUseCaseTest :
 					checkoutSessionRepository = mockk(),
 					outboxEventRepository = mockk(),
 					exchangeRateProvider = mockk(),
+					receivingWalletRegistry = RECEIVING_WALLETS,
 					idGenerator = FakeIdGenerator(),
 					transactionManager = ImmediateTransactionManager(),
 					clock = FIXED_CLOCK,
@@ -179,12 +182,80 @@ class CreatePaymentUseCaseTest :
 					checkoutSessionRepository = mockk(),
 					outboxEventRepository = mockk(),
 					exchangeRateProvider = mockk(),
+					receivingWalletRegistry = RECEIVING_WALLETS,
 					idGenerator = FakeIdGenerator(),
 					transactionManager = ImmediateTransactionManager(),
 					clock = FIXED_CLOCK,
 				)
 
 			shouldThrow<MerchantCannotAcceptPaymentsException> { useCase.execute(newCommand()) }
+		}
+
+		// 수취 지갑은 호출부가 아니라 PG 설정이 정한다 — 가맹점이 지정할 수 있으면 USDC를
+		// 직접 받으면서 정산 채권까지 받는다(docs/architecture/mvp-scope.md의 "수취 지갑 귀속").
+		test("takes the receiving wallet from the registry, not from the command") {
+			val merchantRepository = mockk<MerchantRepository>()
+			val paymentRepository = mockk<PaymentRepository>(relaxed = true)
+			val paymentQuoteRepository = mockk<PaymentQuoteRepository>(relaxed = true)
+			val checkoutSessionRepository = mockk<CheckoutSessionRepository>(relaxed = true)
+			val outboxEventRepository = mockk<OutboxEventRepository>(relaxed = true)
+			val exchangeRateProvider = mockk<ExchangeRateProvider>()
+			val savedPayments = mutableListOf<Payment>()
+
+			every { merchantRepository.findById(any()) } returns activeMerchant()
+			every { paymentRepository.findByMerchantOrderId(any(), any()) } returns null
+			every { paymentRepository.save(capture(savedPayments)) } returns Unit
+			every { exchangeRateProvider.currentRate() } returns
+				MarketRateQuote(providerCode = "fake-market", rate = ExchangeRate(BigDecimal("1500")), quotedAt = NOW)
+
+			val pgWallet = WalletAddress("0x" + "b".repeat(40))
+			val useCase =
+				CreatePaymentUseCase(
+					merchantRepository = merchantRepository,
+					paymentRepository = paymentRepository,
+					paymentQuoteRepository = paymentQuoteRepository,
+					checkoutSessionRepository = checkoutSessionRepository,
+					outboxEventRepository = outboxEventRepository,
+					exchangeRateProvider = exchangeRateProvider,
+					receivingWalletRegistry = ReceivingWalletRegistry(mapOf(BlockchainNetwork.BASE_SEPOLIA to pgWallet)),
+					idGenerator = FakeIdGenerator(),
+					transactionManager = ImmediateTransactionManager(),
+					clock = FIXED_CLOCK,
+				)
+
+			useCase.execute(newCommand())
+
+			savedPayments.single().receivingWallet shouldBe pgWallet
+		}
+
+		test("throws ReceivingWalletNotConfiguredException when the network has no PG wallet") {
+			val merchantRepository = mockk<MerchantRepository>()
+			val paymentRepository = mockk<PaymentRepository>(relaxed = true)
+			val exchangeRateProvider = mockk<ExchangeRateProvider>()
+
+			every { merchantRepository.findById(any()) } returns activeMerchant()
+			every { paymentRepository.findByMerchantOrderId(any(), any()) } returns null
+			every { exchangeRateProvider.currentRate() } returns
+				MarketRateQuote(providerCode = "fake-market", rate = ExchangeRate(BigDecimal("1500")), quotedAt = NOW)
+
+			val useCase =
+				CreatePaymentUseCase(
+					merchantRepository = merchantRepository,
+					paymentRepository = paymentRepository,
+					paymentQuoteRepository = mockk(relaxed = true),
+					checkoutSessionRepository = mockk(relaxed = true),
+					outboxEventRepository = mockk(relaxed = true),
+					exchangeRateProvider = exchangeRateProvider,
+					receivingWalletRegistry = ReceivingWalletRegistry(emptyMap()),
+					idGenerator = FakeIdGenerator(),
+					transactionManager = ImmediateTransactionManager(),
+					clock = FIXED_CLOCK,
+				)
+
+			shouldThrow<ReceivingWalletNotConfiguredException> { useCase.execute(newCommand()) }
+
+			// 아무것도 저장되지 않는다 — 설정이 빠진 채로 결제가 반쯤 만들어지지 않게 한다.
+			verify(exactly = 0) { paymentRepository.save(any()) }
 		}
 
 		test("replays the existing result idempotently instead of creating a duplicate") {
@@ -230,6 +301,7 @@ class CreatePaymentUseCaseTest :
 					checkoutSessionRepository = checkoutSessionRepository,
 					outboxEventRepository = mockk(),
 					exchangeRateProvider = exchangeRateProvider,
+					receivingWalletRegistry = RECEIVING_WALLETS,
 					idGenerator = FakeIdGenerator(),
 					transactionManager = ImmediateTransactionManager(),
 					clock = FIXED_CLOCK,

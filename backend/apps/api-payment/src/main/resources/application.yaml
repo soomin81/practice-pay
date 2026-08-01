@@ -40,6 +40,26 @@ app:
     # Pepper를 바꾸면 기존에 발급된 API Key의 secret_hash가 전부 무효가 된다
     # (해시를 다시 계산할 원문이 없다) — 교체하려면 Key 재발급이 함께 필요하다.
     pepper: ${APP_API_KEY_PEPPER:dev-only-api-key-pepper-change-in-production}
+  payment:
+    receiving-wallets:
+      # 네트워크별 **PG 수취 지갑**이다. 고객이 보낸 USDC가 실제로 도착하는 주소이고,
+      # 결제 생성 시 이 값이 payment.receiving_wallet_address에 박힌다.
+      #
+      # !! 가맹점이 요청으로 지정하지 못하게 하려고 여기 둔 것이다 !!
+      # 수취 지갑이 가맹점 것이면 가맹점은 USDC를 직접 받으면서 PG로부터 KRW
+      # SettlementReceivable까지 받아 같은 대금이 두 번 나간다
+      # (docs/architecture/mvp-scope.md의 "수취 지갑 귀속").
+      #
+      # **기본값을 두지 않는 것이 의도다.** 다른 설정처럼 "로컬 개발용 기본값"을 적을 수
+      # 없다 — 실제 테스트넷 USDC가 그 주소로 전송되고 되찾을 수 없기 때문이다. 비어
+      # 있으면 앱은 정상 기동하되 결제 생성이 503으로 실패한다. 로컬에서 결제를
+      # 흘려보려면 본인이 통제하는 주소를 환경변수로 넣는다:
+      #   APP_PAYMENT_RECEIVING_WALLETS_BASE_SEPOLIA=0x...
+      # (절차는 docs/guides/testnet-wallet-setup.md)
+      #
+      # 토큰 Contract 주소(0x036CbD…CF7e)를 넣지 않는다 — 그건 "USDC라는 토큰"의
+      # 주소이지 지갑이 아니고, 그리로 보낸 토큰은 되찾을 수 없다.
+      base-sepolia: ${APP_PAYMENT_RECEIVING_WALLETS_BASE_SEPOLIA:}
   checkout:
     # 고객 대면 체크아웃(/checkout/**)만을 위한 CORS 허용 Origin이다.
     # 기본값은 로컬 프론트엔드 개발 서버를 가리키고, 운영에서는

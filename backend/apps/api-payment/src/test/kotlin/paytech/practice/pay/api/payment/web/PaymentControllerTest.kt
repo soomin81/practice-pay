@@ -25,10 +25,12 @@ import paytech.practice.pay.application.payment.CreatePaymentResult
 import paytech.practice.pay.application.payment.CreatePaymentUseCase
 import paytech.practice.pay.application.payment.MerchantCannotAcceptPaymentsException
 import paytech.practice.pay.application.payment.MerchantNotFoundException
+import paytech.practice.pay.application.payment.ReceivingWalletNotConfiguredException
 import paytech.practice.pay.domain.apikey.MerchantApiKeyId
 import paytech.practice.pay.domain.checkout.CheckoutSessionId
 import paytech.practice.pay.domain.merchant.MerchantId
 import paytech.practice.pay.domain.payment.PaymentId
+import paytech.practice.pay.domain.shared.BlockchainNetwork
 import tools.jackson.databind.ObjectMapper
 
 private val MERCHANT_ID = MerchantId("mrc_test_001")
@@ -39,7 +41,6 @@ private fun validRequest(): CreatePaymentRequest =
 		orderName = "테스트 주문",
 		orderAmount = 10_000,
 		network = "BASE_SEPOLIA",
-		receivingWallet = "0x" + "a".repeat(40),
 		successUrl = "https://merchant.example.com/success",
 		cancelUrl = "https://merchant.example.com/cancel",
 	)
@@ -127,14 +128,53 @@ class PaymentControllerTest : FunSpec() {
 				).andExpect(status().isBadRequest)
 		}
 
-		test("an invalid wallet address returns 400") {
+		/**
+		 * 가맹점이 예전 계약대로 `receivingWallet`을 보내도 **그 값이 쓰이지 않는다**는 것을
+		 * 고정한다. 이게 이 슬라이스에서 지켜야 할 핵심이다 — 수취 지갑은 PG 설정에서만
+		 * 온다(`docs/architecture/mvp-scope.md`의 "수취 지갑 귀속"). 알 수 없는 필드는
+		 * Spring Boot의 Jackson 기본 설정대로 무시되므로 요청 자체는 201로 통과한다.
+		 */
+		test("a merchant-supplied receivingWallet is ignored, never reaching the command") {
+			val commandSlot = slot<CreatePaymentCommand>()
+			every { createPaymentUseCase.execute(capture(commandSlot)) } returns
+				CreatePaymentResult(PaymentId("pay_001"), CheckoutSessionId("cs_001"))
+
+			val bodyWithLegacyWallet =
+				"""
+				{
+				  "merchantOrderId": "order-001",
+				  "orderName": "테스트 주문",
+				  "orderAmount": 10000,
+				  "network": "BASE_SEPOLIA",
+				  "receivingWallet": "0x${"e".repeat(40)}",
+				  "successUrl": "https://merchant.example.com/success"
+				}
+				""".trimIndent()
+
 			mockMvc
 				.perform(
 					post("/api/v1/payments")
 						.with(authenticatedAs("SCOPE_PAYMENT_CREATE"))
 						.contentType(MediaType.APPLICATION_JSON)
-						.content(objectMapper.writeValueAsString(validRequest().copy(receivingWallet = "not-a-wallet"))),
-				).andExpect(status().isBadRequest)
+						.content(bodyWithLegacyWallet),
+				).andExpect(status().isCreated)
+
+			// CreatePaymentCommand에 수취 지갑 필드가 없다는 것 자체가 증거다 — 컴파일이
+			// 그것을 보장하므로, 여기서는 요청이 정상 처리됐다는 것만 확인한다.
+			commandSlot.captured.merchantId shouldBe MERCHANT_ID
+		}
+
+		test("ReceivingWalletNotConfiguredException from the use case returns 503") {
+			every { createPaymentUseCase.execute(any()) } throws
+				ReceivingWalletNotConfiguredException(BlockchainNetwork.BASE_SEPOLIA)
+
+			mockMvc
+				.perform(
+					post("/api/v1/payments")
+						.with(authenticatedAs("SCOPE_PAYMENT_CREATE"))
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsString(validRequest())),
+				).andExpect(status().isServiceUnavailable)
 		}
 
 		test("MerchantNotFoundException from the use case returns 404") {

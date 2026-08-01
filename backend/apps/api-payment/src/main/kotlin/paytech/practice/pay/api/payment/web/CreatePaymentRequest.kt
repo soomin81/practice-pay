@@ -12,10 +12,10 @@ import jakarta.validation.constraints.Positive
  * API Key 인증이 없어서 임시로 요청 본문에 받았지만, 이제는 인증된 가맹점만
  * 결제를 생성할 수 있다.
  *
- * [network]/[receivingWallet]을 요청 본문으로 받는 것은 **알려진 gap이다** — 수취 지갑은
- * PG가 수탁하는 지갑이라 가맹점이 정할 값이 아니고, 지금은 허용 목록 검증도 없다. 근거와
- * 예정된 방향은 `CreatePaymentCommand`의 KDoc과 `docs/architecture/mvp-scope.md`의
- * "수취 지갑 귀속" 절에 있다.
+ * **수취 지갑은 요청 필드가 아니다** — PG가 수탁하는 지갑이라 서버 설정
+ * (`app.payment.receiving-wallets`)에서 [network]에 맞는 값을 꺼낸다. 가맹점이 지정할 수
+ * 있으면 USDC를 직접 받으면서 정산 채권까지 받게 되기 때문이다
+ * (`docs/architecture/mvp-scope.md`의 "수취 지갑 귀속").
  */
 data class CreatePaymentRequest(
 	@field:NotBlank
@@ -26,8 +26,6 @@ data class CreatePaymentRequest(
 	val orderAmount: Long,
 	@field:NotBlank
 	val network: String,
-	@field:NotBlank
-	val receivingWallet: String,
 	@field:NotBlank
 	val successUrl: String,
 	val cancelUrl: String?,

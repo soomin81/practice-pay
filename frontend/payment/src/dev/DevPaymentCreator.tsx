@@ -14,8 +14,13 @@ import { Button } from '@/components/ui/button'
  *     자체가 제거된다(Vite가 상수로 치환해 dead code로 만든다).
  *  2. 이 컴포넌트도 스스로 `import.meta.env.DEV`를 확인하고 아니면 아무것도 그리지 않는다.
  *
- * API Key와 수취 지갑은 `.env.local`(gitignore)에서만 읽는다. 값이 없으면 기능을 끄고
- * 안내만 한다 — 둘 다 코드에 기본값으로 박아두지 않는다.
+ * API Key는 `.env.local`(gitignore)에서만 읽는다. 값이 없으면 기능을 끄고 안내만 한다 —
+ * 코드에 기본값으로 박아두지 않는다.
+ *
+ * **수취 지갑은 더 이상 여기서 보내지 않는다.** PG가 수탁하는 지갑이라 백엔드 설정
+ * (`APP_PAYMENT_RECEIVING_WALLETS_BASE_SEPOLIA`)에서만 온다 — 가맹점 역할이 지정할 수
+ * 있으면 USDC를 직접 받으면서 정산 채권까지 받는다(`docs/architecture/mvp-scope.md`의
+ * "수취 지갑 귀속"). 백엔드에 그 설정이 없으면 이 버튼이 503을 받는다.
  */
 export function DevPaymentCreator({ onCreated }: { onCreated: (sessionId: string) => void }) {
 	const [busy, setBusy] = useState(false)
@@ -24,19 +29,10 @@ export function DevPaymentCreator({ onCreated }: { onCreated: (sessionId: string
 	if (!import.meta.env.DEV) return null
 
 	const apiKey: string | undefined = import.meta.env.VITE_DEV_API_KEY
-	const receivingWallet: string | undefined = import.meta.env.VITE_DEV_RECEIVING_WALLET
 	const baseUrl: string = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8081'
 
 	if (!apiKey) {
 		return <MissingEnv name="VITE_DEV_API_KEY" />
-	}
-
-	// **수취 지갑에 기본값을 두지 않는다.** 한때 여기에 USDC 토큰 Contract 주소가
-	// 하드코딩돼 있었는데, 그대로 테스트하면 토큰을 Contract 자신에게 보내게 되고
-	// 되찾을 수 없다. 원래 가맹점이 결제를 만들 때 지정하는 값이라 "그럴듯한 기본값"
-	// 자체가 존재할 수 없다 — 없으면 기능을 끄는 것이 맞다.
-	if (!receivingWallet) {
-		return <MissingEnv name="VITE_DEV_RECEIVING_WALLET" />
 	}
 
 	async function createPayment() {
@@ -51,7 +47,6 @@ export function DevPaymentCreator({ onCreated }: { onCreated: (sessionId: string
 					orderName: '개발용 테스트 주문',
 					orderAmount: 50000,
 					network: 'BASE_SEPOLIA',
-					receivingWallet,
 					successUrl: 'https://merchant.example.com/done',
 					cancelUrl: 'https://merchant.example.com/cancel',
 				}),
