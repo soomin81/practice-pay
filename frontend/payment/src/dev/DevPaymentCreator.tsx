@@ -47,10 +47,11 @@ export function DevPaymentCreator({ onCreated }: { onCreated: (sessionId: string
 				body: JSON.stringify({
 					merchantOrderId: `dev-${Date.now()}`,
 					orderName: '개발용 테스트 주문',
-					// Faucet 한 번(2시간에 20 USDC)으로 결제 한 건이 끝나도록 정한 금액이다.
-					// 20,000원 ÷ 1,393(적용 환율) = 14.357502 USDC — 50,000원이면 35.89 USDC라
-					// 두 번 받아야 해서 테스트 한 바퀴에 2시간이 걸렸다.
-					orderAmount: 20000,
+					// **테스트넷 Faucet이 이 값을 정한다** — 2시간에 20 USDC라, 금액이 크면 한
+					// 바퀴 돌 때마다 받아 와야 한다. 1,000원 ÷ 1,393(적용 환율) = 0.717876 USDC라
+					// 한 번 받아 두면 20여 건을 연달아 확인할 수 있다(20,000원이던 시절에는
+					// 14.357502 USDC라 한 번에 한 건이었다).
+					orderAmount: 1000,
 					network: 'BASE_SEPOLIA',
 					// **원래 이 값은 가맹점의 자기 사이트 주소다.** 로컬에는 그런 사이트가 없어서
 					// `merchant.example.com`을 쓰고 있었는데, 그러면 결제가 성공한 직후 고객이
