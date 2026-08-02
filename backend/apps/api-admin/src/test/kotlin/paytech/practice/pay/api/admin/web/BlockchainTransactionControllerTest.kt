@@ -3,7 +3,9 @@ package paytech.practice.pay.api.admin.web
 import com.ninjasquad.springmockk.MockkBean
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.extensions.spring.SpringExtension
+import io.kotest.matchers.shouldBe
 import io.mockk.every
+import io.mockk.slot
 import io.mockk.verify
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest
@@ -19,6 +21,7 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import paytech.practice.pay.api.admin.config.SecurityConfig
 import paytech.practice.pay.api.admin.security.InternalUserPrincipal
 import paytech.practice.pay.application.payment.BlockchainTransactionNotFoundException
+import paytech.practice.pay.application.payment.MarkTransactionReorgedCommand
 import paytech.practice.pay.application.payment.MarkTransactionReorgedResult
 import paytech.practice.pay.application.payment.MarkTransactionReorgedUseCase
 import paytech.practice.pay.application.payment.TransactionNotReorgeableException
@@ -61,7 +64,7 @@ class BlockchainTransactionControllerTest : FunSpec() {
 		extensions(SpringExtension)
 
 		test("marking a transaction reorged reports that the settlement was held") {
-			every { markTransactionReorgedUseCase.execute(TX_ID) } returns marked()
+			every { markTransactionReorgedUseCase.execute(any()) } returns marked()
 
 			mockMvc
 				.perform(post(MARK_PATH).with(authenticatedAs(SUPER_ADMIN)).with(csrf()))
@@ -71,11 +74,27 @@ class BlockchainTransactionControllerTest : FunSpec() {
 		}
 
 		/**
+		 * **실행자는 요청이 아니라 인증 주체에서 온다** — 본문으로 받으면 누구든 남의 이름으로
+		 * 이력을 남길 수 있고, 그러면 감사 기록이 증거로서 쓸모가 없어진다.
+		 */
+		test("the actor recorded in the audit trail comes from the session, not the request") {
+			val command = slot<MarkTransactionReorgedCommand>()
+			every { markTransactionReorgedUseCase.execute(capture(command)) } returns marked()
+
+			mockMvc
+				.perform(post(MARK_PATH).with(authenticatedAs(SUPER_ADMIN)).with(csrf()))
+				.andExpect(status().isOk)
+
+			command.captured.actorInternalUserId shouldBe InternalUserId("iu_sa01")
+			command.captured.blockchainTransactionId shouldBe TX_ID
+		}
+
+		/**
 		 * **막지 못한 쪽이 오히려 위험하다** — 채권이 아직 없다는 뜻이고, 매도 Worker가 이
 		 * 결제를 집어 채권을 만들 수 있다. 응답이 그 사실을 담아야 화면이 경고한다.
 		 */
 		test("reports when nothing was held because the receivable does not exist yet") {
-			every { markTransactionReorgedUseCase.execute(TX_ID) } returns marked(settlementHeld = false)
+			every { markTransactionReorgedUseCase.execute(any()) } returns marked(settlementHeld = false)
 
 			mockMvc
 				.perform(post(MARK_PATH).with(authenticatedAs(SUPER_ADMIN)).with(csrf()))
@@ -113,7 +132,7 @@ class BlockchainTransactionControllerTest : FunSpec() {
 		}
 
 		test("an unknown transaction is 404") {
-			every { markTransactionReorgedUseCase.execute(TX_ID) } throws BlockchainTransactionNotFoundException(TX_ID)
+			every { markTransactionReorgedUseCase.execute(any()) } throws BlockchainTransactionNotFoundException(TX_ID)
 
 			mockMvc
 				.perform(post(MARK_PATH).with(authenticatedAs(SUPER_ADMIN)).with(csrf()))
@@ -125,7 +144,7 @@ class BlockchainTransactionControllerTest : FunSpec() {
 		 * 중이라는 뜻이라, 운영자가 기다려야 할지 알아야 한다.
 		 */
 		test("a transaction that is not confirmed is 409 and says its current status") {
-			every { markTransactionReorgedUseCase.execute(TX_ID) } throws
+			every { markTransactionReorgedUseCase.execute(any()) } throws
 				TransactionNotReorgeableException(TX_ID, BlockchainTransactionStatus.CONFIRMING)
 
 			mockMvc

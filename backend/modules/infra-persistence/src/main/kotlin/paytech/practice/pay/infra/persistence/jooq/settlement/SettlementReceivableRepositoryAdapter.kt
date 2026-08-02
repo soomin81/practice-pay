@@ -15,6 +15,7 @@ import paytech.practice.pay.infra.persistence.jooq.exchangeOrderId
 import paytech.practice.pay.infra.persistence.jooq.exchangeOrderSeq
 import paytech.practice.pay.infra.persistence.jooq.merchantId
 import paytech.practice.pay.infra.persistence.jooq.merchantSeq
+import paytech.practice.pay.infra.persistence.jooq.paymentId
 import paytech.practice.pay.infra.persistence.jooq.paymentSeq
 import paytech.practice.pay.infra.persistence.jooq.toUtcInstant
 import paytech.practice.pay.infra.persistence.jooq.toUtcLocalDateTime
@@ -72,6 +73,14 @@ class SettlementReceivableRepositoryAdapter(
 			.where(SETTLEMENT_RECEIVABLE.PAYMENT_SEQ.eq(dsl.paymentSeq(paymentId)))
 			.fetchOne()
 			?.toDomain(paymentId)
+
+	override fun findById(settlementReceivableId: SettlementReceivableId): SettlementReceivable? =
+		dsl
+			.selectFrom(SETTLEMENT_RECEIVABLE)
+			.where(SETTLEMENT_RECEIVABLE.SETTLEMENT_RECEIVABLE_ID.eq(settlementReceivableId.value))
+			.fetchOne()
+			// paymentId를 인자로 받는 쪽과 달리 여기서는 seq를 되돌려 해석해야 한다.
+			?.let { it.toDomain(dsl.paymentId(it.paymentSeq!!)) }
 
 	private fun SettlementReceivableRecord.fillFrom(settlementReceivable: SettlementReceivable) {
 		settlementReceivableId = settlementReceivable.id.value

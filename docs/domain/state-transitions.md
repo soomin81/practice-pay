@@ -117,7 +117,9 @@ MVP:
 
 ```text
 PENDING → READY
-(PENDING | READY) → HELD → CANCELLED
+(PENDING | READY) → HELD
+HELD → (PENDING | READY)
+(PENDING | READY | HELD) → CANCELLED
 ```
 
 향후:
@@ -128,8 +130,32 @@ READY → ASSIGNED → SETTLED
 
 **`HELD`는 "지급을 막는다"는 뜻이고 `hold_reason_code`에 사유를 남긴다.** MVP에서 실제로
 쓰이는 사유는 확정 이후 reorg다(위 `BlockchainTransaction` 절) — 결제는 성공으로 남지만
-그 돈이 실제로는 없으므로 정산을 막는다. `HELD`는 되돌릴 수 있고(사람이 판단해 다시 풀거나
-`CANCELLED`로 끝낸다) `CANCELLED`가 종료 상태다.
+그 돈이 실제로는 없으므로 정산을 막는다. `CANCELLED`가 종료 상태다.
+
+### `HELD`에서 돌아가는 곳은 저장된 값이 정한다
+
+**보류를 풀 때 "어느 상태로 돌아갈지"를 기억해 두지 않는다** — `exchange_order_seq`가
+이미 답을 갖고 있기 때문이다:
+
+| 조건 | 돌아가는 상태 |
+|---|---|
+| `exchange_order_seq`가 있다(매도가 끝났다) | `READY` |
+| 없다 | `PENDING` |
+
+`READY`는 **"매도가 확정돼 정산할 금액이 정해졌다"**는 뜻이고, 그 근거인 `ExchangeOrder`
+참조가 없으면 성립하지 않는다(`SettlementReceivable`이 `require`로 직접 막는다). 그래서
+직전 상태를 따로 저장하면 그 값과 `exchange_order_seq`가 어긋날 수 있는 자리만 하나 더
+생긴다 — **모순이 가능한 필드를 두느니 파생하는 쪽**을 골랐다.
+
+### 보류·해제·취소는 감사 기록을 남긴다
+
+세 전이는 전부 사람이 판단해 실행하고 **가맹점에게 나갈 돈을 좌우한다.** 그래서
+`settlement_hold_audit`에 누가·언제·무엇을·왜 했는지 append-only로 남긴다
+(`internal_login_audit`과 같은 성격이다).
+
+`hold_reason_code`는 **"지금 왜 막혀 있나"**에만 답하는 현재 상태 필드라, 풀면 `NULL`로
+지워져 보류됐던 사실 자체가 사라진다 — 로그인 시도보다 결과가 무거운 행위인데 흔적이 남지
+않는 것은 균형이 맞지 않는다. 상태 필드와 이력을 나눈 이유다.
 
 ## WebhookDelivery
 

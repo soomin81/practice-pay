@@ -153,6 +153,51 @@ class SettlementReceivableTest :
 			shouldThrow<IllegalArgumentException> { receivable.hold("   ", CREATED_AT.plusSeconds(1)) }
 		}
 
+		/**
+		 * **돌아갈 상태를 저장해 두지 않고 `exchangeOrderId`에서 파생한다는 것**이 이 전이의
+		 * 핵심이라, 두 갈래를 모두 고정한다. 매도 전에 막힌 채권을 `READY`로 되돌리면
+		 * 근거 없는 정산 금액이 생긴다.
+		 */
+		test("release returns a held receivable to READY when the exchange already completed") {
+			val receivable = newReceivable()
+			receivable.markReady(ExchangeOrderId("exo_test_001"), Money(97_800), null, CREATED_AT.plusSeconds(1))
+			receivable.hold("TRANSACTION_REORGED", CREATED_AT.plusSeconds(2))
+			val changedAt = CREATED_AT.plusSeconds(3)
+
+			receivable.release(changedAt)
+
+			receivable.status shouldBe SettlementReceivableStatus.READY
+			receivable.holdReasonCode shouldBe null
+			receivable.updatedAt shouldBe changedAt
+			// 해제가 환전 결과를 지우지 않는다 — READY의 근거 자체다.
+			receivable.exchangeOrderId shouldBe ExchangeOrderId("exo_test_001")
+		}
+
+		test("release returns a held receivable to PENDING when the exchange hasn't happened") {
+			val receivable = newReceivable()
+			receivable.hold("TRANSACTION_REORGED", CREATED_AT.plusSeconds(1))
+
+			receivable.release(CREATED_AT.plusSeconds(2))
+
+			receivable.status shouldBe SettlementReceivableStatus.PENDING
+			receivable.holdReasonCode shouldBe null
+		}
+
+		test("release fails when not HELD") {
+			val receivable = newReceivable()
+
+			shouldThrow<IllegalStateException> { receivable.release(CREATED_AT.plusSeconds(1)) }
+		}
+
+		/** 종료 상태는 재사용하지 않는다 — 취소된 채권을 해제로 되살릴 수 없다. */
+		test("release cannot revive a cancelled receivable") {
+			val receivable = newReceivable()
+			receivable.hold("TRANSACTION_REORGED", CREATED_AT.plusSeconds(1))
+			receivable.cancel(CREATED_AT.plusSeconds(2))
+
+			shouldThrow<IllegalStateException> { receivable.release(CREATED_AT.plusSeconds(3)) }
+		}
+
 		test("cancel moves PENDING, READY or HELD to CANCELLED") {
 			val fromPending = newReceivable()
 			fromPending.cancel(CREATED_AT.plusSeconds(1))

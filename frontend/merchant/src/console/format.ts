@@ -53,3 +53,21 @@ export function formatTokenAmount(minorUnits: string, decimals: number): string 
 	const fraction = decimals > 0 ? `.${digits.slice(digits.length - decimals)}` : ''
 	return `${negative ? '-' : ''}${whole}${fraction}`
 }
+
+/**
+ * 정산 보류 사유 코드를 사람이 읽는 문장으로 바꾼다.
+ *
+ * **가맹점에게도 보여준다** — 자기 돈이 멈춘 이유를 모르면 결국 문의로 돌아온다. 다만 이
+ * 콘솔에는 푸는 수단이 없다(보류·해제·취소는 PG 내부 운영자만 한다).
+ *
+ * 모르는 코드는 그대로 보여준다 — 서버가 사유를 늘렸을 때 빈칸이 되면 "이유 없이 막혔다"로
+ * 읽힌다(`labelFor`가 상태 코드에 쓰는 것과 같은 규칙). **admin 쪽에 같은 함수가 있다 —
+ * 한쪽을 고치면 다른 쪽도 함께 본다.**
+ */
+export function holdReasonLabel(code: string): string {
+	return HOLD_REASONS[code] ?? code
+}
+
+const HOLD_REASONS: Record<string, string> = {
+	TRANSACTION_REORGED: '확정 이후 입금이 체인에서 사라짐',
+}

@@ -63,6 +63,7 @@ private fun entry() =
 		exchangeReceivedAmount = 20_101,
 		exchangeProfitLossAmount = 101,
 		eligibleDate = LocalDate.parse("2026-08-01"),
+		holdReasonCode = null,
 		createdAt = Instant.parse("2026-08-01T04:07:24Z"),
 	)
 

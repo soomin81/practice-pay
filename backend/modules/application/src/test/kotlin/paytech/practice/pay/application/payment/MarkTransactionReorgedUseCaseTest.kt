@@ -5,8 +5,10 @@ import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.verify
 import paytech.practice.pay.application.port.outbound.BlockchainTransactionRepository
+import paytech.practice.pay.application.port.outbound.SettlementHoldAuditRepository
 import paytech.practice.pay.application.port.outbound.SettlementReceivableRepository
 import paytech.practice.pay.application.port.outbound.TransactionManager
 import paytech.practice.pay.domain.blockchain.BlockchainTransaction
@@ -17,8 +19,11 @@ import paytech.practice.pay.domain.blockchain.ContractAddress
 import paytech.practice.pay.domain.blockchain.TransactionHash
 import paytech.practice.pay.domain.blockchain.TransactionType
 import paytech.practice.pay.domain.exchange.ExchangeOrderId
+import paytech.practice.pay.domain.identity.InternalUserId
 import paytech.practice.pay.domain.merchant.MerchantId
 import paytech.practice.pay.domain.payment.PaymentId
+import paytech.practice.pay.domain.settlement.SettlementHoldAction
+import paytech.practice.pay.domain.settlement.SettlementHoldAudit
 import paytech.practice.pay.domain.settlement.SettlementReceivable
 import paytech.practice.pay.domain.settlement.SettlementReceivableId
 import paytech.practice.pay.domain.settlement.SettlementReceivableStatus
@@ -38,6 +43,7 @@ private val NOW: Instant = Instant.parse("2026-08-02T00:00:00Z")
 private val FIXED_CLOCK: Clock = Clock.fixed(NOW, ZoneOffset.UTC)
 private val TX_ID = BlockchainTransactionId("btx_test_001")
 private val PAYMENT_ID = PaymentId("pay_test_001")
+private val ACTOR_ID = InternalUserId("iu_test_001")
 
 /** 같은 패키지의 다른 테스트가 가진 것은 private이라 여기에 따로 둔다. */
 private class ReorgImmediateTransactionManager : TransactionManager {
@@ -90,10 +96,13 @@ private fun readyReceivable(): SettlementReceivable =
 private fun newUseCase(
 	transactionRepository: BlockchainTransactionRepository,
 	receivableRepository: SettlementReceivableRepository = mockk(relaxed = true),
+	auditRepository: SettlementHoldAuditRepository = mockk(relaxed = true),
 ): MarkTransactionReorgedUseCase =
 	MarkTransactionReorgedUseCase(
 		blockchainTransactionRepository = transactionRepository,
 		settlementReceivableRepository = receivableRepository,
+		settlementHoldAuditRepository = auditRepository,
+		idGenerator = { "generated-id" },
 		transactionManager = ReorgImmediateTransactionManager(),
 		clock = FIXED_CLOCK,
 	)
@@ -114,7 +123,7 @@ class MarkTransactionReorgedUseCaseTest :
 			every { transactionRepository.findById(TX_ID) } returns transaction
 			every { receivableRepository.findByPaymentId(PAYMENT_ID) } returns receivable
 
-			val result = newUseCase(transactionRepository, receivableRepository).execute(TX_ID)
+			val result = newUseCase(transactionRepository, receivableRepository).execute(MarkTransactionReorgedCommand(TX_ID, ACTOR_ID))
 
 			transaction.status shouldBe BlockchainTransactionStatus.REORGED
 			receivable.status shouldBe SettlementReceivableStatus.HELD
@@ -131,9 +140,45 @@ class MarkTransactionReorgedUseCaseTest :
 			every { transactionRepository.findById(TX_ID) } returns confirmedTransaction()
 			every { receivableRepository.findByPaymentId(PAYMENT_ID) } returns receivable
 
-			newUseCase(transactionRepository, receivableRepository).execute(TX_ID)
+			newUseCase(transactionRepository, receivableRepository).execute(MarkTransactionReorgedCommand(TX_ID, ACTOR_ID))
 
 			receivable.holdReasonCode shouldBe "TRANSACTION_REORGED"
+		}
+
+		/**
+		 * `holdReasonCode`는 해제하면 지워지므로 **막았다는 사실 자체는 이력에만 남는다** —
+		 * 누가 막았는지까지 남아야 나중에 해제와 나란히 읽힌다.
+		 */
+		test("records who held the settlement in the audit trail") {
+			val transactionRepository = mockk<BlockchainTransactionRepository>(relaxed = true)
+			val receivableRepository = mockk<SettlementReceivableRepository>(relaxed = true)
+			val auditRepository = mockk<SettlementHoldAuditRepository>(relaxed = true)
+			val audit = slot<SettlementHoldAudit>()
+			every { transactionRepository.findById(TX_ID) } returns confirmedTransaction()
+			every { receivableRepository.findByPaymentId(PAYMENT_ID) } returns readyReceivable()
+			every { auditRepository.append(capture(audit)) } returns Unit
+
+			newUseCase(transactionRepository, receivableRepository, auditRepository)
+				.execute(MarkTransactionReorgedCommand(TX_ID, ACTOR_ID))
+
+			audit.captured.action shouldBe SettlementHoldAction.HELD
+			audit.captured.internalUserId shouldBe ACTOR_ID
+			audit.captured.reasonCode shouldBe "TRANSACTION_REORGED"
+			audit.captured.occurredAt shouldBe NOW
+		}
+
+		/** 막은 것이 없으면 남길 이력도 없다 — 빈 이력 행이 쌓이면 "언제 막혔나"가 흐려진다. */
+		test("writes no audit row when there was nothing to hold") {
+			val transactionRepository = mockk<BlockchainTransactionRepository>(relaxed = true)
+			val receivableRepository = mockk<SettlementReceivableRepository>(relaxed = true)
+			val auditRepository = mockk<SettlementHoldAuditRepository>(relaxed = true)
+			every { transactionRepository.findById(TX_ID) } returns confirmedTransaction()
+			every { receivableRepository.findByPaymentId(PAYMENT_ID) } returns null
+
+			newUseCase(transactionRepository, receivableRepository, auditRepository)
+				.execute(MarkTransactionReorgedCommand(TX_ID, ACTOR_ID))
+
+			verify(exactly = 0) { auditRepository.append(any()) }
 		}
 
 		/**
@@ -146,7 +191,7 @@ class MarkTransactionReorgedUseCaseTest :
 			every { transactionRepository.findById(TX_ID) } returns confirmedTransaction()
 			every { receivableRepository.findByPaymentId(PAYMENT_ID) } returns null
 
-			val result = newUseCase(transactionRepository, receivableRepository).execute(TX_ID)
+			val result = newUseCase(transactionRepository, receivableRepository).execute(MarkTransactionReorgedCommand(TX_ID, ACTOR_ID))
 
 			result.settlementHeld shouldBe false
 			verify(exactly = 0) { receivableRepository.save(any()) }
@@ -160,7 +205,7 @@ class MarkTransactionReorgedUseCaseTest :
 			every { transactionRepository.findById(TX_ID) } returns confirmedTransaction()
 			every { receivableRepository.findByPaymentId(PAYMENT_ID) } returns alreadyHeld
 
-			val result = newUseCase(transactionRepository, receivableRepository).execute(TX_ID)
+			val result = newUseCase(transactionRepository, receivableRepository).execute(MarkTransactionReorgedCommand(TX_ID, ACTOR_ID))
 
 			result.settlementHeld shouldBe false
 			// 먼저 기록된 사유를 덮어쓰지 않는다.
@@ -171,7 +216,9 @@ class MarkTransactionReorgedUseCaseTest :
 			val transactionRepository = mockk<BlockchainTransactionRepository>()
 			every { transactionRepository.findById(TX_ID) } returns null
 
-			shouldThrow<BlockchainTransactionNotFoundException> { newUseCase(transactionRepository).execute(TX_ID) }
+			shouldThrow<BlockchainTransactionNotFoundException> {
+				newUseCase(transactionRepository).execute(MarkTransactionReorgedCommand(TX_ID, ACTOR_ID))
+			}
 		}
 
 		/**
@@ -208,7 +255,7 @@ class MarkTransactionReorgedUseCaseTest :
 
 			val thrown =
 				shouldThrow<TransactionNotReorgeableException> {
-					newUseCase(transactionRepository, receivableRepository).execute(TX_ID)
+					newUseCase(transactionRepository, receivableRepository).execute(MarkTransactionReorgedCommand(TX_ID, ACTOR_ID))
 				}
 
 			thrown.status shouldBe BlockchainTransactionStatus.CONFIRMING

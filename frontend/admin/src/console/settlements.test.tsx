@@ -5,7 +5,7 @@ import { renderWithRouter } from '@/test-utils'
 import { SettlementTable } from '@/console/SettlementTable'
 import { SettlementPage } from '@/console/SettlementPage'
 import { settlementQueryString } from '@/api/client'
-import type { SettlementReceivableSummary } from '@/api/types'
+import type { MeResponse, SettlementReceivableSummary } from '@/api/types'
 
 function receivable(overrides: Partial<SettlementReceivableSummary> = {}): SettlementReceivableSummary {
 	return {
@@ -29,6 +29,9 @@ function receivable(overrides: Partial<SettlementReceivableSummary> = {}): Settl
 	} as SettlementReceivableSummary
 }
 
+/** 기본은 SUPER_ADMIN이다 — 보류 해제·취소를 할 수 있는 유일한 역할이라 액션이 그려진다. */
+const ME = { internalUserId: 'iu_001', loginId: 'admin', role: 'SUPER_ADMIN' } as MeResponse
+
 function fakeResponse(body: unknown) {
 	return { ok: true, status: 200, json: async () => body }
 }
@@ -47,7 +50,7 @@ afterEach(() => {
 
 describe('정산 표', () => {
 	it('정산 기준·수수료·정산 예정 금액을 보여준다', () => {
-		renderWithRouter(<SettlementTable rows={[receivable()]} />)
+		renderWithRouter(<SettlementTable rows={[receivable()]} canManage />)
 
 		expect(screen.getByText('20,000원')).toBeInTheDocument()
 		expect(screen.getByText(/19,700원/)).toBeInTheDocument()
@@ -57,14 +60,14 @@ describe('정산 표', () => {
 	// READY 전에는 환전이 일어나지 않아 값이 없다 — 0으로 보이면 안 된다.
 	it('환전 손익이 없으면 0이 아니라 빈 표식을 그린다', () => {
 		renderWithRouter(
-			<SettlementTable rows={[receivable({ status: 'PENDING', exchangeProfitLossAmount: null })]} />,
+			<SettlementTable rows={[receivable({ status: 'PENDING', exchangeProfitLossAmount: null })]} canManage />,
 		)
 
 		expect(screen.getByText('—')).toBeInTheDocument()
 	})
 
 	it('조건에 맞는 채권이 없으면 안내를 그린다', () => {
-		renderWithRouter(<SettlementTable rows={[]} />)
+		renderWithRouter(<SettlementTable rows={[]} canManage />)
 
 		expect(screen.getByText(/정산 채권이 없습니다/)).toBeInTheDocument()
 	})
@@ -91,7 +94,7 @@ describe('정산 페이지', () => {
 			routedFetch({ settlementReceivables: [receivable()], totalCount: 3, totalNetAmount: 59100, page: 0, size: 20 }),
 		)
 
-		renderWithRouter(<SettlementPage />)
+		renderWithRouter(<SettlementPage me={ME} />)
 
 		expect(await screen.findByText('59,100원')).toBeInTheDocument()
 		// 합계가 **어느 범위의 것인지**도 함께 보인다 — 예전에는 합계 아래에 "3건 기준"으로
@@ -110,7 +113,7 @@ describe('정산 페이지', () => {
 		})
 		vi.stubGlobal('fetch', fetchMock)
 
-		renderWithRouter(<SettlementPage />)
+		renderWithRouter(<SettlementPage me={ME} />)
 		await userEvent.click(await screen.findByRole('button', { name: '다음' }))
 		await waitFor(() => expect(lastUrl(fetchMock)).toContain('page=1'))
 
@@ -131,7 +134,7 @@ describe('정산 페이지', () => {
 		vi.stubGlobal('fetch', fetchMock)
 		vi.stubGlobal('URL', { ...URL, createObjectURL: () => 'blob:x', revokeObjectURL: () => {} })
 
-		renderWithRouter(<SettlementPage />)
+		renderWithRouter(<SettlementPage me={ME} />)
 		await userEvent.click(await screen.findByRole('button', { name: '엑셀 다운로드' }))
 
 		await waitFor(() => {
@@ -147,7 +150,7 @@ describe('정산 페이지', () => {
 		vi.stubGlobal('fetch', exportAwareFetch({ truncated: true }))
 		vi.stubGlobal('URL', { ...URL, createObjectURL: () => 'blob:x', revokeObjectURL: () => {} })
 
-		renderWithRouter(<SettlementPage />)
+		renderWithRouter(<SettlementPage me={ME} />)
 		await userEvent.click(await screen.findByRole('button', { name: '엑셀 다운로드' }))
 
 		expect(await screen.findByText(/최대 10,000건까지만 담았습니다/)).toBeInTheDocument()
@@ -186,3 +189,155 @@ function exportUrl(fetchMock: ReturnType<typeof vi.fn>): string {
 	const calls = fetchMock.mock.calls.filter((call) => String(call[0]).includes('/settlement-receivables/export'))
 	return String(calls[calls.length - 1][0])
 }
+
+describe('정산 보류 해제와 취소', () => {
+	function held(overrides: Partial<SettlementReceivableSummary> = {}) {
+		return receivable({ status: 'HELD', holdReasonCode: 'TRANSACTION_REORGED', ...overrides })
+	}
+
+	/**
+	 * **"보류"만 보여주고 이유를 감추면 풀어도 되는지 판단할 수 없다.** 이 화면이 액션을
+	 * 갖는 이유 전체가 그 판단이라, 이유가 함께 보이는 것이 전제다.
+	 */
+	it('보류된 행에는 왜 막혔는지를 함께 적는다', () => {
+		renderWithRouter(<SettlementTable rows={[held()]} canManage />)
+
+		expect(screen.getByText('보류')).toBeInTheDocument()
+		expect(screen.getByText('확정 이후 입금이 체인에서 사라짐')).toBeInTheDocument()
+	})
+
+	/** 서버가 사유를 늘렸을 때 화면이 빈칸이 되면 "이유 없이 막혔다"로 읽힌다. */
+	it('모르는 사유 코드는 그대로 보여준다', () => {
+		renderWithRouter(<SettlementTable rows={[held({ holdReasonCode: 'SOMETHING_NEW' })]} canManage />)
+
+		expect(screen.getByText('SOMETHING_NEW')).toBeInTheDocument()
+	})
+
+	it('보류가 아닌 행에는 해제·취소 버튼을 그리지 않는다', () => {
+		renderWithRouter(<SettlementTable rows={[receivable()]} canManage />)
+
+		expect(screen.queryByRole('button', { name: '보류 해제' })).not.toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: '취소' })).not.toBeInTheDocument()
+	})
+
+	/**
+	 * **막는 쪽(SUPER_ADMIN 전용)과 같은 등급이어야 한다** — 푸는 쪽만 넓히면 좁게 잡은
+	 * 의미가 없어진다. 서버도 403으로 막지만 누를 수 있게 두고 거부하는 것보다 낫다.
+	 */
+	it('SUPER_ADMIN이 아니면 액션 대신 이력만 볼 수 있다', () => {
+		renderWithRouter(<SettlementTable rows={[held()]} canManage={false} />)
+
+		expect(screen.queryByRole('button', { name: '보류 해제' })).not.toBeInTheDocument()
+		// 읽는 것과 바꾸는 것은 다른 권한이다 — 이력은 VIEWER도 본다.
+		expect(screen.getByRole('button', { name: '이력' })).toBeInTheDocument()
+	})
+
+	/** 자동 경로가 없는 전이라 실행한 사람 말고는 이유를 아는 곳이 없다. */
+	it('사유를 적기 전에는 해제할 수 없다', async () => {
+		renderWithRouter(<SettlementTable rows={[held()]} canManage />)
+
+		await userEvent.click(screen.getByRole('button', { name: '보류 해제' }))
+
+		expect(screen.getByRole('button', { name: '해제합니다' })).toBeDisabled()
+
+		await userEvent.type(screen.getByLabelText('사유 (필수)'), '탐지 오류로 확인되었습니다.')
+
+		expect(screen.getByRole('button', { name: '해제합니다' })).toBeEnabled()
+	})
+
+	it('해제는 사유와 함께 그 채권 경로로 보낸다', async () => {
+		const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+			if (init?.method === 'POST') {
+				return Promise.resolve(fakeResponse({ settlementReceivableId: 'str_001', status: 'READY' }))
+			}
+			return Promise.resolve(fakeResponse({ merchants: [] }))
+		})
+		vi.stubGlobal('fetch', fetchMock)
+		renderWithRouter(<SettlementTable rows={[held()]} canManage />)
+
+		await userEvent.click(screen.getByRole('button', { name: '보류 해제' }))
+		await userEvent.type(screen.getByLabelText('사유 (필수)'), '탐지 오류로 확인되었습니다.')
+		await userEvent.click(screen.getByRole('button', { name: '해제합니다' }))
+
+		await waitFor(() => {
+			const posted = fetchMock.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === 'POST')
+			expect(posted).toBeDefined()
+			const [url, init] = posted as [string, RequestInit]
+			expect(String(url)).toContain('/admin/settlement-receivables/str_001/release')
+			expect(String(init.body)).toContain('탐지 오류로 확인되었습니다.')
+		})
+	})
+
+	/**
+	 * **취소는 되돌릴 수 없다** — 해제와 같은 자리에 있으므로 확인 문구가 그 차이를 분명히
+	 * 말해야 잘못 누르지 않는다.
+	 */
+	it('취소는 되돌릴 수 없다고 알린다', async () => {
+		renderWithRouter(<SettlementTable rows={[held()]} canManage />)
+
+		await userEvent.click(screen.getByRole('button', { name: '취소' }))
+
+		expect(screen.getByText('되돌릴 수 없습니다')).toBeInTheDocument()
+		expect(screen.getByText(/영영 정산되지 않습니다/)).toBeInTheDocument()
+	})
+
+	/** `409`는 "왜 안 되는지"를 담고 있다 — 감추면 같은 버튼을 계속 누른다. */
+	it('서버가 거절하면 그 이유를 그대로 보여준다', async () => {
+		const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+			if (init?.method === 'POST') {
+				return Promise.resolve({
+					ok: false,
+					status: 409,
+					json: async () => ({ message: '보류된 정산 채권만 해제할 수 있습니다. 현재 상태: CANCELLED' }),
+				})
+			}
+			return Promise.resolve(fakeResponse({ merchants: [] }))
+		})
+		vi.stubGlobal('fetch', fetchMock)
+		renderWithRouter(<SettlementTable rows={[held()]} canManage />)
+
+		await userEvent.click(screen.getByRole('button', { name: '보류 해제' }))
+		await userEvent.type(screen.getByLabelText('사유 (필수)'), '풀어봅니다.')
+		await userEvent.click(screen.getByRole('button', { name: '해제합니다' }))
+
+		expect(await screen.findByText(/현재 상태: CANCELLED/)).toBeInTheDocument()
+	})
+
+	/** 비어 있다는 것도 정보다 — "손댄 적이 없다"와 "못 불러왔다"는 다른 사실이다. */
+	it('이력이 없으면 없다고 말한다', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue(fakeResponse({ history: [] })))
+		renderWithRouter(<SettlementTable rows={[held()]} canManage />)
+
+		await userEvent.click(screen.getByRole('button', { name: '이력' }))
+
+		expect(await screen.findByText('보류·해제·취소된 적이 없습니다.')).toBeInTheDocument()
+	})
+
+	it('이력에는 누가 언제 무엇을 왜 했는지가 나온다', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue(
+				fakeResponse({
+					history: [
+						{
+							auditId: 'sha_001',
+							internalUserId: 'iu_001',
+							internalUserName: '홍길동',
+							action: 'RELEASED',
+							reasonCode: null,
+							note: '탐지 오류로 확인되어 해제합니다.',
+							occurredAt: '2026-08-02T00:00:00Z',
+						},
+					],
+				}),
+			),
+		)
+		renderWithRouter(<SettlementTable rows={[held()]} canManage />)
+
+		await userEvent.click(screen.getByRole('button', { name: '이력' }))
+
+		expect(await screen.findByText('해제함')).toBeInTheDocument()
+		expect(screen.getByText('홍길동')).toBeInTheDocument()
+		expect(screen.getByText('탐지 오류로 확인되어 해제합니다.')).toBeInTheDocument()
+	})
+})

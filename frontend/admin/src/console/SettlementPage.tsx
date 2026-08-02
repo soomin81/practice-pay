@@ -1,6 +1,12 @@
 import { useState } from 'react'
 import { AdminApiError } from '@/api/client'
-import { SETTLEMENT_RECEIVABLE_STATUSES, type SettlementFilters, type SettlementReceivableStatus } from '@/api/types'
+import {
+	canManageSettlementHold,
+	SETTLEMENT_RECEIVABLE_STATUSES,
+	type MeResponse,
+	type SettlementFilters,
+	type SettlementReceivableStatus,
+} from '@/api/types'
 import { SettlementTable } from '@/console/SettlementTable'
 import { useSettlementReceivables } from '@/console/useSettlementReceivables'
 import { useSettlementExport } from '@/console/useSettlementExport'
@@ -27,7 +33,7 @@ const PAGE_SIZE = 20
  * 화면 맨 위에 **필터 전체의 정산 예정 금액 합계**를 크게 보여준다 — 이 화면에서 사람이
  * 가장 먼저 묻는 것이 "그래서 얼마를 받나"인데, 목록만 있으면 답할 수 없다.
  */
-export function SettlementPage() {
+export function SettlementPage({ me }: { me: MeResponse }) {
 	const [filters, setFilters] = useState<SettlementFilters>({ page: 0, size: PAGE_SIZE })
 	const settlements = useSettlementReceivables(filters)
 	const exportSettlements = useSettlementExport()
@@ -152,7 +158,7 @@ export function SettlementPage() {
 					)}
 					{settlements.data && (
 						<>
-							<SettlementTable rows={settlements.data.settlementReceivables} />
+							<SettlementTable rows={settlements.data.settlementReceivables} canManage={canManageSettlementHold(String(me.role))} />
 							<div className="flex items-center justify-between text-sm">
 								<span className="text-muted-foreground">
 									전체 {totalCount.toLocaleString('ko-KR')}건 · {page + 1} / {lastPage + 1} 페이지

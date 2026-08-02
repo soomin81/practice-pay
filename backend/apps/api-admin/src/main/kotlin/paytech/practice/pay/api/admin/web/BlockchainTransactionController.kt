@@ -1,9 +1,12 @@
 package paytech.practice.pay.api.admin.web
 
+import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
+import paytech.practice.pay.api.admin.security.InternalUserPrincipal
+import paytech.practice.pay.application.payment.MarkTransactionReorgedCommand
 import paytech.practice.pay.application.payment.MarkTransactionReorgedUseCase
 import paytech.practice.pay.domain.blockchain.BlockchainTransactionId
 
@@ -25,8 +28,16 @@ class BlockchainTransactionController(
 	@PostMapping("/{blockchainTransactionId}/mark-reorged")
 	fun markReorged(
 		@PathVariable blockchainTransactionId: String,
+		@AuthenticationPrincipal principal: InternalUserPrincipal,
 	): MarkTransactionReorgedResponse {
-		val result = markTransactionReorgedUseCase.execute(BlockchainTransactionId(blockchainTransactionId))
+		// 실행자는 요청이 아니라 인증 주체에서 온다 — 이 값이 settlement_hold_audit에 남는다.
+		val result =
+			markTransactionReorgedUseCase.execute(
+				MarkTransactionReorgedCommand(
+					blockchainTransactionId = BlockchainTransactionId(blockchainTransactionId),
+					actorInternalUserId = principal.internalUserId,
+				),
+			)
 
 		return MarkTransactionReorgedResponse(
 			blockchainTransactionId = result.blockchainTransactionId.value,

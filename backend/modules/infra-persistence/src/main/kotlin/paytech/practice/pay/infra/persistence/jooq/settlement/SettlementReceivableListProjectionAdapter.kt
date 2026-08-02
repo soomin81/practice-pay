@@ -49,6 +49,7 @@ class SettlementReceivableListProjectionAdapter(
 					SETTLEMENT_RECEIVABLE.EXCHANGE_RECEIVED_AMOUNT,
 					SETTLEMENT_RECEIVABLE.EXCHANGE_PROFIT_LOSS_AMOUNT,
 					SETTLEMENT_RECEIVABLE.ELIGIBLE_DATE,
+					SETTLEMENT_RECEIVABLE.HOLD_REASON_CODE,
 					SETTLEMENT_RECEIVABLE.CREATED_AT,
 					MERCHANT.MERCHANT_ID,
 					MERCHANT.MERCHANT_NAME,
@@ -85,6 +86,7 @@ class SettlementReceivableListProjectionAdapter(
 						exchangeReceivedAmount = record.get(SETTLEMENT_RECEIVABLE.EXCHANGE_RECEIVED_AMOUNT),
 						exchangeProfitLossAmount = record.get(SETTLEMENT_RECEIVABLE.EXCHANGE_PROFIT_LOSS_AMOUNT),
 						eligibleDate = record.get(SETTLEMENT_RECEIVABLE.ELIGIBLE_DATE)!!,
+						holdReasonCode = record.get(SETTLEMENT_RECEIVABLE.HOLD_REASON_CODE),
 						createdAt = record.get(SETTLEMENT_RECEIVABLE.CREATED_AT)!!.toUtcInstant(),
 					)
 				}

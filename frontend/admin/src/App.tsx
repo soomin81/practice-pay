@@ -61,7 +61,7 @@ function ConsoleRoutes() {
 				<Route path="/" element={<MerchantsPage me={me} />} />
 				<Route path="/merchants/:merchantId" element={<MerchantDetailPage me={me} />} />
 				<Route path="/payments" element={<PaymentsPage />} />
-				<Route path="/settlements" element={<SettlementPage />} />
+				<Route path="/settlements" element={<SettlementPage me={me} />} />
 				<Route path="/payments/:paymentId" element={<PaymentDetailPage />} />
 				{/* 내부 직원 관리는 SUPER_ADMIN 전용 — 서버도 403이므로 라우트 자체를 막는다. */}
 				{canManageInternalUsers(String(me.role)) && (

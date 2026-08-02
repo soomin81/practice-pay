@@ -61,6 +61,9 @@ PG 내부 운영자용 콘솔(브라우저 SPA, `frontend/admin`)이 호출하�
 | `GET /admin/settlement-receivables/export` | **내부 운영자 전원**(VIEWER 포함) | — | 200 `.xlsx` 첨부 | 400 잘못된 status, 401 |
 | `POST /admin/webhook-deliveries/{id}/redeliver` | SUPER_ADMIN/OPERATOR | 필요 | 200 되돌린 상태(**PENDING**) | 401, 403(VIEWER), 404 없는 전송, **409 FAILED가 아님** |
 | `POST /admin/blockchain-transactions/{id}/mark-reorged` | **SUPER_ADMIN만** | 필요 | 200 표시 결과(정산 보류 여부 포함) | 401, 403, 404 없는 거래, **409 CONFIRMED가 아님** |
+| `POST /admin/settlement-receivables/{id}/release` | **SUPER_ADMIN만** | 필요 | 200 돌아간 상태(PENDING\|READY) | 400 사유 누락, 401, 403, 404 없는 채권, **409 HELD가 아님** |
+| `POST /admin/settlement-receivables/{id}/cancel` | **SUPER_ADMIN만** | 필요 | 200 상태(CANCELLED) | 400 사유 누락, 401, 403, 404, **409 이미 CANCELLED** |
+| `GET /admin/settlement-receivables/{id}/hold-history` | **내부 운영자 전원**(VIEWER 포함) | — | 200 보류·해제·취소 이력(최신순) | 401, 404 없는 채권 |
 | `GET /admin/merchants/{merchantId}/users` | **내부 운영자 전원**(VIEWER 포함) | — | 200 명부 | 401 |
 | `POST /admin/merchants/{merchantId}/users/{id}/suspend` | SUPER_ADMIN/OPERATOR | 필요 | 200 상태(SUSPENDED) | 401, 403, 404, 409(마지막 OWNER·잘못된 전이) |
 | `POST /admin/merchants/{merchantId}/users/{id}/reactivate` | SUPER_ADMIN/OPERATOR | 필요 | 200 상태(ACTIVE) | 401, 403, 404, 409(잘못된 전이) |
@@ -267,6 +270,31 @@ PG 내부 운영자용 콘솔(브라우저 SPA, `frontend/admin`)이 호출하�
   중단이라 사람의 판단을 거치게 했다.
 - **`SUPER_ADMIN` 전용이다**(재전송이 OPERATOR까지 열린 것과 다르다) — 돈의 흐름을 막는
   행위라 가장 좁게 잡았다. **가맹점 콘솔에는 없다.**
+
+### 4.6 정산 보류 해제·취소 — 막은 것을 풀 수 있어야 막을 수 있다
+
+`POST /admin/settlement-receivables/{settlementReceivableId}/release|cancel`. 정산 채권
+화면(4.3)의 **`HELD` 행에만** 버튼이 나온다.
+
+- **해제는 돌아갈 상태를 요청이 정하지 않는다** — 서버가 `exchangeOrderId` 유무로 `READY`
+  또는 `PENDING`을 고르고, 응답의 `status`로 알려준다. 화면이 정하게 두면 매도가 끝나지
+  않은 채권을 `READY`로 만들 수 있고, 그건 **근거 없는 정산 금액**이 된다.
+- **`note`(사유 메모)가 필수다.** 자동 경로가 없는 전이라 "왜 풀었나"를 아는 곳이 실행한
+  사람뿐이다 — 빈 값이면 `400`이다. 보류(`mark-reorged`)에 사유 코드가 자동으로 붙는 것과
+  대비된다.
+- **`HELD`가 아니면 `409`**이고 응답 문구에 현재 상태가 담긴다. 취소는 `CANCELLED`가 아닌
+  모든 상태에서 되지만(`PENDING`/`READY`도 포함), 화면은 `HELD` 행에만 버튼을 그린다 —
+  막지도 않은 채권을 목록에서 곧장 끝낼 수 있게 두지 않는다.
+- **`SUPER_ADMIN` 전용이다** — 막는 쪽(`mark-reorged`)과 같은 등급이어야 한다. 푸는 쪽만
+  넓히면 좁게 잡은 의미가 없어진다.
+- **`Payment`와 `ExchangeOrder`는 그대로다**(ADR-007) — 정산을 어떻게 할지만 정한다.
+
+`GET /admin/settlement-receivables/{id}/hold-history`는 그 채권의 보류·해제·취소 이력을
+최신순으로 준다(`settlement_hold_audit`). **조회는 VIEWER에게도 열려 있다** — 이력을 읽는
+것과 상태를 바꾸는 것은 다른 권한이다.
+
+- **가맹점 콘솔에는 액션도 이력도 없다.** 다만 가맹점도 자기 채권이 `HELD`라는 것과 그
+  사유 코드는 본다 — 돈이 멈춘 이유를 모르면 결국 문의로 돌아온다.
 
 ## 5. 초대 링크가 **두 종류**다 — 가리키는 콘솔이 다르다
 

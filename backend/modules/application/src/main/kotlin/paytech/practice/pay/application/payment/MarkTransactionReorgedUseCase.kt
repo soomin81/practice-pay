@@ -1,11 +1,17 @@
 package paytech.practice.pay.application.payment
 
 import paytech.practice.pay.application.port.outbound.BlockchainTransactionRepository
+import paytech.practice.pay.application.port.outbound.IdGenerator
+import paytech.practice.pay.application.port.outbound.SettlementHoldAuditRepository
 import paytech.practice.pay.application.port.outbound.SettlementReceivableRepository
 import paytech.practice.pay.application.port.outbound.TransactionManager
 import paytech.practice.pay.domain.blockchain.BlockchainTransactionId
 import paytech.practice.pay.domain.blockchain.BlockchainTransactionStatus
+import paytech.practice.pay.domain.identity.InternalUserId
 import paytech.practice.pay.domain.payment.PaymentId
+import paytech.practice.pay.domain.settlement.SettlementHoldAction
+import paytech.practice.pay.domain.settlement.SettlementHoldAudit
+import paytech.practice.pay.domain.settlement.SettlementHoldAuditId
 import paytech.practice.pay.domain.settlement.SettlementReceivableStatus
 import java.time.Clock
 
@@ -43,18 +49,20 @@ import java.time.Clock
 class MarkTransactionReorgedUseCase(
 	private val blockchainTransactionRepository: BlockchainTransactionRepository,
 	private val settlementReceivableRepository: SettlementReceivableRepository,
+	private val settlementHoldAuditRepository: SettlementHoldAuditRepository,
+	private val idGenerator: IdGenerator,
 	private val transactionManager: TransactionManager,
 	private val clock: Clock,
 ) {
-	fun execute(blockchainTransactionId: BlockchainTransactionId): MarkTransactionReorgedResult {
+	fun execute(command: MarkTransactionReorgedCommand): MarkTransactionReorgedResult {
 		val transaction =
-			blockchainTransactionRepository.findById(blockchainTransactionId)
-				?: throw BlockchainTransactionNotFoundException(blockchainTransactionId)
+			blockchainTransactionRepository.findById(command.blockchainTransactionId)
+				?: throw BlockchainTransactionNotFoundException(command.blockchainTransactionId)
 
 		// 확정된 거래만 대상이다. 확정 전이면 자동 경로(Confirm 폴링)가 유예를 두고 판단하므로
 		// 사람이 끼어들 이유가 없고, 이미 REORGED면 할 일이 없다.
 		if (transaction.status != BlockchainTransactionStatus.CONFIRMED) {
-			throw TransactionNotReorgeableException(blockchainTransactionId, transaction.status)
+			throw TransactionNotReorgeableException(command.blockchainTransactionId, transaction.status)
 		}
 
 		val now = clock.instant()
@@ -68,9 +76,25 @@ class MarkTransactionReorgedUseCase(
 
 		receivable?.hold(HOLD_REASON_CODE, now)
 
+		// 이 보류도 사람이 실행한 것이라 이력에 남는다 — 나중에 해제와 나란히 읽혀야
+		// "막았다가 풀었다"가 한 줄로 이어진다.
+		val audit =
+			receivable?.let {
+				SettlementHoldAudit(
+					id = SettlementHoldAuditId(SettlementHoldAuditId.PREFIX + idGenerator.newId()),
+					settlementReceivableId = it.id,
+					internalUserId = command.actorInternalUserId,
+					action = SettlementHoldAction.HELD,
+					reasonCode = HOLD_REASON_CODE,
+					note = null,
+					occurredAt = now,
+				)
+			}
+
 		return transactionManager.runInTransaction {
 			blockchainTransactionRepository.save(transaction)
 			receivable?.let { settlementReceivableRepository.save(it) }
+			audit?.let { settlementHoldAuditRepository.append(it) }
 			MarkTransactionReorgedResult(
 				blockchainTransactionId = transaction.id,
 				paymentId = transaction.paymentId,
@@ -87,6 +111,15 @@ class MarkTransactionReorgedUseCase(
 		private const val HOLD_REASON_CODE = "TRANSACTION_REORGED"
 	}
 }
+
+/**
+ * @property actorInternalUserId 실행한 내부 운영자. 요청 본문이 아니라 인증 주체에서 온다 —
+ * 이 값이 `settlement_hold_audit`에 남아 나중에 "누가 막았나"에 답한다.
+ */
+data class MarkTransactionReorgedCommand(
+	val blockchainTransactionId: BlockchainTransactionId,
+	val actorInternalUserId: InternalUserId,
+)
 
 /**
  * 확정 이후 reorg 표시 결과다.

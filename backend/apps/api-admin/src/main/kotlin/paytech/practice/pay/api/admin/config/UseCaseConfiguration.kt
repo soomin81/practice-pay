@@ -38,12 +38,17 @@ import paytech.practice.pay.application.port.outbound.PaymentDetailProjection
 import paytech.practice.pay.application.port.outbound.PaymentExportWriter
 import paytech.practice.pay.application.port.outbound.PaymentListProjection
 import paytech.practice.pay.application.port.outbound.SettlementExportWriter
+import paytech.practice.pay.application.port.outbound.SettlementHoldAuditProjection
+import paytech.practice.pay.application.port.outbound.SettlementHoldAuditRepository
 import paytech.practice.pay.application.port.outbound.SettlementReceivableListProjection
 import paytech.practice.pay.application.port.outbound.SettlementReceivableRepository
 import paytech.practice.pay.application.port.outbound.TransactionManager
 import paytech.practice.pay.application.port.outbound.WebhookDeliveryRepository
+import paytech.practice.pay.application.settlement.CancelSettlementReceivableUseCase
 import paytech.practice.pay.application.settlement.ExportSettlementReceivablesUseCase
+import paytech.practice.pay.application.settlement.ListSettlementHoldHistoryUseCase
 import paytech.practice.pay.application.settlement.ListSettlementReceivablesUseCase
+import paytech.practice.pay.application.settlement.ReleaseSettlementHoldUseCase
 import paytech.practice.pay.application.webhook.RedeliverWebhookUseCase
 import java.time.Clock
 
@@ -203,15 +208,57 @@ class UseCaseConfiguration {
 	fun markTransactionReorgedUseCase(
 		blockchainTransactionRepository: BlockchainTransactionRepository,
 		settlementReceivableRepository: SettlementReceivableRepository,
+		settlementHoldAuditRepository: SettlementHoldAuditRepository,
+		idGenerator: IdGenerator,
 		transactionManager: TransactionManager,
 		clock: Clock,
 	): MarkTransactionReorgedUseCase =
 		MarkTransactionReorgedUseCase(
 			blockchainTransactionRepository = blockchainTransactionRepository,
 			settlementReceivableRepository = settlementReceivableRepository,
+			settlementHoldAuditRepository = settlementHoldAuditRepository,
+			idGenerator = idGenerator,
 			transactionManager = transactionManager,
 			clock = clock,
 		)
+
+	@Bean
+	fun releaseSettlementHoldUseCase(
+		settlementReceivableRepository: SettlementReceivableRepository,
+		settlementHoldAuditRepository: SettlementHoldAuditRepository,
+		idGenerator: IdGenerator,
+		transactionManager: TransactionManager,
+		clock: Clock,
+	): ReleaseSettlementHoldUseCase =
+		ReleaseSettlementHoldUseCase(
+			settlementReceivableRepository = settlementReceivableRepository,
+			settlementHoldAuditRepository = settlementHoldAuditRepository,
+			idGenerator = idGenerator,
+			transactionManager = transactionManager,
+			clock = clock,
+		)
+
+	@Bean
+	fun cancelSettlementReceivableUseCase(
+		settlementReceivableRepository: SettlementReceivableRepository,
+		settlementHoldAuditRepository: SettlementHoldAuditRepository,
+		idGenerator: IdGenerator,
+		transactionManager: TransactionManager,
+		clock: Clock,
+	): CancelSettlementReceivableUseCase =
+		CancelSettlementReceivableUseCase(
+			settlementReceivableRepository = settlementReceivableRepository,
+			settlementHoldAuditRepository = settlementHoldAuditRepository,
+			idGenerator = idGenerator,
+			transactionManager = transactionManager,
+			clock = clock,
+		)
+
+	@Bean
+	fun listSettlementHoldHistoryUseCase(
+		settlementReceivableRepository: SettlementReceivableRepository,
+		settlementHoldAuditProjection: SettlementHoldAuditProjection,
+	): ListSettlementHoldHistoryUseCase = ListSettlementHoldHistoryUseCase(settlementReceivableRepository, settlementHoldAuditProjection)
 
 	@Bean
 	fun redeliverWebhookUseCase(

@@ -30,6 +30,11 @@ data class ListSettlementReceivablesResponse(
  *
  * @property exchangeReceivedAmount 환전으로 확보한 KRW. `READY` 전에는 `null`이다.
  * @property exchangeProfitLossAmount 확보액과 정산 기준 금액의 차이(PG 마진). 음수일 수 있다.
+ * @property holdReasonCode 정산이 막힌 이유. `HELD`가 아니면 `null`이다.
+ *
+ * **가맹점에게도 보여준다** — 자기 돈이 멈춘 이유를 모르면 결국 문의로 돌아온다. 다만 이
+ * 콘솔에는 **푸는 수단이 없다**(보류·해제·취소는 전부 내부 운영자의 SUPER_ADMIN 전용이고
+ * 이력 조회도 admin에만 있다).
  */
 data class SettlementReceivableSummaryResponse(
 	val settlementReceivableId: String,
@@ -45,5 +50,6 @@ data class SettlementReceivableSummaryResponse(
 	val exchangeReceivedAmount: Long?,
 	val exchangeProfitLossAmount: Long?,
 	val eligibleDate: LocalDate,
+	val holdReasonCode: String?,
 	val createdAt: Instant,
 )

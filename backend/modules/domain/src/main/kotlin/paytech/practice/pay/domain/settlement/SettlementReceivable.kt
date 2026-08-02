@@ -115,6 +115,35 @@ class SettlementReceivable private constructor(
 	}
 
 	/**
+	 * `HELD` → (`PENDING` 또는 `READY`). 보류를 풀고 정산 흐름으로 되돌린다.
+	 *
+	 * **돌아갈 상태를 호출부가 정하지 않고 [exchangeOrderId]에서 파생한다.** `READY`는
+	 * "매도가 확정돼 정산할 금액이 정해졌다"는 뜻이라 그 근거인 `ExchangeOrder` 참조 없이는
+	 * 성립하지 않는다(이 클래스의 `init`이 `require`로 막는다). 직전 상태를 따로 들고 있으면
+	 * 그 값과 [exchangeOrderId]가 어긋날 수 있는 자리만 하나 더 생기므로, **모순이 가능한
+	 * 필드를 두느니 파생하는 쪽**을 골랐다.
+	 *
+	 * 보류 사유([holdReasonCode])는 지운다 — "지금 왜 막혀 있나"에 답하는 현재 상태 필드라
+	 * 막혀 있지 않으면 값이 남아 있으면 안 된다. 막혔던 이력은 `settlement_hold_audit`에
+	 * 남는다(`docs/domain/state-transitions.md`).
+	 */
+	fun release(changedAt: Instant) {
+		// 목표 상태가 파생되는 유일한 전이라 checkTransition을 쓰지 않는다 — 실패 메시지에
+		// 적을 목표 상태가 이 시점에는 아직 정해지지 않았다.
+		check(status == SettlementReceivableStatus.HELD) {
+			"보류된 SettlementReceivable만 해제할 수 있습니다. 현재 상태: $status"
+		}
+		status =
+			if (exchangeOrderId != null) {
+				SettlementReceivableStatus.READY
+			} else {
+				SettlementReceivableStatus.PENDING
+			}
+		holdReasonCode = null
+		updatedAt = changedAt
+	}
+
+	/**
 	 * (`PENDING`, `READY` 또는 `HELD`) → `CANCELLED`.
 	 *
 	 * `docs/domain/state-transitions.md`는 이 전이도 명시하지 않지만 스키마

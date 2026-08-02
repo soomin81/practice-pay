@@ -6,11 +6,13 @@ import paytech.practice.pay.dbcore.jooq.tables.InternalUser.Companion.INTERNAL_U
 import paytech.practice.pay.dbcore.jooq.tables.Merchant.Companion.MERCHANT
 import paytech.practice.pay.dbcore.jooq.tables.MerchantUser.Companion.MERCHANT_USER
 import paytech.practice.pay.dbcore.jooq.tables.Payment.Companion.PAYMENT
+import paytech.practice.pay.dbcore.jooq.tables.SettlementReceivable.Companion.SETTLEMENT_RECEIVABLE
 import paytech.practice.pay.domain.exchange.ExchangeOrderId
 import paytech.practice.pay.domain.identity.InternalUserId
 import paytech.practice.pay.domain.identity.MerchantUserId
 import paytech.practice.pay.domain.merchant.MerchantId
 import paytech.practice.pay.domain.payment.PaymentId
+import paytech.practice.pay.domain.settlement.SettlementReceivableId
 
 /**
  * 공개 ID(`*_id`, `VARCHAR`)와 내부 PK(`*_seq`, `BIGINT AUTO_INCREMENT`) 사이를 변환하는 공유
@@ -99,3 +101,10 @@ fun DSLContext.exchangeOrderId(exchangeOrderSeq: Long): ExchangeOrderId =
 		.fetchOne(EXCHANGE_ORDER.EXCHANGE_ORDER_ID)
 		?.let { ExchangeOrderId(it) }
 		?: error("ExchangeOrder(seq=$exchangeOrderSeq)를 찾을 수 없습니다.")
+
+fun DSLContext.settlementReceivableSeq(settlementReceivableId: SettlementReceivableId): Long =
+	select(SETTLEMENT_RECEIVABLE.SETTLEMENT_RECEIVABLE_SEQ)
+		.from(SETTLEMENT_RECEIVABLE)
+		.where(SETTLEMENT_RECEIVABLE.SETTLEMENT_RECEIVABLE_ID.eq(settlementReceivableId.value))
+		.fetchOne(SETTLEMENT_RECEIVABLE.SETTLEMENT_RECEIVABLE_SEQ)
+		?: error("SettlementReceivable(${settlementReceivableId.value})를 찾을 수 없습니다.")

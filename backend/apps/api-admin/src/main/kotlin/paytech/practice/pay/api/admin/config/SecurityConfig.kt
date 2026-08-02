@@ -111,6 +111,11 @@ class SecurityConfig {
 				// **여기만 SUPER_ADMIN 전용이다.** 되돌릴 수 없고 가맹점에게 지급될 돈을
 				// 직접 막는 동작이라, 다른 운영 동작보다 한 단계 좁힌다.
 				authorize("/admin/blockchain-transactions/**", hasRole("SUPER_ADMIN"))
+				// 정산 보류 해제·취소도 같은 등급이다 — **푸는 쪽만 넓히면 막는 쪽을 좁게
+				// 잡은 의미가 없어진다.** 여기는 POST로 좁힌다: 같은 하위 경로에 이력 조회
+				// (GET .../hold-history)가 있고, 이력을 읽는 것은 상태를 바꾸는 것과 다른
+				// 권한이라 VIEWER에게도 열어 둔다.
+				authorize(HttpMethod.POST, "/admin/settlement-receivables/**", hasRole("SUPER_ADMIN"))
 				authorize(anyRequest, authenticated)
 			}
 		}

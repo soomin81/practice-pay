@@ -140,6 +140,11 @@
 - 응답에 가맹점 열이 없다(언제나 자기 가맹점 하나다).
 - 금액은 전부 숫자다(KRW 원 단위 정수). `exchangeReceivedAmount`/`exchangeProfitLossAmount`는
   `READY` 전에는 `null`이다.
+- **`HELD`(보류)와 그 사유(`holdReasonCode`)는 가맹점에게도 보여준다** — 자기 돈이 멈춘 이유를
+  모르면 결국 문의로 돌아온다. 다만 **푸는 수단은 이 콘솔에 없다**: 보류·해제·취소는 전부 내부
+  운영자의 `SUPER_ADMIN` 전용이고 이력 조회도 admin에만 있다
+  ([admin-console-api.md](admin-console-api.md) 4.6). 가맹점에게 열면 자기 정산을 스스로 풀 수
+  있게 되어 보류가 아무것도 막지 못한다.
 
 - **엑셀 다운로드가 있다** — `GET /merchant/settlement-receivables/export`. 조회와 같은
   필터를 받되 페이징은 받지 않고, **범위는 여기서도 인증 주체가 정한다**(`merchantId`를

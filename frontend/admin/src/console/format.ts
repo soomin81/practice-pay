@@ -55,3 +55,17 @@ export function formatTokenAmount(minorUnits: string, decimals: number): string 
 	const fraction = decimals > 0 ? `.${digits.slice(digits.length - decimals)}` : ''
 	return `${negative ? '-' : ''}${whole}${fraction}`
 }
+
+/**
+ * 정산 보류 사유 코드를 사람이 읽는 문장으로 바꾼다.
+ *
+ * **모르는 코드는 그대로 보여준다** — 서버가 사유를 늘렸을 때 화면이 조용히 빈칸이 되면,
+ * 운영자는 "이유 없이 막혔다"고 읽는다. `labelFor`가 상태 코드에 쓰는 것과 같은 규칙이다.
+ */
+export function holdReasonLabel(code: string): string {
+	return HOLD_REASONS[code] ?? code
+}
+
+const HOLD_REASONS: Record<string, string> = {
+	TRANSACTION_REORGED: '확정 이후 입금이 체인에서 사라짐',
+}

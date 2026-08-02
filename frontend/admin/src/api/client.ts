@@ -18,7 +18,9 @@ import type {
 	PaymentDetailResponse,
 	MarkTransactionReorgedResponse,
 	RedeliverWebhookResponse,
+	ListSettlementHoldHistoryResponse,
 	ListSettlementReceivablesResponse,
+	SettlementHoldActionResponse,
 	SettlementFilters,
 	PaymentListFilters,
 	MerchantUserRole,
@@ -176,6 +178,29 @@ export const adminApi = {
 		request<MarkTransactionReorgedResponse>(
 			`/admin/blockchain-transactions/${encodeURIComponent(blockchainTransactionId)}/mark-reorged`,
 			{ method: 'POST' },
+		),
+
+	/**
+	 * 정산 보류를 푼다. **돌아갈 상태를 보내지 않는다** — 서버가 매도 완료 여부로
+	 * `READY`/`PENDING`을 고르고 응답의 `status`로 알려준다. `note`는 필수다(감사 이력에 남는다).
+	 */
+	releaseSettlementHold: (settlementReceivableId: string, note: string) =>
+		request<SettlementHoldActionResponse>(
+			`/admin/settlement-receivables/${encodeURIComponent(settlementReceivableId)}/release`,
+			{ method: 'POST', body: JSON.stringify({ note }) },
+		),
+
+	/** 그 돈을 정산하지 않기로 확정한다. **`CANCELLED`는 종료 상태라 되돌릴 수 없다.** */
+	cancelSettlementReceivable: (settlementReceivableId: string, note: string) =>
+		request<SettlementHoldActionResponse>(
+			`/admin/settlement-receivables/${encodeURIComponent(settlementReceivableId)}/cancel`,
+			{ method: 'POST', body: JSON.stringify({ note }) },
+		),
+
+	/** 채권 한 건의 보류·해제·취소 이력(최신순). 조회는 `VIEWER`도 할 수 있다. */
+	settlementHoldHistory: (settlementReceivableId: string) =>
+		request<ListSettlementHoldHistoryResponse>(
+			`/admin/settlement-receivables/${encodeURIComponent(settlementReceivableId)}/hold-history`,
 		),
 
 	/**

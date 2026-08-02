@@ -118,4 +118,46 @@ class SettlementReceivableRepositoryAdapterTest :
 
 			adapter.findByPaymentId(paymentId).shouldBeNull()
 		}
+
+		/**
+		 * 보류 해제·취소 경로는 결제가 아니라 **채권을 지목해** 들어온다 — `paymentId`를
+		 * 인자로 받지 않고 `payment_seq`를 되돌려 해석하는 경로라 따로 확인한다.
+		 */
+		test("findById round-trips a receivable and restores its paymentId") {
+			val merchantId = MerchantId(insertTestMerchant())
+			val paymentId = PaymentId(insertTestPayment(merchantId.value))
+			val settlementReceivable = newSettlementReceivable(paymentId, merchantId)
+			adapter.save(settlementReceivable)
+
+			val found = adapter.findById(settlementReceivable.id)
+
+			found.shouldNotBeNull()
+			found.id shouldBe settlementReceivable.id
+			found.paymentId shouldBe paymentId
+			found.merchantId shouldBe merchantId
+		}
+
+		test("findById returns null for an unknown id") {
+			adapter.findById(SettlementReceivableId("stl_nope_${uniqueSuffix()}")).shouldBeNull()
+		}
+
+		/** 해제가 `hold_reason_code`를 실제로 `NULL`로 되돌리는지 — 도메인만으로는 확인되지 않는다. */
+		test("save persists a hold and clears the reason code on release") {
+			val merchantId = MerchantId(insertTestMerchant())
+			val paymentId = PaymentId(insertTestPayment(merchantId.value))
+			val settlementReceivable = newSettlementReceivable(paymentId, merchantId)
+			adapter.save(settlementReceivable)
+
+			settlementReceivable.hold("TRANSACTION_REORGED", NOW.plusSeconds(1))
+			adapter.save(settlementReceivable)
+			adapter.findById(settlementReceivable.id)!!.holdReasonCode shouldBe "TRANSACTION_REORGED"
+
+			settlementReceivable.release(NOW.plusSeconds(2))
+			adapter.save(settlementReceivable)
+
+			val released = adapter.findById(settlementReceivable.id)
+			released.shouldNotBeNull()
+			released.status shouldBe SettlementReceivableStatus.PENDING
+			released.holdReasonCode.shouldBeNull()
+		}
 	})

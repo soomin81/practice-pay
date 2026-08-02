@@ -101,6 +101,16 @@ export function canRegisterMerchant(role: string): boolean {
 	return role === 'SUPER_ADMIN' || role === 'OPERATOR'
 }
 
+/**
+ * 정산 보류를 풀거나 채권을 취소할 수 있는 역할. **`SUPER_ADMIN` 전용이다** — 막는 쪽
+ * (확정 이후 체인 재구성 표시)과 같은 등급이어야 하고, 푸는 쪽만 넓히면 좁게 잡은 의미가
+ * 없어진다(`canManageMerchantAccounts`가 OPERATOR까지인 것과 다른 이유). **이력 조회는
+ * VIEWER도 할 수 있다** — 읽는 것과 바꾸는 것은 다른 권한이다.
+ */
+export function canManageSettlementHold(role: string): boolean {
+	return role === 'SUPER_ADMIN'
+}
+
 export type ListPaymentsResponse = JsonResponse<'admin-payments', 200>
 export type PaymentSummary = ListPaymentsResponse['payments'][number]
 
@@ -172,3 +182,19 @@ export type RedeliverWebhookResponse = JsonResponse<'admin-redeliver-webhook', 2
  * 뜻이고 더 위험하다** — 매도 Worker가 이 결제를 집어 채권을 만들 수 있다.
  */
 export type MarkTransactionReorgedResponse = JsonResponse<'admin-mark-transaction-reorged', 200>
+
+/**
+ * 정산 보류 해제 결과. **`status`가 실제로 돌아간 상태다** — 요청이 목표 상태를 정하지 않고
+ * 서버가 매도 완료 여부로 `READY`/`PENDING`을 고르므로, 화면은 이 값 말고는 어디로 갔는지
+ * 알 길이 없다.
+ */
+export type SettlementHoldActionResponse = JsonResponse<'admin-release-settlement-hold', 200>
+
+export type ListSettlementHoldHistoryResponse = JsonResponse<'admin-settlement-hold-history', 200>
+export type SettlementHoldAuditEntry = ListSettlementHoldHistoryResponse['history'][number]
+
+/**
+ * 이력이 기록하는 **행위**다. 채권 상태(`SettlementReceivableStatus`)와 값이 겹쳐 보이지만
+ * 다른 축이다 — `RELEASED`에 대응하는 상태가 없다(해제하면 `PENDING`/`READY`로 갈라진다).
+ */
+export type SettlementHoldAction = 'HELD' | 'RELEASED' | 'CANCELLED'

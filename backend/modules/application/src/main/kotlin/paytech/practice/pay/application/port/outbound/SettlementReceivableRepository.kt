@@ -2,6 +2,7 @@ package paytech.practice.pay.application.port.outbound
 
 import paytech.practice.pay.domain.payment.PaymentId
 import paytech.practice.pay.domain.settlement.SettlementReceivable
+import paytech.practice.pay.domain.settlement.SettlementReceivableId
 
 /**
  * [SettlementReceivable] Aggregate를 저장·복원하는 Command Repository Outbound Port다.
@@ -18,4 +19,12 @@ interface SettlementReceivableRepository {
 	 * 이 `payment_seq`다(`SettlementReceivableId`의 KDoc 참고).
 	 */
 	fun findByPaymentId(paymentId: PaymentId): SettlementReceivable?
+
+	/**
+	 * 공개 ID로 기존 SettlementReceivable을 찾는다.
+	 *
+	 * 내부 운영자가 **화면에서 채권 한 건을 지목해** 보류를 풀거나 취소하는 경로가 쓴다 —
+	 * 그쪽은 결제가 아니라 채권을 골라 오므로 [findByPaymentId]로는 닿을 수 없다.
+	 */
+	fun findById(settlementReceivableId: SettlementReceivableId): SettlementReceivable?
 }

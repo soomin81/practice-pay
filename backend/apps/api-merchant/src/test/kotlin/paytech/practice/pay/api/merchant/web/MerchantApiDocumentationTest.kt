@@ -859,6 +859,7 @@ class MerchantApiDocumentationTest : FunSpec() {
 								exchangeReceivedAmount = 20_101,
 								exchangeProfitLossAmount = 101,
 								eligibleDate = LocalDate.parse("2026-08-01"),
+								holdReasonCode = null,
 								createdAt = NOW,
 							),
 						),
@@ -901,6 +902,9 @@ class MerchantApiDocumentationTest : FunSpec() {
 								.description("확보액과 정산 기준 금액의 차이. 음수 가능, READY 전에는 null.")
 								.optional(),
 							fieldWithPath("settlementReceivables[].eligibleDate").description("정산 예정일(YYYY-MM-DD)"),
+							fieldWithPath("settlementReceivables[].holdReasonCode")
+								.description("정산이 막힌 이유. HELD가 아니면 null. **푸는 것은 PG 내부 운영자만 할 수 있다**")
+								.optional(),
 							fieldWithPath("settlementReceivables[].createdAt").description("생성 시각(UTC)"),
 							fieldWithPath("totalCount").description("필터 전체에 걸린 건수"),
 							fieldWithPath("totalNetAmount").description("필터 전체의 정산 예정 금액 합계"),

@@ -31,6 +31,7 @@
 14. `merchant_api_key_scope`
 15. `internal_login_audit`
 16. `merchant_login_audit`
+17. `settlement_hold_audit`
 
 ## 주요 Unique
 
@@ -51,11 +52,13 @@
 - MerchantApiKey: `key_prefix`
 - InternalLoginAudit: `internal_login_audit_id`
 - MerchantLoginAudit: `merchant_login_audit_id`
+- SettlementHoldAudit: `settlement_hold_audit_id`
 
 ## 주요 인덱스
 
 - 결제 만료: `payment_status + expires_at`
 - 로그인 감사 조회: `internal_login_audit.occurred_at`·`merchant_login_audit.occurred_at`(최신순 최근 목록)
+- 정산 보류 이력 조회: `settlement_hold_audit.settlement_receivable_seq + occurred_at`(채권 한 건의 이력)
 - Confirm Worker: `transaction_status + updated_at`
 - 정산 배치 확장: `receivable_status + eligible_date + merchant_seq`
 - Webhook 재시도: `delivery_status + next_retry_at`
@@ -136,6 +139,28 @@ merchant_login_audit_id (공개 ID, UNIQUE)
 `merchant_seq`(없는 merchantCode 시도면 NULL)와 `merchant_user_seq`(없는 loginId 시도면 NULL)
 둘 다 FK이자 NULL 허용이고, `attempted_merchant_code`/`attempted_login_id`에 시도 원문을 남긴다.
 기록은 api-merchant가, 조회는 api-admin(전 가맹점)이 한다.
+
+### SettlementHoldAudit
+
+```text
+settlement_hold_audit_id (공개 ID, UNIQUE)
+```
+
+정산 채권의 **보류·해제·취소 이력**이다. 위 두 감사 테이블과 같은 append-only 구조이지만
+남기는 대상이 로그인 시도가 아니라 **돈의 흐름을 좌우한 운영 행위**다.
+
+- `hold_action`은 `HELD`/`RELEASED`/`CANCELLED` CHECK로 제한한다.
+- `reason_code`는 `HELD`일 때의 사유(`settlement_receivable.hold_reason_code`에 들어간 값과
+  같다). 해제·취소에는 없다.
+- `note`는 사람이 남기는 자유 메모다. **해제·취소에는 필수**다 — 자동 경로가 없는 전이라
+  "왜 풀었나"에 답할 수 있는 것은 실행한 사람뿐이다.
+- `internal_user_seq`는 **NOT NULL**이다. 앞의 두 감사 테이블이 NULL을 허용한 것은 "없는
+  계정으로의 시도"라는 대상이 있어서인데, 여기서는 인증된 내부 운영자만 실행할 수 있어
+  주체가 없는 행이 존재할 수 없다.
+
+`settlement_receivable.hold_reason_code`와 역할이 다르다 — 그쪽은 **"지금 왜 막혀 있나"**만
+답하는 현재 상태 필드라 해제하면 지워진다. 이력은 여기에만 남는다
+(`docs/domain/state-transitions.md`의 "보류·해제·취소는 감사 기록을 남긴다").
 
 ## 계정 생성 트랜잭션
 

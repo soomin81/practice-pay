@@ -312,6 +312,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/settlement-receivables/{settlementReceivableId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 정산 채권 취소
+         * @description **SUPER_ADMIN만** 실행할 수 있다. 그 돈을 정산하지 않기로 확정한다 — CANCELLED는 종료 상태라 되돌릴 수 없다. note는 필수다. 이미 취소된 채권은 409, 없는 채권은 404.
+         */
+        post: operations["admin-cancel-settlement-receivable"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/settlement-receivables/{settlementReceivableId}/hold-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 정산 보류 이력 조회
+         * @description 채권 한 건의 보류·해제·취소 이력을 최신순으로 준다. **VIEWER도 읽을 수 있다** — 이력을 읽는 것과 상태를 바꾸는 것은 다른 권한이다. 없는 채권은 404(빈 이력과 구분한다).
+         */
+        get: operations["admin-settlement-hold-history"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/settlement-receivables/{settlementReceivableId}/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 정산 보류 해제
+         * @description **SUPER_ADMIN만** 실행할 수 있다(막는 쪽 mark-reorged와 같은 등급). **돌아갈 상태를 요청이 정하지 않는다** — 서버가 매도 완료 여부로 READY/PENDING을 고르고 응답의 status로 알려준다. note는 필수이고(공백이면 400) 감사 이력에 남는다. 보류 상태가 아니면 409, 없는 채권은 404.
+         */
+        post: operations["admin-release-settlement-hold"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/webhook-deliveries/{webhookDeliveryId}/redeliver": {
         parameters: {
             query?: never;
@@ -425,7 +485,12 @@ export interface components {
                 status: string;
             }[];
         };
-        "admin-webhook-deliveries-webhookDeliveryId-redeliver-33084672": Record<string, never>;
+        /** SettlementHoldActionRequest */
+        SettlementHoldActionRequest: {
+            /** @description 왜 취소했는지. **필수** — 감사 이력에 남는다 */
+            note: string;
+        };
+        "admin-internal-users-iu_002-suspend-33084672": Record<string, never>;
         /** ListLoginAuditResponse */
         ListLoginAuditResponse: {
             /** @description 로그인 감사 기록 배열(최신순) */
@@ -446,6 +511,23 @@ export interface components {
                 internalUserId?: string | null;
             }[];
         };
+        /** ListSettlementHoldHistoryResponse */
+        ListSettlementHoldHistoryResponse: {
+            history?: {
+                /** @description 이력 식별자 */
+                auditId: string;
+                /** @description 실행자가 남긴 메모. 해제·취소에는 반드시 있다 */
+                note?: string | null;
+                /** @description 실행 시각(UTC) */
+                occurredAt: string;
+                /** @description 실행한 내부 운영자 이름 */
+                internalUserName: string;
+                /** @description HELD / RELEASED / CANCELLED. **채권 상태와 다른 축이다** — RELEASED에 대응하는 상태는 없다 */
+                action: string;
+                /** @description 실행한 내부 운영자 식별자 */
+                internalUserId: string;
+            }[];
+        };
         /** AcceptAccountInvitationResponse */
         AcceptAccountInvitationResponse: {
             /** @description 활성화된 계정의 로그인 아이디 */
@@ -461,6 +543,13 @@ export interface components {
             changedAt: string;
             /** @description 대상 가맹점 사용자 식별자 */
             merchantUserId: string;
+        };
+        /** SettlementHoldActionResponse */
+        SettlementHoldActionResponse: {
+            /** @description 해제한 정산 채권 식별자 */
+            settlementReceivableId: string;
+            /** @description **실제로 돌아간 상태**. 매도가 끝났으면 READY, 아니면 PENDING */
+            status: string;
         };
         /** RegisterMerchantResponse */
         RegisterMerchantResponse: {
@@ -698,6 +787,52 @@ export interface components {
             /** @description 변경할 역할(ADMIN | VIEWER) */
             role: string;
         };
+        /** ListSettlementReceivablesResponse */
+        ListSettlementReceivablesResponse: {
+            /** @description 실제로 적용된 페이지 크기 */
+            size: number;
+            /** @description 필터 전체의 정산 예정 금액 합계 */
+            totalNetAmount: number;
+            /** @description 조회한 페이지 번호(0부터) */
+            page: number;
+            /** @description 정산 채권 배열(정산 예정일 최신순) */
+            settlementReceivables: {
+                /** @description 정산 예정 금액 = gross - fee + adjustment */
+                netAmount: number;
+                /** @description 확보액과 정산 기준 금액의 차이(PG 마진). 음수 가능, READY 전에는 null. */
+                exchangeProfitLossAmount?: number | null;
+                /** @description 정산 기준 금액 */
+                grossAmount: number;
+                /** @description 가맹점이 부여한 주문 식별자 */
+                merchantOrderId: string;
+                /** @description 적용 수수료율 */
+                feeRate: number;
+                /** @description 가맹점 이름 */
+                merchantName: string;
+                /** @description 생성 시각(UTC) */
+                createdAt: string;
+                /** @description 수수료 */
+                feeAmount: number;
+                /** @description 정산 통화(KRW) */
+                settlementCurrency: string;
+                /** @description 가맹점 식별자 */
+                merchantId: string;
+                /** @description 이 채권을 만든 결제 */
+                paymentId: string;
+                /** @description 정산 예정일(YYYY-MM-DD) */
+                eligibleDate: string;
+                /** @description 환전으로 확보한 KRW. READY 전에는 null. */
+                exchangeReceivedAmount?: number | null;
+                /** @description 조정 금액(음수 가능) */
+                adjustmentAmount: number;
+                /** @description 정산 채권 식별자 */
+                settlementReceivableId: string;
+                /** @description SettlementReceivableStatus 값(MVP 종착은 READY) */
+                status: string;
+            }[];
+            /** @description 필터 전체에 걸린 건수 */
+            totalCount: number;
+        };
         /** RegisterMerchantRequest */
         RegisterMerchantRequest: {
             /** @description 가맹점 코드(전 시스템에서 유일, 가맹점 사용자 로그인에 쓰인다) */
@@ -768,52 +903,6 @@ export interface components {
             /** @description 필터 전체에 걸린 건수(현재 페이지 건수가 아니다) */
             totalCount: number;
         };
-        /** ListSettlementReceivablesResponse */
-        ListSettlementReceivablesResponse: {
-            /** @description 실제로 적용된 페이지 크기 */
-            size: number;
-            /** @description 필터 전체의 정산 예정 금액 합계 */
-            totalNetAmount: number;
-            /** @description 조회한 페이지 번호(0부터) */
-            page: number;
-            /** @description 정산 채권 배열(정산 예정일 최신순) */
-            settlementReceivables: {
-                /** @description 정산 예정 금액 = gross - fee + adjustment */
-                netAmount: number;
-                /** @description 확보액과 정산 기준 금액의 차이(PG 마진). 음수 가능, READY 전에는 null. */
-                exchangeProfitLossAmount?: number | null;
-                /** @description 정산 기준 금액 */
-                grossAmount: number;
-                /** @description 가맹점이 부여한 주문 식별자 */
-                merchantOrderId: string;
-                /** @description 적용 수수료율 */
-                feeRate: number;
-                /** @description 가맹점 이름 */
-                merchantName: string;
-                /** @description 생성 시각(UTC) */
-                createdAt: string;
-                /** @description 수수료 */
-                feeAmount: number;
-                /** @description 정산 통화(KRW) */
-                settlementCurrency: string;
-                /** @description 가맹점 식별자 */
-                merchantId: string;
-                /** @description 이 채권을 만든 결제 */
-                paymentId: string;
-                /** @description 정산 예정일(YYYY-MM-DD) */
-                eligibleDate: string;
-                /** @description 환전으로 확보한 KRW. READY 전에는 null. */
-                exchangeReceivedAmount?: number | null;
-                /** @description 조정 금액(음수 가능) */
-                adjustmentAmount: number;
-                /** @description 정산 채권 식별자 */
-                settlementReceivableId: string;
-                /** @description SettlementReceivableStatus 값(MVP 종착은 READY) */
-                status: string;
-            }[];
-            /** @description 필터 전체에 걸린 건수 */
-            totalCount: number;
-        };
         /** ChangeInternalUserRoleResponse */
         ChangeInternalUserRoleResponse: {
             /** @description 변경된 역할 */
@@ -833,15 +922,6 @@ export interface components {
             userName: string;
             /** @description 전 시스템에서 유일한 이메일 */
             email: string;
-        };
-        /** RedeliverWebhookResponse */
-        RedeliverWebhookResponse: {
-            /** @description 누적 시도 횟수. 재전송은 이 값을 초기화하지 않는다(재시도 예산을 새로 주지 않는다). */
-            attemptCount: number;
-            /** @description 되돌린 전송 식별자 */
-            webhookDeliveryId: string;
-            /** @description 되돌린 뒤의 상태(PENDING). **아직 보내지 않았다는 뜻**이라 '성공'으로 읽으면 안 된다. */
-            status: string;
         };
         /** AdminListMerchantUsersResponse */
         AdminListMerchantUsersResponse: {
@@ -866,6 +946,15 @@ export interface components {
                 /** @description INVITED | ACTIVE | LOCKED | SUSPENDED | TERMINATED */
                 status: string;
             }[];
+        };
+        /** RedeliverWebhookResponse */
+        RedeliverWebhookResponse: {
+            /** @description 누적 시도 횟수. 재전송은 이 값을 초기화하지 않는다(재시도 예산을 새로 주지 않는다). */
+            attemptCount: number;
+            /** @description 되돌린 전송 식별자 */
+            webhookDeliveryId: string;
+            /** @description 되돌린 뒤의 상태(PENDING). **아직 보내지 않았다는 뜻**이라 '성공'으로 읽으면 안 된다. */
+            status: string;
         };
         /** ChangeMerchantUserStatusResponse */
         ChangeMerchantUserStatusResponse: {
@@ -1010,7 +1099,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["admin-webhook-deliveries-webhookDeliveryId-redeliver-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["admin-internal-users-iu_002-suspend-33084672"];
             };
         };
         responses: {
@@ -1205,7 +1294,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["admin-webhook-deliveries-webhookDeliveryId-redeliver-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["admin-internal-users-iu_002-suspend-33084672"];
             };
         };
         responses: {
@@ -1253,7 +1342,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["admin-webhook-deliveries-webhookDeliveryId-redeliver-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["admin-internal-users-iu_002-suspend-33084672"];
             };
         };
         responses: {
@@ -1288,6 +1377,83 @@ export interface operations {
             };
         };
     };
+    "admin-cancel-settlement-receivable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 정산 채권 식별자 */
+                settlementReceivableId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json;charset=UTF-8": components["schemas"]["SettlementHoldActionRequest"];
+            };
+        };
+        responses: {
+            /** @description 200 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettlementHoldActionResponse"];
+                };
+            };
+        };
+    };
+    "admin-settlement-hold-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 정산 채권 식별자 */
+                settlementReceivableId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 200 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListSettlementHoldHistoryResponse"];
+                };
+            };
+        };
+    };
+    "admin-release-settlement-hold": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 보류된 정산 채권 식별자 */
+                settlementReceivableId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json;charset=UTF-8": components["schemas"]["SettlementHoldActionRequest"];
+            };
+        };
+        responses: {
+            /** @description 200 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettlementHoldActionResponse"];
+                };
+            };
+        };
+    };
     "admin-redeliver-webhook": {
         parameters: {
             query?: never;
@@ -1300,7 +1466,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["admin-webhook-deliveries-webhookDeliveryId-redeliver-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["admin-internal-users-iu_002-suspend-33084672"];
             };
         };
         responses: {
@@ -1348,7 +1514,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["admin-webhook-deliveries-webhookDeliveryId-redeliver-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["admin-internal-users-iu_002-suspend-33084672"];
             };
         };
         responses: {

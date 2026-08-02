@@ -35,6 +35,7 @@ export type StatusKind =
 	| 'exchange'
 	| 'checkout'
 	| 'audit'
+	| 'settlementHoldAction'
 
 /** 각 집합은 `docs/domain/state-transitions.md`의 상태 머신과 1:1로 대응한다. */
 const LABELS: Record<StatusKind, Record<string, string>> = {
@@ -46,6 +47,15 @@ const LABELS: Record<StatusKind, Record<string, string>> = {
 		SUCCEEDED: '결제 완료',
 		FAILED: '결제 실패',
 		EXPIRED: '만료됨',
+	},
+	/**
+	 * 이력이 기록하는 **행위**다 — 상태([settlement])와 값이 겹쳐 보이지만 다른 축이라
+	 * 따로 둔다(`RELEASED`에 대응하는 상태가 없다).
+	 */
+	settlementHoldAction: {
+		HELD: '보류함',
+		RELEASED: '해제함',
+		CANCELLED: '취소함',
 	},
 	settlement: {
 		PENDING: '정산 대기',

@@ -101,6 +101,7 @@ class MerchantSettlementReceivableController(
 						exchangeReceivedAmount = entry.exchangeReceivedAmount,
 						exchangeProfitLossAmount = entry.exchangeProfitLossAmount,
 						eligibleDate = entry.eligibleDate,
+						holdReasonCode = entry.holdReasonCode,
 						createdAt = entry.createdAt,
 					)
 				},

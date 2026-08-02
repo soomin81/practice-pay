@@ -19,10 +19,13 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.header
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import paytech.practice.pay.api.admin.config.SecurityConfig
 import paytech.practice.pay.api.admin.security.InternalUserPrincipal
+import paytech.practice.pay.application.settlement.CancelSettlementReceivableUseCase
 import paytech.practice.pay.application.settlement.ExportSettlementReceivablesResult
 import paytech.practice.pay.application.settlement.ExportSettlementReceivablesUseCase
+import paytech.practice.pay.application.settlement.ListSettlementHoldHistoryUseCase
 import paytech.practice.pay.application.settlement.ListSettlementReceivablesCommand
 import paytech.practice.pay.application.settlement.ListSettlementReceivablesUseCase
+import paytech.practice.pay.application.settlement.ReleaseSettlementHoldUseCase
 import paytech.practice.pay.domain.identity.InternalUserId
 import paytech.practice.pay.domain.identity.InternalUserRole
 import paytech.practice.pay.domain.identity.LoginId
@@ -51,6 +54,15 @@ class AdminSettlementExportControllerTest : FunSpec() {
 
 	@MockkBean
 	lateinit var exportSettlementReceivablesUseCase: ExportSettlementReceivablesUseCase
+
+	@MockkBean
+	lateinit var releaseSettlementHoldUseCase: ReleaseSettlementHoldUseCase
+
+	@MockkBean
+	lateinit var cancelSettlementReceivableUseCase: CancelSettlementReceivableUseCase
+
+	@MockkBean
+	lateinit var listSettlementHoldHistoryUseCase: ListSettlementHoldHistoryUseCase
 
 	init {
 		extensions(SpringExtension)

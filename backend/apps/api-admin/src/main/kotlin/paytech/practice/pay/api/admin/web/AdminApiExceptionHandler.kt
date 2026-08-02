@@ -20,6 +20,9 @@ import paytech.practice.pay.application.identity.MerchantUserNotFoundException
 import paytech.practice.pay.application.payment.BlockchainTransactionNotFoundException
 import paytech.practice.pay.application.payment.PaymentNotFoundException
 import paytech.practice.pay.application.payment.TransactionNotReorgeableException
+import paytech.practice.pay.application.settlement.SettlementReceivableNotCancellableException
+import paytech.practice.pay.application.settlement.SettlementReceivableNotFoundException
+import paytech.practice.pay.application.settlement.SettlementReceivableNotReleasableException
 import paytech.practice.pay.application.webhook.WebhookDeliveryNotFoundException
 import paytech.practice.pay.application.webhook.WebhookDeliveryNotRedeliverableException
 
@@ -73,6 +76,21 @@ class AdminApiExceptionHandler {
 	@ResponseStatus(HttpStatus.NOT_FOUND)
 	fun handleWebhookDeliveryNotFound(ex: WebhookDeliveryNotFoundException): ErrorResponse =
 		ErrorResponse(ex.message ?: "Webhook 전송을 찾을 수 없습니다.")
+
+	@ExceptionHandler(SettlementReceivableNotFoundException::class)
+	@ResponseStatus(HttpStatus.NOT_FOUND)
+	fun handleSettlementReceivableNotFound(ex: SettlementReceivableNotFoundException): ErrorResponse =
+		ErrorResponse(ex.message ?: "정산 채권을 찾을 수 없습니다.")
+
+	@ExceptionHandler(SettlementReceivableNotReleasableException::class)
+	@ResponseStatus(HttpStatus.CONFLICT)
+	fun handleSettlementReceivableNotReleasable(ex: SettlementReceivableNotReleasableException): ErrorResponse =
+		ErrorResponse(ex.message ?: "보류된 정산 채권만 해제할 수 있습니다.")
+
+	@ExceptionHandler(SettlementReceivableNotCancellableException::class)
+	@ResponseStatus(HttpStatus.CONFLICT)
+	fun handleSettlementReceivableNotCancellable(ex: SettlementReceivableNotCancellableException): ErrorResponse =
+		ErrorResponse(ex.message ?: "이미 취소된 정산 채권입니다.")
 
 	/**
 	 * `409`인 이유: 요청 자체는 올바른데 **대상의 현재 상태가 그 동작을 허용하지 않는다**

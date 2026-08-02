@@ -1,5 +1,5 @@
 import type { SettlementReceivableSummary } from '@/api/types'
-import { formatKrw } from '@/console/format'
+import { formatKrw, holdReasonLabel } from '@/console/format'
 import { DataTable, EmptyRow, Td, Th } from '@/components/console/DataTable'
 import { StatusBadge } from '@/components/console/StatusBadge'
 
@@ -48,8 +48,12 @@ export function SettlementTable({ rows }: { rows: SettlementReceivableSummary[] 
 								? '—'
 								: formatSignedKrw(row.exchangeProfitLossAmount)}
 						</Td>
-						<Td>
+						<Td className="whitespace-normal">
 							<StatusBadge kind="settlement" status={row.status} />
+							{/* 왜 막혔는지를 함께 적는다 — 이 콘솔에는 푸는 수단이 없지만, 이유를 모르면 문의밖에 남지 않는다. */}
+							{row.holdReasonCode ? (
+								<div className="text-xs text-muted-foreground">{holdReasonLabel(row.holdReasonCode)}</div>
+							) : null}
 						</Td>
 					</tr>
 				))

@@ -68,10 +68,17 @@ import paytech.practice.pay.application.port.outbound.MerchantLoginAuditEntry
 import paytech.practice.pay.application.port.outbound.MerchantSummary
 import paytech.practice.pay.application.port.outbound.MerchantUserSummary
 import paytech.practice.pay.application.port.outbound.PaymentListEntry
+import paytech.practice.pay.application.port.outbound.SettlementHoldAuditEntry
 import paytech.practice.pay.application.port.outbound.SettlementReceivableListEntry
+import paytech.practice.pay.application.settlement.CancelSettlementReceivableResult
+import paytech.practice.pay.application.settlement.CancelSettlementReceivableUseCase
 import paytech.practice.pay.application.settlement.ExportSettlementReceivablesUseCase
+import paytech.practice.pay.application.settlement.ListSettlementHoldHistoryResult
+import paytech.practice.pay.application.settlement.ListSettlementHoldHistoryUseCase
 import paytech.practice.pay.application.settlement.ListSettlementReceivablesResult
 import paytech.practice.pay.application.settlement.ListSettlementReceivablesUseCase
+import paytech.practice.pay.application.settlement.ReleaseSettlementHoldResult
+import paytech.practice.pay.application.settlement.ReleaseSettlementHoldUseCase
 import paytech.practice.pay.application.webhook.RedeliverWebhookResult
 import paytech.practice.pay.application.webhook.RedeliverWebhookUseCase
 import paytech.practice.pay.domain.blockchain.BlockchainTransactionId
@@ -92,6 +99,8 @@ import paytech.practice.pay.domain.merchant.MerchantStatus
 import paytech.practice.pay.domain.payment.MerchantOrderId
 import paytech.practice.pay.domain.payment.PaymentId
 import paytech.practice.pay.domain.payment.PaymentStatus
+import paytech.practice.pay.domain.settlement.SettlementHoldAction
+import paytech.practice.pay.domain.settlement.SettlementHoldAuditId
 import paytech.practice.pay.domain.settlement.SettlementReceivableId
 import paytech.practice.pay.domain.settlement.SettlementReceivableStatus
 import paytech.practice.pay.domain.shared.Asset
@@ -244,6 +253,15 @@ class AdminApiDocumentationTest : FunSpec() {
 
 	@MockkBean
 	lateinit var markTransactionReorgedUseCase: MarkTransactionReorgedUseCase
+
+	@MockkBean
+	lateinit var releaseSettlementHoldUseCase: ReleaseSettlementHoldUseCase
+
+	@MockkBean
+	lateinit var cancelSettlementReceivableUseCase: CancelSettlementReceivableUseCase
+
+	@MockkBean
+	lateinit var listSettlementHoldHistoryUseCase: ListSettlementHoldHistoryUseCase
 
 	init {
 		extensions(SpringExtension)
@@ -983,6 +1001,7 @@ class AdminApiDocumentationTest : FunSpec() {
 								exchangeReceivedAmount = 20_101,
 								exchangeProfitLossAmount = 101,
 								eligibleDate = LocalDate.parse("2026-08-01"),
+								holdReasonCode = null,
 								createdAt = NOW,
 							),
 						),
@@ -1027,6 +1046,9 @@ class AdminApiDocumentationTest : FunSpec() {
 								.description("확보액과 정산 기준 금액의 차이(PG 마진). 음수 가능, READY 전에는 null.")
 								.optional(),
 							fieldWithPath("settlementReceivables[].eligibleDate").description("정산 예정일(YYYY-MM-DD)"),
+							fieldWithPath("settlementReceivables[].holdReasonCode")
+								.description("지금 왜 막혀 있나. HELD가 아니면 null(막혔던 이력은 hold-history에 있다)")
+								.optional(),
 							fieldWithPath("settlementReceivables[].createdAt").description("생성 시각(UTC)"),
 							fieldWithPath("totalCount").description("필터 전체에 걸린 건수"),
 							fieldWithPath("totalNetAmount").description("필터 전체의 정산 예정 금액 합계"),
@@ -1073,6 +1095,132 @@ class AdminApiDocumentationTest : FunSpec() {
 									fieldWithPath("paymentId").description("그 거래가 속한 결제 식별자"),
 									fieldWithPath("settlementHeld")
 										.description("정산 채권을 실제로 막았는지. **false면 아직 채권이 없다는 뜻이고 더 위험하다** — 매도 Worker가 이 결제를 집어 채권을 만들 수 있다."),
+								),
+						),
+					),
+				)
+		}
+
+		test("POST /admin/settlement-receivables/{id}/release is documented") {
+			every { releaseSettlementHoldUseCase.execute(any()) } returns
+				ReleaseSettlementHoldResult(
+					settlementReceivableId = SettlementReceivableId("stl_001"),
+					status = SettlementReceivableStatus.READY,
+				)
+
+			mockMvc
+				.perform(
+					RestDocumentationRequestBuilders
+						.post("/admin/settlement-receivables/{settlementReceivableId}/release", "stl_001")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""{"note":"탐지 오류로 확인되어 해제합니다."}""")
+						.with(authenticatedAs(SUPER_ADMIN))
+						.with(csrf()),
+				).andExpect(status().isOk)
+				.andDo(
+					document(
+						"admin-release-settlement-hold",
+						adminResource(
+							pathParameters = listOf(parameterWithName("settlementReceivableId").description("보류된 정산 채권 식별자")),
+							summary = "정산 보류 해제",
+							description =
+								"**SUPER_ADMIN만** 실행할 수 있다(막는 쪽 mark-reorged와 같은 등급). " +
+									"**돌아갈 상태를 요청이 정하지 않는다** — 서버가 매도 완료 여부로 READY/PENDING을 고르고 " +
+									"응답의 status로 알려준다. note는 필수이고(공백이면 400) 감사 이력에 남는다. " +
+									"보류 상태가 아니면 409, 없는 채권은 404.",
+							requestSchema = "SettlementHoldActionRequest",
+							requestFields = listOf(fieldWithPath("note").description("왜 풀었는지. **필수** — 감사 이력에 남는다")),
+							responseSchema = "SettlementHoldActionResponse",
+							responseFields =
+								listOf(
+									fieldWithPath("settlementReceivableId").description("해제한 정산 채권 식별자"),
+									fieldWithPath("status").description("**실제로 돌아간 상태**. 매도가 끝났으면 READY, 아니면 PENDING"),
+								),
+						),
+					),
+				)
+		}
+
+		test("POST /admin/settlement-receivables/{id}/cancel is documented") {
+			every { cancelSettlementReceivableUseCase.execute(any()) } returns
+				CancelSettlementReceivableResult(
+					settlementReceivableId = SettlementReceivableId("stl_001"),
+					status = SettlementReceivableStatus.CANCELLED,
+				)
+
+			mockMvc
+				.perform(
+					RestDocumentationRequestBuilders
+						.post("/admin/settlement-receivables/{settlementReceivableId}/cancel", "stl_001")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""{"note":"가맹점과 합의해 정산하지 않습니다."}""")
+						.with(authenticatedAs(SUPER_ADMIN))
+						.with(csrf()),
+				).andExpect(status().isOk)
+				.andDo(
+					document(
+						"admin-cancel-settlement-receivable",
+						adminResource(
+							pathParameters = listOf(parameterWithName("settlementReceivableId").description("정산 채권 식별자")),
+							summary = "정산 채권 취소",
+							description =
+								"**SUPER_ADMIN만** 실행할 수 있다. 그 돈을 정산하지 않기로 확정한다 — CANCELLED는 " +
+									"종료 상태라 되돌릴 수 없다. note는 필수다. 이미 취소된 채권은 409, 없는 채권은 404.",
+							requestSchema = "SettlementHoldActionRequest",
+							requestFields = listOf(fieldWithPath("note").description("왜 취소했는지. **필수** — 감사 이력에 남는다")),
+							responseSchema = "SettlementHoldActionResponse",
+							responseFields =
+								listOf(
+									fieldWithPath("settlementReceivableId").description("취소한 정산 채권 식별자"),
+									fieldWithPath("status").description("언제나 CANCELLED"),
+								),
+						),
+					),
+				)
+		}
+
+		test("GET /admin/settlement-receivables/{id}/hold-history is documented") {
+			every { listSettlementHoldHistoryUseCase.execute(any()) } returns
+				ListSettlementHoldHistoryResult(
+					entries =
+						listOf(
+							SettlementHoldAuditEntry(
+								auditId = SettlementHoldAuditId("sha_001"),
+								internalUserId = InternalUserId("iu_001"),
+								internalUserName = "홍길동",
+								action = SettlementHoldAction.RELEASED,
+								reasonCode = null,
+								note = "탐지 오류로 확인되어 해제합니다.",
+								occurredAt = NOW,
+							),
+						),
+				)
+
+			mockMvc
+				.perform(
+					RestDocumentationRequestBuilders
+						.get("/admin/settlement-receivables/{settlementReceivableId}/hold-history", "stl_001")
+						.with(authenticatedAs(VIEWER)),
+				).andExpect(status().isOk)
+				.andDo(
+					document(
+						"admin-settlement-hold-history",
+						adminResource(
+							pathParameters = listOf(parameterWithName("settlementReceivableId").description("정산 채권 식별자")),
+							summary = "정산 보류 이력 조회",
+							description =
+								"채권 한 건의 보류·해제·취소 이력을 최신순으로 준다. **VIEWER도 읽을 수 있다** — " +
+									"이력을 읽는 것과 상태를 바꾸는 것은 다른 권한이다. 없는 채권은 404(빈 이력과 구분한다).",
+							responseSchema = "ListSettlementHoldHistoryResponse",
+							responseFields =
+								listOf(
+									fieldWithPath("history[].auditId").description("이력 식별자"),
+									fieldWithPath("history[].internalUserId").description("실행한 내부 운영자 식별자"),
+									fieldWithPath("history[].internalUserName").description("실행한 내부 운영자 이름"),
+									fieldWithPath("history[].action").description("HELD / RELEASED / CANCELLED. **채권 상태와 다른 축이다** — RELEASED에 대응하는 상태는 없다"),
+									fieldWithPath("history[].reasonCode").description("HELD일 때의 사유 코드. 해제·취소에는 null").optional(),
+									fieldWithPath("history[].note").description("실행자가 남긴 메모. 해제·취소에는 반드시 있다").optional(),
+									fieldWithPath("history[].occurredAt").description("실행 시각(UTC)"),
 								),
 						),
 					),
