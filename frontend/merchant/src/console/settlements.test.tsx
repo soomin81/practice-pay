@@ -94,7 +94,10 @@ describe('정산 페이지', () => {
 		renderWithRouter(<SettlementPage />)
 
 		expect(await screen.findByText('59,100원')).toBeInTheDocument()
-		expect(screen.getByText(/3건 기준/)).toBeInTheDocument()
+		// 합계가 **어느 범위의 것인지**도 함께 보인다 — 예전에는 합계 아래에 "3건 기준"으로
+		// 적었고, 지금은 통계 줄의 옆 칸(건수)이 같은 답을 한다. 확인하려는 것은 표현이
+		// 아니라 "합계만 덩그러니 있지 않다"는 사실이다.
+		expect(screen.getByText('3건')).toBeInTheDocument()
 	})
 
 	it('필터를 바꾸면 첫 페이지로 돌아간다', async () => {

@@ -1,71 +1,69 @@
 import { Link } from 'react-router-dom'
 import type { PaymentSummary } from '@/api/types'
 import { formatDateTime, formatKrw, formatTokenAmount } from '@/console/format'
-import { Badge } from '@/components/ui/badge'
+import { DataTable, EmptyRow, Td, Th } from '@/components/console/DataTable'
+import { StatusBadge } from '@/components/console/StatusBadge'
 
 /**
  * 결제 내역 표. **토큰 금액은 `formatTokenAmount`로만 다룬다** — 백엔드가 Minor Unit을
  * 문자열로 주는 이유가 `Number` 변환에서 값이 조용히 달라질 수 있어서다.
+ *
+ * 시각·금액·Hash를 등폭으로 두어 **행끼리 자릿수가 맞는다** — 표를 훑으며 큰 금액을
+ * 찾는 것이 이 화면의 주 용도라, 비례 폰트면 그 일이 안 된다.
  */
 export function PaymentTable({ payments }: { payments: PaymentSummary[] }) {
-	if (payments.length === 0) {
-		return <p className="text-sm text-muted-foreground">조건에 맞는 결제가 없습니다.</p>
-	}
-
 	return (
-		<div className="overflow-x-auto">
-			<table className="w-full text-sm">
-				<thead>
-					<tr className="border-b text-left text-muted-foreground">
-						<th className="py-2 pr-3 font-medium">생성 시각</th>
-						<th className="py-2 pr-3 font-medium">주문</th>
-						<th className="py-2 pr-3 font-medium">주문 금액</th>
-						<th className="py-2 pr-3 font-medium">결제 금액</th>
-						<th className="py-2 pr-3 font-medium">상태</th>
-						<th className="py-2 font-medium">거래 Hash</th>
-					</tr>
-				</thead>
-				<tbody>
-					{payments.map((payment) => (
-						<tr key={payment.paymentId} className="border-b last:border-0">
-							<td className="py-2 pr-3 whitespace-nowrap">{formatDateTime(payment.createdAt)}</td>
-							<td className="py-2 pr-3">
-								{/* 주문명이 상세로 가는 입구다(admin 목록과 같은 방식). */}
-								<Link className="underline underline-offset-2" to={`/payments/${payment.paymentId}`}>
-									{payment.orderName}
-								</Link>
-								<div className="text-xs text-muted-foreground">{payment.merchantOrderId}</div>
-							</td>
-							<td className="py-2 pr-3 whitespace-nowrap">{formatKrw(payment.orderAmount)}</td>
-							<td className="py-2 pr-3 whitespace-nowrap">
-								{formatTokenAmount(payment.paymentAmount, payment.tokenDecimals)} {payment.paymentAsset}
-							</td>
-							<td className="py-2 pr-3">
-								<PaymentStatusBadge status={payment.status} failureReason={payment.failureReason} />
-							</td>
-							{/* 전체 값은 title로 남긴다 — 운영자가 온체인 탐색기와 대조해야 한다. */}
-							<td className="py-2 font-mono text-xs" title={payment.transactionHash ?? undefined}>
+		<DataTable
+			head={
+				<>
+					<Th>생성 시각</Th>
+					<Th>주문</Th>
+					<Th align="right">주문 금액</Th>
+					<Th align="right">결제 금액</Th>
+					<Th>상태</Th>
+					<Th>거래 Hash</Th>
+				</>
+			}
+		>
+			{payments.length === 0 ? (
+				<EmptyRow colSpan={6}>조건에 맞는 결제가 없습니다.</EmptyRow>
+			) : (
+				payments.map((payment) => (
+					<tr key={payment.paymentId} className="hover:bg-muted/40">
+						<Td variant="mono">{formatDateTime(payment.createdAt)}</Td>
+						<Td className="whitespace-normal">
+							{/* 주문명이 상세로 가는 입구다(admin 목록과 같은 방식). */}
+							<Link
+								className="font-medium hover:underline hover:underline-offset-2"
+								to={`/payments/${payment.paymentId}`}
+							>
+								{payment.orderName}
+							</Link>
+							<div className="mono-cell text-xs text-muted-foreground">{payment.merchantOrderId}</div>
+						</Td>
+						<Td variant="amount">{formatKrw(payment.orderAmount)}</Td>
+						<Td variant="amount">
+							{formatTokenAmount(payment.paymentAmount, payment.tokenDecimals)}{' '}
+							<span className="text-muted-foreground">{payment.paymentAsset}</span>
+						</Td>
+						<Td>
+							<StatusBadge status={payment.status} />
+							{/* **실패 사유는 코드 그대로 보여준다** — 가맹점 운영자도 원인 코드를 그대로
+							    본다(고객 대면 체크아웃에서만 문구로 번역한다). */}
+							{payment.failureReason ? (
+								<div className="mt-0.5 text-xs text-muted-foreground">{payment.failureReason}</div>
+							) : null}
+						</Td>
+						{/* 전체 값은 title로 남긴다 — 운영자가 온체인 탐색기와 대조해야 한다. */}
+						<Td variant="mono" className="text-xs">
+							<span title={payment.transactionHash ?? undefined}>
 								{payment.transactionHash ? shortenHex(payment.transactionHash) : '—'}
-							</td>
-						</tr>
-					))}
-				</tbody>
-			</table>
-		</div>
-	)
-}
-
-/**
- * 상태 배지. **실패 사유는 코드 그대로 보여준다** — 가맹점 운영자도 원인 코드를 그대로 본다
- * (고객 대면 체크아웃에서만 문구로 번역한다).
- */
-function PaymentStatusBadge({ status, failureReason }: { status: string; failureReason?: string | null }) {
-	const variant = status === 'SUCCEEDED' ? 'default' : status === 'FAILED' ? 'destructive' : 'secondary'
-	return (
-		<div className="flex flex-col gap-0.5">
-			<Badge variant={variant}>{status}</Badge>
-			{failureReason && <span className="text-xs text-muted-foreground">{failureReason}</span>}
-		</div>
+							</span>
+						</Td>
+					</tr>
+				))
+			)}
+		</DataTable>
 	)
 }
 

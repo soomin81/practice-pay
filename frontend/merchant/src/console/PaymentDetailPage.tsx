@@ -3,9 +3,11 @@ import { Link, useParams } from 'react-router-dom'
 import { MerchantApiError } from '@/api/client'
 import { usePaymentDetail } from '@/console/usePaymentDetail'
 import { formatDateTime, formatKrw, formatTokenAmount } from '@/console/format'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { PageHeader } from '@/components/console/PageHeader'
+import { Panel } from '@/components/console/Panel'
+import { DataTable, Td, Th } from '@/components/console/DataTable'
+import { StatusBadge } from '@/components/console/StatusBadge'
 
 /**
  * 결제 한 건의 전체 맥락을 단계별로 보여준다(내부 운영자 콘솔의 같은 화면에서 가맹점 열만 뺀 복제본이다).
@@ -38,20 +40,21 @@ export function PaymentDetailPage() {
 		detail.data
 
 	return (
-		<div className="flex flex-col gap-6">
-			<div className="flex items-start justify-between gap-3">
-				<div>
-					<h1 className="font-heading text-xl font-medium">{payment.orderName}</h1>
-					<p className="font-mono text-xs break-all text-muted-foreground">{payment.paymentId}</p>
-				</div>
-				<Button variant="outline" size="sm" asChild>
-					<Link to="/payments">목록으로</Link>
-				</Button>
-			</div>
+		<>
+			<PageHeader
+				title={payment.orderName}
+				description={payment.paymentId}
+				action={
+					<Button variant="outline" size="sm" asChild>
+						<Link to="/payments">목록으로</Link>
+					</Button>
+				}
+			/>
 
+			<div className="flex flex-col gap-6">
 			<Section title="결제" description="주문과 결제 금액, 현재 상태">
 				<Field label="상태">
-					<Badge variant={statusTone(payment.status)}>{payment.status}</Badge>
+					<StatusBadge status={payment.status} />
 					{payment.failureReason && <span className="ml-2 text-xs text-destructive">{payment.failureReason}</span>}
 				</Field>
 				<Field label="주문 번호">{payment.merchantOrderId}</Field>
@@ -79,7 +82,9 @@ export function PaymentDetailPage() {
 			</Section>
 
 			<Section title="체크아웃" description="고객이 결제를 진행한 세션">
-				<Field label="상태">{checkoutSession.status}</Field>
+				<Field label="상태">
+					<StatusBadge status={checkoutSession.status} />
+				</Field>
 				<Field label="연결된 지갑" mono>
 					{checkoutSession.connectedWallet ?? '아직 연결되지 않음'}
 				</Field>
@@ -89,8 +94,10 @@ export function PaymentDetailPage() {
 				{blockchainTransaction ? (
 					<>
 						<Field label="상태">
-							{blockchainTransaction.status} ({blockchainTransaction.confirmationCount} /{' '}
-							{blockchainTransaction.requiredConfirmationCount} Confirm)
+							<StatusBadge status={blockchainTransaction.status} />{' '}
+							<span className="tabular text-xs text-muted-foreground">
+								{blockchainTransaction.confirmationCount} / {blockchainTransaction.requiredConfirmationCount} Confirm
+							</span>
 						</Field>
 						<Field label="블록">{blockchainTransaction.blockNumber ?? '—'}</Field>
 						<Field label="거래 Hash" mono>
@@ -117,7 +124,8 @@ export function PaymentDetailPage() {
 				{exchangeOrder ? (
 					<>
 						<Field label="상태">
-							{exchangeOrder.status} ({exchangeOrder.providerCode})
+							<StatusBadge status={exchangeOrder.status} />{' '}
+							<span className="text-xs text-muted-foreground">{exchangeOrder.providerCode}</span>
 						</Field>
 						<Field label="체결 환율">{exchangeOrder.averageExecutionRate ?? '—'}</Field>
 						<Field label="확보 금액">{optionalKrw(exchangeOrder.receivedAmount)}</Field>
@@ -133,7 +141,9 @@ export function PaymentDetailPage() {
 			<Section title="정산" description="가맹점에 지급할 채권">
 				{settlementReceivable ? (
 					<>
-						<Field label="상태">{settlementReceivable.status}</Field>
+						<Field label="상태">
+							<StatusBadge status={settlementReceivable.status} />
+						</Field>
 						<Field label="정산 기준">{formatKrw(settlementReceivable.grossAmount)}</Field>
 						<Field label="수수료">−{formatKrw(settlementReceivable.feeAmount)}</Field>
 						<Field label="정산 예정">
@@ -151,58 +161,52 @@ export function PaymentDetailPage() {
 				{webhookDeliveries.length === 0 ? (
 					<NotYet>전송 이력이 없습니다(가맹점이 Webhook URL을 설정하지 않았을 수 있습니다).</NotYet>
 				) : (
-					<div className="overflow-x-auto sm:col-span-2">
-						<table className="w-full text-sm">
-							<thead>
-								<tr className="border-b text-left text-muted-foreground">
-									<th className="py-2 pr-3 font-medium">이벤트</th>
-									<th className="py-2 pr-3 font-medium">상태</th>
-									<th className="py-2 pr-3 font-medium">시도</th>
-									<th className="py-2 pr-3 font-medium">응답</th>
-									<th className="py-2 font-medium">시각</th>
+					<div className="sm:col-span-2">
+						<DataTable
+							head={
+								<>
+									<Th>이벤트</Th>
+									<Th>상태</Th>
+									<Th align="right">시도</Th>
+									<Th align="right">응답</Th>
+									<Th>시각</Th>
+								</>
+							}
+						>
+							{webhookDeliveries.map((delivery) => (
+								<tr key={delivery.webhookDeliveryId}>
+									<Td className="mono-cell text-foreground">{delivery.eventType}</Td>
+									<Td>
+										<StatusBadge status={delivery.status} />
+									</Td>
+									<Td variant="amount">{delivery.attemptCount}회</Td>
+									<Td variant="amount">{delivery.lastHttpStatus ?? '—'}</Td>
+									<Td variant="mono">{formatDateTime(delivery.createdAt)}</Td>
 								</tr>
-							</thead>
-							<tbody>
-								{webhookDeliveries.map((delivery) => (
-									<tr key={delivery.webhookDeliveryId} className="border-b last:border-0">
-										<td className="py-2 pr-3">{delivery.eventType}</td>
-										<td className="py-2 pr-3">
-											<Badge variant={delivery.status === 'SUCCEEDED' ? 'default' : 'destructive'}>
-												{delivery.status}
-											</Badge>
-										</td>
-										<td className="py-2 pr-3">{delivery.attemptCount}회</td>
-										<td className="py-2 pr-3">{delivery.lastHttpStatus ?? '—'}</td>
-										<td className="py-2 whitespace-nowrap">{formatDateTime(delivery.createdAt)}</td>
-									</tr>
-								))}
-							</tbody>
-						</table>
+							))}
+						</DataTable>
 					</div>
 				)}
 			</Section>
-		</div>
+			</div>
+		</>
 	)
 }
 
 function Section({ title, description, children }: { title: string; description: string; children: ReactNode }) {
 	return (
-		<Card>
-			<CardHeader>
-				<CardTitle className="text-base">{title}</CardTitle>
-				<CardDescription>{description}</CardDescription>
-			</CardHeader>
-			<CardContent className="grid gap-x-6 gap-y-3 sm:grid-cols-2">{children}</CardContent>
-		</Card>
+		<Panel title={title} meta={description} bodyClassName="grid gap-x-6 gap-y-4 px-5 pb-5 sm:grid-cols-2">
+			{children}
+		</Panel>
 	)
 }
 
 /** 주소·Hash는 줄이지 않고 전체를 보여준다 — 운영자가 온체인 탐색기와 대조해야 한다. */
 function Field({ label, mono, children }: { label: string; mono?: boolean; children: ReactNode }) {
 	return (
-		<div className="flex flex-col gap-0.5 text-sm">
+		<div className="flex flex-col gap-1 text-sm">
 			<span className="text-xs text-muted-foreground">{label}</span>
-			<span className={mono ? 'font-mono text-xs break-all' : undefined}>{children}</span>
+			<span className={mono ? 'mono-cell text-xs break-all' : 'tabular'}>{children}</span>
 		</div>
 	)
 }
@@ -215,12 +219,6 @@ function NotYet({ children }: { children: ReactNode }) {
 /** 금액이 `null`이면 `0`이 아니라 빈 표식으로 그린다(정산 표와 같은 규칙). */
 function optionalKrw(amount: number | null | undefined): string {
 	return amount === null || amount === undefined ? '—' : formatKrw(amount)
-}
-
-function statusTone(status: string): 'default' | 'destructive' | 'secondary' {
-	if (status === 'SUCCEEDED') return 'default'
-	if (status === 'FAILED') return 'destructive'
-	return 'secondary'
 }
 
 function errorMessage(error: unknown): string {

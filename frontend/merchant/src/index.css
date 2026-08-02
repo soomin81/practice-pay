@@ -7,6 +7,17 @@
 
 @theme inline {
     --font-heading: var(--font-sans);
+    --font-mono: ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', 'Roboto Mono', Menlo, Consolas, monospace;
+    --color-state-ok: var(--state-ok);
+    --color-state-ok-fg: var(--state-ok-fg);
+    --color-state-wait: var(--state-wait);
+    --color-state-wait-fg: var(--state-wait-fg);
+    --color-state-move: var(--state-move);
+    --color-state-move-fg: var(--state-move-fg);
+    --color-state-off: var(--state-off);
+    --color-state-off-fg: var(--state-off-fg);
+    --color-state-bad: var(--state-bad);
+    --color-state-bad-fg: var(--state-bad-fg);
     --font-sans: 'Geist Variable', sans-serif;
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
@@ -49,7 +60,7 @@
 }
 
 :root {
-    --background: oklch(1 0 0);
+    --background: oklch(0.976 0.002 247.9);
     --foreground: oklch(0.145 0 0);
     --card: oklch(1 0 0);
     --card-foreground: oklch(0.145 0 0);
@@ -59,34 +70,50 @@
     --primary-foreground: oklch(0.985 0 0);
     --secondary: oklch(0.97 0 0);
     --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
+    --muted: oklch(0.968 0.004 247.9);
+    --muted-foreground: oklch(0.554 0.021 257.4);
     --accent: oklch(0.97 0 0);
     --accent-foreground: oklch(0.205 0 0);
     --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
+    --border: oklch(0.923 0.004 247.9);
+    --input: oklch(0.923 0.004 247.9);
     --ring: oklch(0.708 0 0);
     --chart-1: oklch(0.87 0 0);
     --chart-2: oklch(0.556 0 0);
     --chart-3: oklch(0.439 0 0);
     --chart-4: oklch(0.371 0 0);
     --chart-5: oklch(0.269 0 0);
-    --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.708 0 0);
+    --radius: 0.75rem;
+    /* 사이드바는 **테마와 무관하게 항상 짙은 네이비**다 — 아래 `.dark`에도 같은 값을
+       둔다. 스크린샷의 사이드바가 라이트 화면에서도 어두운 것을 그대로 따른 것이고,
+       덕분에 브랜드 영역이 본문 밝기와 상관없이 한 가지 모습을 유지한다. */
+    --sidebar: oklch(0.213 0.021 258.3);
+    --sidebar-foreground: oklch(0.93 0.005 250);
+    --sidebar-primary: oklch(0.985 0 0);
+    --sidebar-primary-foreground: oklch(0.213 0.021 258.3);
+    --sidebar-accent: oklch(0.278 0.024 257.3);
+    --sidebar-accent-foreground: oklch(0.985 0 0);
+    --sidebar-border: oklch(1 0 0 / 8%);
+    --sidebar-ring: oklch(0.6 0.02 257);
+
+    /* 상태 배지 — 파스텔 배경 + 진한 글자. 상태 이름이 아니라 **성격**으로 나눈다
+       (같은 색을 여러 애그리게이트가 공유한다 — StatusBadge의 주석 참고). */
+    --state-ok: oklch(0.945 0.045 165);
+    --state-ok-fg: oklch(0.44 0.09 165);
+    --state-wait: oklch(0.945 0.035 235);
+    --state-wait-fg: oklch(0.45 0.09 245);
+    --state-move: oklch(0.93 0.05 255);
+    --state-move-fg: oklch(0.45 0.16 260);
+    --state-off: oklch(0.945 0.005 250);
+    --state-off-fg: oklch(0.45 0.02 255);
+    --state-bad: oklch(0.945 0.035 22);
+    --state-bad-fg: oklch(0.5 0.16 25);
 }
 
 .dark {
-    --background: oklch(0.145 0 0);
+    --background: oklch(0.163 0.011 258);
     --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
+    --card: oklch(0.208 0.013 258);
     --card-foreground: oklch(0.985 0 0);
     --popover: oklch(0.205 0 0);
     --popover-foreground: oklch(0.985 0 0);
@@ -107,14 +134,27 @@
     --chart-3: oklch(0.439 0 0);
     --chart-4: oklch(0.371 0 0);
     --chart-5: oklch(0.269 0 0);
-    --sidebar: oklch(0.205 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.488 0.243 264.376);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
+    /* 사이드바 값은 `:root`와 **같다** — 테마가 바뀌어도 사이드바는 그대로다. */
+    --sidebar: oklch(0.213 0.021 258.3);
+    --sidebar-foreground: oklch(0.93 0.005 250);
+    --sidebar-primary: oklch(0.985 0 0);
+    --sidebar-primary-foreground: oklch(0.213 0.021 258.3);
+    --sidebar-accent: oklch(0.278 0.024 257.3);
     --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.556 0 0);
+    --sidebar-border: oklch(1 0 0 / 8%);
+    --sidebar-ring: oklch(0.6 0.02 257);
+
+    /* 어두운 바탕에서는 파스텔이 눈을 찌른다 — 배경을 낮추고 글자를 올린다. */
+    --state-ok: oklch(0.32 0.055 165);
+    --state-ok-fg: oklch(0.85 0.11 165);
+    --state-wait: oklch(0.32 0.045 240);
+    --state-wait-fg: oklch(0.85 0.09 240);
+    --state-move: oklch(0.33 0.07 260);
+    --state-move-fg: oklch(0.86 0.1 262);
+    --state-off: oklch(0.3 0.008 255);
+    --state-off-fg: oklch(0.8 0.012 255);
+    --state-bad: oklch(0.33 0.075 25);
+    --state-bad-fg: oklch(0.84 0.11 25);
 }
 
 @layer base {
@@ -127,4 +167,24 @@
   html {
     @apply font-sans;
     }
+}
+
+/**
+ * 숫자·식별자·일시를 **자릿수가 맞게** 보여준다.
+ *
+ * 참고 디자인에서 가장 강한 신호가 이것이었다 — 일시(2026.08.02.14:18), 거래ID,
+ * 금액이 전부 세로로 정렬돼 있어서 훑어보며 비교할 수 있다. 비례 폰트로 두면
+ * `1`이 좁아 금액 자릿수가 어긋나고, 그러면 표를 훑는 의미가 사라진다.
+ *
+ * `.tabular`는 등폭 글꼴까지는 쓰지 않고 **숫자 폭만** 고정한다(한글이 섞이는 칸용).
+ * `.mono-cell`은 식별자·일시처럼 값 전체가 기계적인 칸에 쓴다.
+ */
+@utility tabular {
+    font-variant-numeric: tabular-nums;
+}
+
+@utility mono-cell {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
 }

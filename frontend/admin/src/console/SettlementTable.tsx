@@ -1,6 +1,7 @@
 import type { SettlementReceivableSummary } from '@/api/types'
 import { formatKrw } from '@/console/format'
-import { Badge } from '@/components/ui/badge'
+import { DataTable, EmptyRow, Td, Th } from '@/components/console/DataTable'
+import { StatusBadge } from '@/components/console/StatusBadge'
 
 /**
  * 정산 채권 표.
@@ -9,54 +10,53 @@ import { Badge } from '@/components/ui/badge'
  * 문자열)과 다른 점이다.
  */
 export function SettlementTable({ rows }: { rows: SettlementReceivableSummary[] }) {
-	if (rows.length === 0) {
-		return <p className="text-sm text-muted-foreground">조건에 맞는 정산 채권이 없습니다.</p>
-	}
-
 	return (
-		<div className="overflow-x-auto">
-			<table className="w-full text-sm">
-				<thead>
-					<tr className="border-b text-left text-muted-foreground">
-						<th className="py-2 pr-3 font-medium">정산 예정일</th>
-						<th className="py-2 pr-3 font-medium">가맹점</th>
-						<th className="py-2 pr-3 font-medium">주문</th>
-						<th className="py-2 pr-3 font-medium text-right">정산 기준</th>
-						<th className="py-2 pr-3 font-medium text-right">수수료</th>
-						<th className="py-2 pr-3 font-medium text-right">정산 예정</th>
-						<th className="py-2 pr-3 font-medium text-right">환전 손익</th>
-						<th className="py-2 font-medium">상태</th>
+		<DataTable
+			head={
+				<>
+					<Th>정산 예정일</Th>
+					<Th>가맹점</Th>
+					<Th>주문</Th>
+					<Th align="right">정산 기준</Th>
+					<Th align="right">수수료</Th>
+					<Th align="right">정산 예정</Th>
+					<Th align="right">환전 손익</Th>
+					<Th>상태</Th>
+				</>
+			}
+		>
+			{rows.length === 0 ? (
+				<EmptyRow colSpan={8}>조건에 맞는 정산 채권이 없습니다.</EmptyRow>
+			) : (
+				rows.map((row) => (
+					<tr key={row.settlementReceivableId} className="hover:bg-muted/40">
+						<Td variant="mono">{row.eligibleDate}</Td>
+						<Td>{row.merchantName}</Td>
+						<Td className="whitespace-normal">
+							<div className="mono-cell">{row.merchantOrderId}</div>
+							<div className="mono-cell text-xs text-muted-foreground">{row.paymentId}</div>
+						</Td>
+						<Td variant="amount">{formatKrw(row.grossAmount)}</Td>
+						<Td variant="amount" className="text-muted-foreground">
+							−{formatKrw(row.feeAmount)}
+							<div className="text-xs">{formatFeeRate(row.feeRate)}</div>
+						</Td>
+						<Td variant="amount" className="font-semibold">
+							{formatKrw(row.netAmount)}
+						</Td>
+						{/* 환전 확보액과 정산 기준 금액의 차이 = PG 마진. READY 전에는 값이 없다. */}
+						<Td variant="amount" className="text-muted-foreground">
+							{row.exchangeProfitLossAmount === null || row.exchangeProfitLossAmount === undefined
+								? '—'
+								: formatSignedKrw(row.exchangeProfitLossAmount)}
+						</Td>
+						<Td>
+							<StatusBadge status={row.status} />
+						</Td>
 					</tr>
-				</thead>
-				<tbody>
-					{rows.map((row) => (
-						<tr key={row.settlementReceivableId} className="border-b last:border-0">
-							<td className="py-2 pr-3 whitespace-nowrap">{row.eligibleDate}</td>
-							<td className="py-2 pr-3">{row.merchantName}</td>
-							<td className="py-2 pr-3">
-								<div>{row.merchantOrderId}</div>
-								<div className="font-mono text-xs text-muted-foreground">{row.paymentId}</div>
-							</td>
-							<td className="py-2 pr-3 text-right whitespace-nowrap">{formatKrw(row.grossAmount)}</td>
-							<td className="py-2 pr-3 text-right whitespace-nowrap text-muted-foreground">
-								−{formatKrw(row.feeAmount)}
-								<div className="text-xs">{formatFeeRate(row.feeRate)}</div>
-							</td>
-							<td className="py-2 pr-3 text-right font-medium whitespace-nowrap">{formatKrw(row.netAmount)}</td>
-							{/* 환전 확보액과 정산 기준 금액의 차이 = PG 마진. READY 전에는 값이 없다. */}
-							<td className="py-2 pr-3 text-right whitespace-nowrap text-muted-foreground">
-								{row.exchangeProfitLossAmount === null || row.exchangeProfitLossAmount === undefined
-									? '—'
-									: formatSignedKrw(row.exchangeProfitLossAmount)}
-							</td>
-							<td className="py-2">
-								<Badge variant={row.status === 'READY' ? 'default' : 'secondary'}>{row.status}</Badge>
-							</td>
-						</tr>
-					))}
-				</tbody>
-			</table>
-		</div>
+				))
+			)}
+		</DataTable>
 	)
 }
 

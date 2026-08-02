@@ -6,7 +6,9 @@ import { useSettlementReceivables } from '@/console/useSettlementReceivables'
 import { useMerchants } from '@/console/useMerchants'
 import { formatKrw } from '@/console/format'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { LiveStamp, PageHeader } from '@/components/console/PageHeader'
+import { Panel } from '@/components/console/Panel'
+import { StatStrip } from '@/components/console/StatStrip'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 
@@ -36,32 +38,39 @@ export function SettlementPage() {
 	const lastPage = Math.max(0, Math.ceil(totalCount / PAGE_SIZE) - 1)
 
 	return (
-		<div className="flex flex-col gap-6">
-			<Card>
-				<CardHeader>
-					<CardTitle>정산 채권</CardTitle>
-					<CardDescription>
-						결제 건별 정산 예정 금액입니다. 기간은 <strong>정산 예정일</strong> 기준입니다.
-					</CardDescription>
-				</CardHeader>
-				<CardContent className="flex flex-col gap-4">
-					{/* 이 화면의 핵심 숫자 — 현재 페이지가 아니라 필터 전체의 합계다. */}
-					<div className="rounded-lg border bg-muted/40 px-4 py-3">
-						<div className="text-xs text-muted-foreground">조건에 맞는 정산 예정 금액 합계</div>
-						<div className="text-2xl font-semibold tracking-tight">
-							{settlements.data ? formatKrw(settlements.data.totalNetAmount) : '—'}
-						</div>
-						<div className="text-xs text-muted-foreground">
-							{totalCount.toLocaleString('ko-KR')}건 기준
-						</div>
-					</div>
+		<>
+			<PageHeader
+				title="정산"
+				description="전 가맹점의 정산 예정 금액입니다. 기간은 정산 예정일 기준입니다."
+				action={<LiveStamp at={new Date()} />}
+			/>
+		{/* **여기 두 값은 목록 API가 실제로 내려주는 것뿐이다**(`totalCount`,
+		    `totalNetAmount`). 참고 디자인처럼 네 칸을 채우려면 서버가 합계를 더 줘야
+		    하는데, 없는 값을 그럴듯하게 만들면 그 숫자를 아무도 설명할 수 없게 된다. */}
+		<div className="pb-6">
+			<StatStrip
+				stats={[
+					{ label: '건수', value: settlements.data ? `${totalCount.toLocaleString('ko-KR')}건` : '—' },
+					{
+						label: '정산 예정 금액 합계',
+						value: settlements.data ? formatKrw(settlements.data.totalNetAmount) : '—',
+					},
+				]}
+			/>
+		</div>
 
+		<div className="flex flex-col gap-6">
+			<Panel
+				title="정산 채권"
+				meta={settlements.data ? `조회 결과 ${totalCount.toLocaleString('ko-KR')}건` : '불러오는 중…'}
+			>
+				<div className="flex flex-col gap-4">
 					<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
 						<div className="flex flex-col gap-1.5">
 							<Label htmlFor="settle-merchant">가맹점</Label>
 							<select
 								id="settle-merchant"
-								className="h-9 rounded-md border bg-transparent px-3 text-sm"
+								className="h-9 rounded-lg border bg-card px-3 text-sm"
 								value={filters.merchantId ?? ''}
 								onChange={(event) => updateFilter({ merchantId: event.target.value })}
 							>
@@ -77,7 +86,7 @@ export function SettlementPage() {
 							<Label htmlFor="settle-status">상태</Label>
 							<select
 								id="settle-status"
-								className="h-9 rounded-md border bg-transparent px-3 text-sm"
+								className="h-9 rounded-lg border bg-card px-3 text-sm"
 								value={filters.status ?? ''}
 								onChange={(event) =>
 									updateFilter({ status: event.target.value as SettlementReceivableStatus | '' })
@@ -143,11 +152,13 @@ export function SettlementPage() {
 							</div>
 						</>
 					)}
-				</CardContent>
-			</Card>
+				</div>
+			</Panel>
 		</div>
+		</>
 	)
 }
+
 
 function listErrorMessage(error: unknown): string {
 	if (error instanceof AdminApiError) return error.message

@@ -4,6 +4,8 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useRotateWebhookSecret, useUpdateWebhookUrl, useWebhookSettings } from '@/console/useWebhookSettings'
+import { PageHeader } from '@/components/console/PageHeader'
+import { Panel } from '@/components/console/Panel'
 
 /**
  * Webhook 설정 화면 — 수신 URL과 **서명 비밀**을 다룬다.
@@ -46,14 +48,17 @@ export function WebhookPage() {
 	}
 
 	return (
-		<div className="flex flex-col gap-8">
-			<section className="flex flex-col gap-3">
-				<div>
-					<h2 className="text-lg font-semibold">수신 URL</h2>
-					<p className="text-sm text-muted-foreground">
-						결제 상태가 바뀔 때 이 주소로 POST를 보냅니다. 비워 두면 전송하지 않습니다.
-					</p>
-				</div>
+		<>
+			<PageHeader
+				title="Webhook"
+				description="결제 상태가 바뀔 때 알림을 받을 주소와, 그 요청의 진위를 확인할 서명 비밀입니다."
+			/>
+		<div className="flex flex-col gap-6">
+			<Panel
+				title="수신 URL"
+				meta="결제 상태가 바뀔 때 이 주소로 POST를 보냅니다. 비워 두면 전송하지 않습니다."
+				bodyClassName="flex flex-col gap-3 px-5 pb-5"
+			>
 				<form
 					className="flex flex-wrap items-center gap-2"
 					onSubmit={(event) => {
@@ -78,17 +83,18 @@ export function WebhookPage() {
 						{webhookUrl ? '저장했습니다.' : '수신 URL을 해제했습니다 — 더 이상 전송하지 않습니다.'}
 					</p>
 				) : null}
-			</section>
+			</Panel>
 
-			<section className="flex flex-col gap-3">
-				<div>
-					<h2 className="text-lg font-semibold">서명 비밀</h2>
-					<p className="text-sm text-muted-foreground">
-						받은 요청의 <code className="font-mono">X-PracticePay-Signature</code> 헤더를 이 값으로 검증하세요.{' '}
+			<Panel
+				title="서명 비밀"
+				meta={
+					<>
+						받은 요청의 <code className="mono-cell">X-PracticePay-Signature</code> 헤더를 이 값으로 검증하세요.{' '}
 						<strong>검증하지 않으면 누구나 결제 성공 알림을 위조할 수 있습니다.</strong>
-					</p>
-				</div>
-
+					</>
+				}
+				bodyClassName="flex flex-col gap-3 px-5 pb-5"
+			>
 				<div className="flex flex-wrap items-center gap-2">
 					<code
 						data-testid="signing-secret"
@@ -142,8 +148,9 @@ export function WebhookPage() {
 					</div>
 				)}
 				{rotate.error ? <p className="text-sm text-destructive">{messageOf(rotate.error)}</p> : null}
-			</section>
-		</div>
+			</Panel>
+			</div>
+		</>
 	)
 }
 

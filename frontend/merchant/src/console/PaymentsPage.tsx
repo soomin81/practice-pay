@@ -1,13 +1,17 @@
 import { useState } from 'react'
+import { Download } from 'lucide-react'
 import { MerchantApiError } from '@/api/client'
 import { PAYMENT_STATUSES, type PaymentListFilters, type PaymentStatus } from '@/api/types'
 import { PaymentTable } from '@/console/PaymentTable'
 import { usePayments } from '@/console/usePayments'
 import { exportErrorMessage, usePaymentExport } from '@/console/usePaymentExport'
+import { RANGE_OPTIONS, rangeFilters, type RangePreset } from '@/console/dateRange'
 import { Button } from '@/components/ui/button'
-import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { LiveStamp, PageHeader } from '@/components/console/PageHeader'
+import { Panel } from '@/components/console/Panel'
+import { FilterChips } from '@/components/console/FilterChips'
 
 const PAGE_SIZE = 20
 
@@ -21,6 +25,7 @@ const PAGE_SIZE = 20
  */
 export function PaymentsPage() {
 	const [filters, setFilters] = useState<PaymentListFilters>({ page: 0, size: PAGE_SIZE })
+	const [preset, setPreset] = useState<RangePreset | null>(null)
 	const payments = usePayments(filters)
 	const exportPayments = usePaymentExport()
 
@@ -35,104 +40,125 @@ export function PaymentsPage() {
 	const lastPage = Math.max(0, Math.ceil(totalCount / PAGE_SIZE) - 1)
 
 	return (
-		<div className="flex flex-col gap-6">
-			<Card>
-				<CardHeader>
-					<CardTitle>결제 내역</CardTitle>
-					<CardDescription>
-						우리 가맹점의 결제를 생성 시각 최신순으로 보여줍니다. 기간은 결제 <strong>생성</strong> 시각 기준입니다.
-					</CardDescription>
-				</CardHeader>
-				<CardAction>
+		<>
+			<PageHeader
+				title="결제 내역"
+				description="우리 가맹점의 결제를 생성 시각 최신순으로 조회합니다. 기간은 결제 생성 시각 기준입니다."
+				action={<LiveStamp at={new Date()} />}
+			/>
+
+			<Panel
+				title="결제 내역"
+				meta={payments.data ? `조회 결과 ${totalCount.toLocaleString('ko-KR')}건` : '불러오는 중…'}
+				action={
 					<Button
 						variant="outline"
 						size="sm"
 						disabled={exportPayments.isPending}
 						onClick={() => exportPayments.mutate(filters)}
 					>
+						<Download className="size-4" />
 						{exportPayments.isPending ? '만드는 중…' : '엑셀 다운로드'}
 					</Button>
-				</CardAction>
-				<CardContent className="flex flex-col gap-4">
-					{exportPayments.isError && (
-						<p className="text-sm text-destructive">{exportErrorMessage(exportPayments.error)}</p>
-					)}
-					{/* 잘린 파일을 그냥 받아가지 않도록 반드시 알린다. */}
-					{exportPayments.data === true && (
-						<p className="text-sm text-destructive">
-							결과가 너무 많아 최대 10,000건까지만 담았습니다. 기간이나 조건을 좁혀 다시 받으세요.
-						</p>
-					)}
-					<div className="grid gap-3 sm:grid-cols-3">
-						<div className="flex flex-col gap-1.5">
-							<Label htmlFor="filter-status">상태</Label>
-							<select
-								id="filter-status"
-								className="h-9 rounded-md border bg-transparent px-3 text-sm"
-								value={filters.status ?? ''}
-								onChange={(event) => updateFilter({ status: event.target.value as PaymentStatus | '' })}
-							>
-								<option value="">전체</option>
-								{PAYMENT_STATUSES.map((status) => (
-									<option key={status} value={status}>
-										{status}
-									</option>
-								))}
-							</select>
-						</div>
-						<div className="flex flex-col gap-1.5">
-							<Label htmlFor="filter-from">시작일</Label>
-							<Input
-								id="filter-from"
-								type="date"
-								value={toDateInput(filters.from)}
-								onChange={(event) => updateFilter({ from: startOfDayIso(event.target.value) })}
-							/>
-						</div>
-						<div className="flex flex-col gap-1.5">
-							<Label htmlFor="filter-to">종료일</Label>
-							<Input
-								id="filter-to"
-								type="date"
-								value={toDateInput(filters.to)}
-								onChange={(event) => updateFilter({ to: endOfDayIso(event.target.value) })}
-							/>
-						</div>
-					</div>
+				}
+				bodyClassName="flex flex-col gap-4 px-5 pb-5"
+			>
+				{exportPayments.isError && <p className="text-sm text-destructive">{exportErrorMessage(exportPayments.error)}</p>}
+				{/* 잘린 파일을 그냥 받아가지 않도록 반드시 알린다. */}
+				{exportPayments.data === true && (
+					<p className="text-sm text-destructive">
+						결과가 너무 많아 최대 10,000건까지만 담았습니다. 기간이나 조건을 좁혀 다시 받으세요.
+					</p>
+				)}
 
-					{payments.isPending && <p className="text-sm text-muted-foreground">불러오는 중…</p>}
-					{payments.isError && <p className="text-sm text-destructive">{listErrorMessage(payments.error)}</p>}
-					{payments.data && (
-						<>
-							<PaymentTable payments={payments.data.payments} />
-							<div className="flex items-center justify-between text-sm">
-								<span className="text-muted-foreground">
-									전체 {totalCount.toLocaleString('ko-KR')}건 · {page + 1} / {lastPage + 1} 페이지
-								</span>
-								<div className="flex gap-2">
-									<Button
-										variant="outline"
-										size="sm"
-										disabled={page <= 0}
-										onClick={() => setFilters((previous) => ({ ...previous, page: page - 1 }))}
-									>
-										이전
-									</Button>
-									<Button
-										variant="outline"
-										size="sm"
-										disabled={page >= lastPage}
-										onClick={() => setFilters((previous) => ({ ...previous, page: page + 1 }))}
-									>
-										다음
-									</Button>
-								</div>
+				<div className="flex flex-wrap items-end gap-3">
+					{/* 칩은 날짜 입력을 **대신하지 않고 함께 바꾼다** — 지금 무엇이 걸려 있는지
+					    두 곳에서 같은 답이 나와야 한다. */}
+					<FilterChips
+						ariaLabel="기간 빠른 선택"
+						options={RANGE_OPTIONS}
+						value={preset}
+						onChange={(next) => {
+							setPreset(next)
+							updateFilter(rangeFilters(next))
+						}}
+					/>
+					<div className="flex flex-col gap-1.5">
+						<Label htmlFor="filter-status">상태</Label>
+						<select
+							id="filter-status"
+							className="h-9 rounded-lg border bg-card px-3 text-sm"
+							value={filters.status ?? ''}
+							onChange={(event) => updateFilter({ status: event.target.value as PaymentStatus | '' })}
+						>
+							<option value="">전체</option>
+							{PAYMENT_STATUSES.map((status) => (
+								<option key={status} value={status}>
+									{status}
+								</option>
+							))}
+						</select>
+					</div>
+					<div className="flex flex-col gap-1.5">
+						<Label htmlFor="filter-from">시작일</Label>
+						<Input
+							id="filter-from"
+							type="date"
+							className="w-40 bg-card"
+							value={toDateInput(filters.from)}
+							onChange={(event) => {
+								setPreset(null)
+								updateFilter({ from: startOfDayIso(event.target.value) })
+							}}
+						/>
+					</div>
+					<div className="flex flex-col gap-1.5">
+						<Label htmlFor="filter-to">종료일</Label>
+						<Input
+							id="filter-to"
+							type="date"
+							className="w-40 bg-card"
+							value={toDateInput(filters.to)}
+							onChange={(event) => {
+								setPreset(null)
+								updateFilter({ to: endOfDayIso(event.target.value) })
+							}}
+						/>
+					</div>
+				</div>
+
+				{payments.isPending && <p className="text-sm text-muted-foreground">불러오는 중…</p>}
+				{payments.isError && <p className="text-sm text-destructive">{listErrorMessage(payments.error)}</p>}
+				{payments.data && (
+					<>
+						<PaymentTable payments={payments.data.payments} />
+						<div className="flex items-center justify-between text-sm">
+							<span className="text-muted-foreground">
+								전체 {totalCount.toLocaleString('ko-KR')}건 · {page + 1} / {lastPage + 1} 페이지
+							</span>
+							<div className="flex gap-2">
+								<Button
+									variant="outline"
+									size="sm"
+									disabled={page <= 0}
+									onClick={() => setFilters((previous) => ({ ...previous, page: page - 1 }))}
+								>
+									이전
+								</Button>
+								<Button
+									variant="outline"
+									size="sm"
+									disabled={page >= lastPage}
+									onClick={() => setFilters((previous) => ({ ...previous, page: page + 1 }))}
+								>
+									다음
+								</Button>
 							</div>
-						</>
-					)}
-				</CardContent>
-			</Card>
-		</div>
+						</div>
+					</>
+				)}
+			</Panel>
+		</>
 	)
 }
 

@@ -2,58 +2,53 @@ import { useState } from 'react'
 import { useRevokeApiKey } from '@/console/useApiKeys'
 import { formatDateTime } from '@/console/format'
 import type { ApiKeySummary } from '@/api/types'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { DataTable, EmptyRow, Td, Th } from '@/components/console/DataTable'
+import { StatusBadge } from '@/components/console/StatusBadge'
 
 /** API Key 목록 테이블. 활성 Key에만 폐기 버튼을 두고, 폐기는 인라인으로 한 번 더 확인한다. */
 export function ApiKeyTable({ apiKeys }: { apiKeys: readonly ApiKeySummary[] }) {
-	if (apiKeys.length === 0) {
-		return <p className="text-sm text-muted-foreground">아직 발급된 API Key가 없습니다.</p>
-	}
-
 	return (
-		<div className="overflow-x-auto">
-			<table className="w-full min-w-[40rem] border-collapse text-sm">
-				<thead>
-					<tr className="border-b text-left text-xs text-muted-foreground">
-						<th className="py-2 pr-4 font-medium">이름</th>
-						<th className="py-2 pr-4 font-medium">Prefix</th>
-						<th className="py-2 pr-4 font-medium">Scope</th>
-						<th className="py-2 pr-4 font-medium">상태</th>
-						<th className="py-2 pr-4 font-medium">발급</th>
-						<th className="py-2 pr-4 font-medium">마지막 사용</th>
-						<th className="py-2 font-medium" />
+		<DataTable
+			head={
+				<>
+					<Th>이름</Th>
+					<Th>Prefix</Th>
+					<Th>Scope</Th>
+					<Th>상태</Th>
+					<Th>발급</Th>
+					<Th>마지막 사용</Th>
+					<Th align="right"> </Th>
+				</>
+			}
+		>
+			{apiKeys.length === 0 ? (
+				<EmptyRow colSpan={7}>아직 발급된 API Key가 없습니다.</EmptyRow>
+			) : (
+				apiKeys.map((key) => (
+					<tr key={key.merchantApiKeyId} className="hover:bg-muted/40">
+						<Td className="font-medium">{key.keyName}</Td>
+						<Td variant="mono" className="text-foreground">
+							{key.keyPrefix}
+						</Td>
+						<Td className="text-xs text-muted-foreground">{key.scopes.map(String).join(', ')}</Td>
+						<Td>
+							<StatusBadge status={String(key.status)} />
+						</Td>
+						<Td variant="mono" className="text-xs">
+							{formatDateTime(key.createdAt)}
+						</Td>
+						<Td variant="mono" className="text-xs">
+							{formatDateTime(key.lastUsedAt)}
+						</Td>
+						<Td className="text-right">
+							{String(key.status) === 'ACTIVE' && <RevokeAction merchantApiKeyId={key.merchantApiKeyId} />}
+						</Td>
 					</tr>
-				</thead>
-				<tbody>
-					{apiKeys.map((key) => (
-						<tr key={key.merchantApiKeyId} className="border-b last:border-0">
-							<td className="py-2.5 pr-4">{key.keyName}</td>
-							<td className="py-2.5 pr-4 font-mono text-xs">{key.keyPrefix}</td>
-							<td className="py-2.5 pr-4 text-xs text-muted-foreground">
-								{key.scopes.map(String).join(', ')}
-							</td>
-							<td className="py-2.5 pr-4">
-								<StatusBadge status={String(key.status)} />
-							</td>
-							<td className="py-2.5 pr-4 text-xs text-muted-foreground">{formatDateTime(key.createdAt)}</td>
-							<td className="py-2.5 pr-4 text-xs text-muted-foreground">{formatDateTime(key.lastUsedAt)}</td>
-							<td className="py-2.5 text-right">
-								{String(key.status) === 'ACTIVE' && <RevokeAction merchantApiKeyId={key.merchantApiKeyId} />}
-							</td>
-						</tr>
-					))}
-				</tbody>
-			</table>
-		</div>
+				))
+			)}
+		</DataTable>
 	)
-}
-
-function StatusBadge({ status }: { status: string }) {
-	if (status === 'ACTIVE') return <Badge variant="secondary">ACTIVE</Badge>
-	if (status === 'EXPIRED') return <Badge variant="destructive">EXPIRED</Badge>
-	// 그 밖의 상태(REVOKED 등)는 중립적으로 — shadcn 생성물의 variant 목록에 muted는 없다.
-	return <Badge variant="outline">{status}</Badge>
 }
 
 /**

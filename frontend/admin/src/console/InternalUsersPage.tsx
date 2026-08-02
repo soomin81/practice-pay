@@ -3,7 +3,8 @@ import { useInternalUsers } from '@/console/useInternalUsers'
 import { InternalUserTable } from '@/console/InternalUserTable'
 import { IssueInternalUserForm } from '@/console/IssueInternalUserForm'
 import { AdminApiError } from '@/api/client'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { PageHeader } from '@/components/console/PageHeader'
+import { Panel } from '@/components/console/Panel'
 
 /**
  * 내부 직원 명부·발급 페이지. **이 페이지 전체가 SUPER_ADMIN 전용이다** — 라우트와
@@ -16,25 +17,17 @@ export function InternalUsersPage() {
 	const { data: me } = useMe()
 
 	return (
+		<>
+			<PageHeader title="내부 직원" description="내부 운영자 계정을 초대하고 역할·상태를 관리합니다." />
 		<div className="flex flex-col gap-6">
-			<Card>
-				<CardHeader>
-					<CardTitle>내부 직원 초대</CardTitle>
-					<CardDescription>
-						OPERATOR 또는 VIEWER 계정을 초대합니다. 발급된 링크로 본인이 비밀번호를 설정하면 활성화됩니다.
-					</CardDescription>
-				</CardHeader>
-				<CardContent>
+			<Panel title={<>내부 직원 초대</>} meta={<>OPERATOR 또는 VIEWER 계정을 초대합니다. 발급된 링크로 본인이 비밀번호를 설정하면 활성화됩니다.</>}>
+				<div>
 					<IssueInternalUserForm />
-				</CardContent>
-			</Card>
+				</div>
+			</Panel>
 
-			<Card>
-				<CardHeader>
-					<CardTitle>내부 직원</CardTitle>
-					<CardDescription>INVITED는 아직 초대 링크로 비밀번호를 설정하지 않은 계정입니다.</CardDescription>
-				</CardHeader>
-				<CardContent>
+			<Panel title={<>내부 직원</>} meta={<>INVITED는 아직 초대 링크로 비밀번호를 설정하지 않은 계정입니다.</>}>
+				<div>
 					{users.isPending && <p className="text-sm text-muted-foreground">불러오는 중…</p>}
 					{users.isError && <p className="text-sm text-destructive">{listErrorMessage(users.error)}</p>}
 					{users.isSuccess && (
@@ -43,11 +36,13 @@ export function InternalUsersPage() {
 							currentInternalUserId={me?.internalUserId}
 						/>
 					)}
-				</CardContent>
-			</Card>
+				</div>
+			</Panel>
 		</div>
+		</>
 	)
 }
+
 
 function listErrorMessage(error: unknown): string {
 	if (error instanceof AdminApiError) {

@@ -25,7 +25,14 @@ export function LoginPage() {
 	}
 
 	return (
-		<div className="flex min-h-dvh items-center justify-center p-6">
+		<div className="flex min-h-dvh flex-col items-center justify-center gap-5 p-6">
+			{/* 사이드바의 브랜드 블록과 같은 표식 — 로그인 전에도 어느 서비스인지 보이게 한다. */}
+			<div className="flex items-center gap-2.5">
+				<span className="flex size-8 items-center justify-center rounded-lg bg-sidebar text-sm font-semibold text-sidebar-foreground">
+					PP
+				</span>
+				<span className="font-heading text-base font-semibold">PracticePay</span>
+			</div>
 			<Card className="w-full max-w-sm">
 				<CardHeader>
 					<CardTitle>가맹점 콘솔 로그인</CardTitle>

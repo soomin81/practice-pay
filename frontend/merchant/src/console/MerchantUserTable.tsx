@@ -1,7 +1,8 @@
 import { describeInvitation, formatDateTime } from '@/console/format'
 import { MerchantUserActions } from '@/console/MerchantUserActions'
 import type { MerchantUserSummary } from '@/api/types'
-import { Badge } from '@/components/ui/badge'
+import { DataTable, EmptyRow, Td, Th } from '@/components/console/DataTable'
+import { StatusBadge } from '@/components/console/StatusBadge'
 
 /**
  * 가맹점 사용자 명부. 비밀번호 관련 값은 애초에 응답에 없다(Projection 단계에서 제외).
@@ -17,48 +18,49 @@ export function MerchantUserTable({
 	merchantUsers: readonly MerchantUserSummary[]
 	currentMerchantUserId?: string
 }) {
-	if (merchantUsers.length === 0) {
-		return <p className="text-sm text-muted-foreground">아직 등록된 사용자가 없습니다.</p>
-	}
-
 	return (
-		<div className="overflow-x-auto">
-			<table className="w-full min-w-[40rem] border-collapse text-sm">
-				<thead>
-					<tr className="border-b text-left text-xs text-muted-foreground">
-						<th className="py-2 pr-4 font-medium">로그인 아이디</th>
-						<th className="py-2 pr-4 font-medium">이름</th>
-						<th className="py-2 pr-4 font-medium">이메일</th>
-						<th className="py-2 pr-4 font-medium">역할</th>
-						<th className="py-2 pr-4 font-medium">상태</th>
-						<th className="py-2 pr-4 font-medium">마지막 로그인</th>
-						<th className="py-2 font-medium" />
+		<DataTable
+			head={
+				<>
+					<Th>로그인 아이디</Th>
+					<Th>이름</Th>
+					<Th>이메일</Th>
+					<Th>역할</Th>
+					<Th>상태</Th>
+					<Th>마지막 로그인</Th>
+					<Th align="right"> </Th>
+				</>
+			}
+		>
+			{merchantUsers.length === 0 ? (
+				<EmptyRow colSpan={7}>아직 등록된 사용자가 없습니다.</EmptyRow>
+			) : (
+				merchantUsers.map((user) => (
+					<tr key={user.merchantUserId} className="hover:bg-muted/40">
+						<Td variant="mono" className="text-foreground">
+							{user.loginId}
+						</Td>
+						<Td className="font-medium">{user.userName}</Td>
+						<Td className="text-xs text-muted-foreground">{user.email}</Td>
+						<Td className="text-xs">{String(user.role)}</Td>
+						<Td>
+							<StatusBadge status={String(user.status)} />
+							{String(user.status) === 'INVITED' && <InvitationHint expiresAt={user.pendingInvitationExpiresAt} />}
+						</Td>
+						<Td variant="mono" className="text-xs">
+							{formatDateTime(user.lastLoginAt)}
+						</Td>
+						<Td className="text-right">
+							{user.merchantUserId === currentMerchantUserId ? (
+								<span className="text-xs text-muted-foreground">본인</span>
+							) : (
+								<MerchantUserActions user={user} />
+							)}
+						</Td>
 					</tr>
-				</thead>
-				<tbody>
-					{merchantUsers.map((user) => (
-						<tr key={user.merchantUserId} className="border-b last:border-0">
-							<td className="py-2.5 pr-4 font-mono text-xs">{user.loginId}</td>
-							<td className="py-2.5 pr-4">{user.userName}</td>
-							<td className="py-2.5 pr-4 text-xs text-muted-foreground">{user.email}</td>
-							<td className="py-2.5 pr-4 text-xs">{String(user.role)}</td>
-							<td className="py-2.5 pr-4">
-								<StatusBadge status={String(user.status)} />
-								{String(user.status) === 'INVITED' && <InvitationHint expiresAt={user.pendingInvitationExpiresAt} />}
-							</td>
-							<td className="py-2.5 pr-4 text-xs text-muted-foreground">{formatDateTime(user.lastLoginAt)}</td>
-							<td className="py-2.5 text-right">
-								{user.merchantUserId === currentMerchantUserId ? (
-									<span className="text-xs text-muted-foreground">본인</span>
-								) : (
-									<MerchantUserActions user={user} />
-								)}
-							</td>
-						</tr>
-					))}
-				</tbody>
-			</table>
-		</div>
+				))
+			)}
+		</DataTable>
 	)
 }
 
@@ -68,18 +70,5 @@ export function MerchantUserTable({
  */
 function InvitationHint({ expiresAt }: { expiresAt: string | null | undefined }) {
 	const { text, expired } = describeInvitation(expiresAt)
-	return (
-		<div className={`mt-0.5 text-xs ${expired ? 'text-destructive' : 'text-muted-foreground'}`}>{text}</div>
-	)
-}
-
-function StatusBadge({ status }: { status: string }) {
-	if (status === 'ACTIVE') return <Badge variant="secondary">ACTIVE</Badge>
-	// 아직 초대 링크로 비밀번호를 설정하지 않은 상태 — 운영자가 가장 자주 확인하는 값이다.
-	if (status === 'INVITED') return <Badge variant="outline">INVITED</Badge>
-	if (status === 'LOCKED' || status === 'SUSPENDED' || status === 'TERMINATED') {
-		return <Badge variant="destructive">{status}</Badge>
-	}
-	// 그 밖의 상태는 중립적으로 — shadcn 생성물의 variant 목록에 muted는 없다.
-	return <Badge variant="outline">{status}</Badge>
+	return <div className={`mt-0.5 text-xs ${expired ? 'text-destructive' : 'text-muted-foreground'}`}>{text}</div>
 }

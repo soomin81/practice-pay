@@ -3,12 +3,15 @@ import { MerchantApiError } from '@/api/client'
 import { SETTLEMENT_RECEIVABLE_STATUSES, type SettlementFilters, type SettlementReceivableStatus } from '@/api/types'
 import { SettlementTable } from '@/console/SettlementTable'
 import { useSettlementReceivables } from '@/console/useSettlementReceivables'
-
+import { RANGE_OPTIONS, rangeDates, type RangePreset } from '@/console/dateRange'
 import { formatKrw } from '@/console/format'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { LiveStamp, PageHeader } from '@/components/console/PageHeader'
+import { Panel } from '@/components/console/Panel'
+import { StatStrip } from '@/components/console/StatStrip'
+import { FilterChips } from '@/components/console/FilterChips'
 
 const PAGE_SIZE = 20
 
@@ -23,8 +26,8 @@ const PAGE_SIZE = 20
  */
 export function SettlementPage() {
 	const [filters, setFilters] = useState<SettlementFilters>({ page: 0, size: PAGE_SIZE })
+	const [preset, setPreset] = useState<RangePreset | null>(null)
 	const settlements = useSettlementReceivables(filters)
-
 
 	// 필터를 바꾸면 첫 페이지로 돌아간다(결제 내역과 같은 이유).
 	function updateFilter(patch: Partial<SettlementFilters>) {
@@ -36,101 +39,119 @@ export function SettlementPage() {
 	const lastPage = Math.max(0, Math.ceil(totalCount / PAGE_SIZE) - 1)
 
 	return (
-		<div className="flex flex-col gap-6">
-			<Card>
-				<CardHeader>
-					<CardTitle>정산 채권</CardTitle>
-					<CardDescription>
-						결제 건별 정산 예정 금액입니다. 기간은 <strong>정산 예정일</strong> 기준입니다.
-					</CardDescription>
-				</CardHeader>
-				<CardContent className="flex flex-col gap-4">
-					{/* 이 화면의 핵심 숫자 — 현재 페이지가 아니라 필터 전체의 합계다. */}
-					<div className="rounded-lg border bg-muted/40 px-4 py-3">
-						<div className="text-xs text-muted-foreground">조건에 맞는 정산 예정 금액 합계</div>
-						<div className="text-2xl font-semibold tracking-tight">
-							{settlements.data ? formatKrw(settlements.data.totalNetAmount) : '—'}
-						</div>
-						<div className="text-xs text-muted-foreground">
-							{totalCount.toLocaleString('ko-KR')}건 기준
-						</div>
+		<>
+			<PageHeader
+				title="정산"
+				description="결제 건별 정산 예정 금액입니다. 기간은 정산 예정일 기준입니다."
+				action={<LiveStamp at={new Date()} />}
+			/>
+
+			{/* **여기 두 값은 목록 API가 실제로 내려주는 것뿐이다**(`totalCount`,
+			    `totalNetAmount`). 참고 디자인처럼 네 칸을 채우려면 서버가 합계를 더 줘야
+			    하는데, 없는 값을 그럴듯하게 만들면 그 숫자를 아무도 설명할 수 없게 된다. */}
+			<div className="pb-6">
+				<StatStrip
+					stats={[
+						{ label: '건수', value: settlements.data ? `${totalCount.toLocaleString('ko-KR')}건` : '—' },
+						{
+							label: '정산 예정 금액 합계',
+							value: settlements.data ? formatKrw(settlements.data.totalNetAmount) : '—',
+						},
+					]}
+				/>
+			</div>
+
+			<Panel
+				title="정산 채권"
+				meta={settlements.data ? `조회 결과 ${totalCount.toLocaleString('ko-KR')}건` : '불러오는 중…'}
+				bodyClassName="flex flex-col gap-4 px-5 pb-5"
+			>
+				<div className="flex flex-wrap items-end gap-3">
+					<FilterChips
+						ariaLabel="정산 예정일 빠른 선택"
+						options={RANGE_OPTIONS}
+						value={preset}
+						onChange={(next) => {
+							setPreset(next)
+							updateFilter(rangeDates(next))
+						}}
+					/>
+					<div className="flex flex-col gap-1.5">
+						<Label htmlFor="settle-status">상태</Label>
+						<select
+							id="settle-status"
+							className="h-9 rounded-lg border bg-card px-3 text-sm"
+							value={filters.status ?? ''}
+							onChange={(event) => updateFilter({ status: event.target.value as SettlementReceivableStatus | '' })}
+						>
+							<option value="">전체</option>
+							{SETTLEMENT_RECEIVABLE_STATUSES.map((status) => (
+								<option key={status} value={status}>
+									{status}
+								</option>
+							))}
+						</select>
 					</div>
-
-					<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-
-						<div className="flex flex-col gap-1.5">
-							<Label htmlFor="settle-status">상태</Label>
-							<select
-								id="settle-status"
-								className="h-9 rounded-md border bg-transparent px-3 text-sm"
-								value={filters.status ?? ''}
-								onChange={(event) =>
-									updateFilter({ status: event.target.value as SettlementReceivableStatus | '' })
-								}
-							>
-								<option value="">전체</option>
-								{SETTLEMENT_RECEIVABLE_STATUSES.map((status) => (
-									<option key={status} value={status}>
-										{status}
-									</option>
-								))}
-							</select>
-						</div>
-						<div className="flex flex-col gap-1.5">
-							<Label htmlFor="settle-from">정산 예정일 시작</Label>
-							<Input
-								id="settle-from"
-								type="date"
-								value={filters.eligibleFrom ?? ''}
-								onChange={(event) => updateFilter({ eligibleFrom: event.target.value || undefined })}
-							/>
-						</div>
-						<div className="flex flex-col gap-1.5">
-							<Label htmlFor="settle-to">정산 예정일 종료</Label>
-							<Input
-								id="settle-to"
-								type="date"
-								value={filters.eligibleTo ?? ''}
-								onChange={(event) => updateFilter({ eligibleTo: event.target.value || undefined })}
-							/>
-						</div>
+					<div className="flex flex-col gap-1.5">
+						<Label htmlFor="settle-from">정산 예정일 시작</Label>
+						<Input
+							id="settle-from"
+							type="date"
+							className="w-40 bg-card"
+							value={filters.eligibleFrom ?? ''}
+							onChange={(event) => {
+								setPreset(null)
+								updateFilter({ eligibleFrom: event.target.value || undefined })
+							}}
+						/>
 					</div>
+					<div className="flex flex-col gap-1.5">
+						<Label htmlFor="settle-to">정산 예정일 종료</Label>
+						<Input
+							id="settle-to"
+							type="date"
+							className="w-40 bg-card"
+							value={filters.eligibleTo ?? ''}
+							onChange={(event) => {
+								setPreset(null)
+								updateFilter({ eligibleTo: event.target.value || undefined })
+							}}
+						/>
+					</div>
+				</div>
 
-					{settlements.isPending && <p className="text-sm text-muted-foreground">불러오는 중…</p>}
-					{settlements.isError && (
-						<p className="text-sm text-destructive">{listErrorMessage(settlements.error)}</p>
-					)}
-					{settlements.data && (
-						<>
-							<SettlementTable rows={settlements.data.settlementReceivables} />
-							<div className="flex items-center justify-between text-sm">
-								<span className="text-muted-foreground">
-									전체 {totalCount.toLocaleString('ko-KR')}건 · {page + 1} / {lastPage + 1} 페이지
-								</span>
-								<div className="flex gap-2">
-									<Button
-										variant="outline"
-										size="sm"
-										disabled={page <= 0}
-										onClick={() => setFilters((previous) => ({ ...previous, page: page - 1 }))}
-									>
-										이전
-									</Button>
-									<Button
-										variant="outline"
-										size="sm"
-										disabled={page >= lastPage}
-										onClick={() => setFilters((previous) => ({ ...previous, page: page + 1 }))}
-									>
-										다음
-									</Button>
-								</div>
+				{settlements.isPending && <p className="text-sm text-muted-foreground">불러오는 중…</p>}
+				{settlements.isError && <p className="text-sm text-destructive">{listErrorMessage(settlements.error)}</p>}
+				{settlements.data && (
+					<>
+						<SettlementTable rows={settlements.data.settlementReceivables} />
+						<div className="flex items-center justify-between text-sm">
+							<span className="text-muted-foreground">
+								전체 {totalCount.toLocaleString('ko-KR')}건 · {page + 1} / {lastPage + 1} 페이지
+							</span>
+							<div className="flex gap-2">
+								<Button
+									variant="outline"
+									size="sm"
+									disabled={page <= 0}
+									onClick={() => setFilters((previous) => ({ ...previous, page: page - 1 }))}
+								>
+									이전
+								</Button>
+								<Button
+									variant="outline"
+									size="sm"
+									disabled={page >= lastPage}
+									onClick={() => setFilters((previous) => ({ ...previous, page: page + 1 }))}
+								>
+									다음
+								</Button>
 							</div>
-						</>
-					)}
-				</CardContent>
-			</Card>
-		</div>
+						</div>
+					</>
+				)}
+			</Panel>
+		</>
 	)
 }
 

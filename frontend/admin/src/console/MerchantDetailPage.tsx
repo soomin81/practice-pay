@@ -6,7 +6,7 @@ import { formatDateTime } from '@/console/format'
 import { AdminApiError } from '@/api/client'
 import { canManageMerchantAccounts, type MeResponse } from '@/api/types'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Panel } from "@/components/console/Panel"
 
 /**
  * 가맹점 상세 — 그 가맹점의 사용자 명부와 계정 관리(정지·재개·종료·역할 변경)를 보여준다.
@@ -34,42 +34,32 @@ export function MerchantDetailPage({ me }: { me: MeResponse }) {
 				</Button>
 			</div>
 
-			<Card>
-				<CardHeader>
-					<CardTitle>{merchant ? merchant.merchantName : merchantId}</CardTitle>
-					<CardDescription>
-						{merchant ? (
+			<Panel title={<>{merchant ? merchant.merchantName : merchantId}</>} meta={<>{merchant ? (
 							<>
 								<span className="font-mono">{merchant.merchantCode}</span> · {String(merchant.status)} · 등록{' '}
 								{formatDateTime(merchant.createdAt)}
 							</>
 						) : (
 							<span className="font-mono">{merchantId}</span>
-						)}
-					</CardDescription>
-				</CardHeader>
-				<CardContent>
+						)}</>}>
+				<div>
 					<p className="text-sm text-muted-foreground">
 						{canManage
 							? '가맹점이 스스로 잠기거나(마지막 OWNER 정지) 계정 사고가 났을 때 개입하는 화면입니다. 마지막 활성 OWNER는 정지·종료·강등할 수 없습니다.'
 							: '조회 전용입니다. 계정 관리는 SUPER_ADMIN 또는 OPERATOR만 할 수 있습니다.'}
 					</p>
-				</CardContent>
-			</Card>
+				</div>
+			</Panel>
 
-			<Card>
-				<CardHeader>
-					<CardTitle>가맹점 사용자</CardTitle>
-					<CardDescription>INVITED는 아직 초대 링크로 비밀번호를 설정하지 않은 계정입니다.</CardDescription>
-				</CardHeader>
-				<CardContent>
+			<Panel title={<>가맹점 사용자</>} meta={<>INVITED는 아직 초대 링크로 비밀번호를 설정하지 않은 계정입니다.</>}>
+				<div>
 					{users.isPending && <p className="text-sm text-muted-foreground">불러오는 중…</p>}
 					{users.isError && <p className="text-sm text-destructive">{listErrorMessage(users.error)}</p>}
 					{users.isSuccess && (
 						<AdminMerchantUserTable merchantId={merchantId} merchantUsers={users.data.merchantUsers} canManage={canManage} />
 					)}
-				</CardContent>
-			</Card>
+				</div>
+			</Panel>
 		</div>
 	)
 }
