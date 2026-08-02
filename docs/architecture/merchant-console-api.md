@@ -66,6 +66,9 @@
 | `GET /merchant/payments/{paymentId}` | **가맹점 사용자 전원**(VIEWER 포함) | — | 200 결제 상세(자기 가맹점) | 401, **404 없는 결제·남의 결제** |
 | `GET /merchant/payments/export` | **가맹점 사용자 전원**(VIEWER 포함) | — | 200 `.xlsx` 첨부(자기 가맹점) | 400 잘못된 status, 401 |
 | `GET /merchant/settlement-receivables` | **가맹점 사용자 전원**(VIEWER 포함) | — | 200 정산 채권(자기 가맹점, 정산 예정일 최신순) | 400 잘못된 status, 401 |
+| `GET /merchant/webhook` | OWNER/ADMIN | — | 200 수신 URL + **서명 비밀** + 세대 | 401, 403(VIEWER) |
+| `PUT /merchant/webhook` | OWNER/ADMIN | 필요 | 200 갱신된 설정 | 400 URL 형식, 401, 403 |
+| `POST /merchant/webhook/rotate-secret` | OWNER/ADMIN | 필요 | 200 새 비밀·세대 | 401, 403 |
 | `GET /merchant/merchant-users` | OWNER/ADMIN | — | 200 명부 | 401, 403(VIEWER) |
 | `POST /merchant/merchant-users` | OWNER/ADMIN | 필요 | 201 초대(invitationToken 1회) | 400 검증, 401, 403, 409 중복 |
 | `POST /merchant/account-invitations/accept` | **공개** | **불필요**(2절) | 200 활성화 | 400 유효하지 않거나 만료된 초대 |
@@ -134,6 +137,26 @@
   `READY` 전에는 `null`이다.
 
 필드 상세와 나머지 계약은 [admin-console-api.md](admin-console-api.md)의 4.3에 한 번만 적었다.
+
+### 4.3 Webhook 설정 — 조회(GET)까지 OWNER/ADMIN으로 막는다
+
+**응답 자체가 자격증명이다.** 이 경로는 서명 비밀을 돌려주고, 그 값을 읽을 수 있는 사람은
+곧 그 가맹점의 Webhook을 위조할 수 있다 — 그래서 다른 조회 경로와 달리 `GET`도 `VIEWER`에게
+열지 않는다(`GET /merchant/api-keys`도 OWNER/ADMIN 전용이지만, 저쪽은 Key **원문을 돌려주지
+않아** 근거가 다르다).
+
+- **비밀은 몇 번이든 다시 볼 수 있다** — API Key의 "최초 1회 표시" 규칙을 따르지 않는다.
+  비밀이 저장돼 있지 않고 매번 파생되기 때문이기도 하고([webhook-api.md](webhook-api.md) 4.2),
+  가맹점이 자기 서버에 넣어야 하는 값이라 잃어버렸을 때 되찾을 길이 교체뿐이면 그때마다
+  그 사이의 Webhook을 놓치기 때문이기도 하다.
+- **`webhookUrl`을 비우거나 `null`로 보내면 해제**된다 — 해제 전용 엔드포인트는 없다.
+  화면에서 입력란을 비우는 것이 곧 해제이므로, 빈 문자열을 URL 형식 검증에 걸어 400으로
+  돌려주지 않는다.
+- **교체(`rotate-secret`)는 되돌릴 수 없고 겹치는 기간이 없다** — 세대를 올리는 순간 옛
+  비밀이 무효가 된다. 상세는 [webhook-api.md](webhook-api.md) 4.3.
+
+전체 Webhook 계약(이벤트 종류, 서명 형식, **가맹점 측 검증 절차**)은
+[webhook-api.md](webhook-api.md)에 있다.
 
 ## 5. 초대 링크
 

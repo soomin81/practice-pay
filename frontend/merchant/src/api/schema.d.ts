@@ -152,6 +152,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/merchant/webhook": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Webhook 설정 조회
+         * @description 수신 URL과 **서명 비밀**을 돌려준다. 응답에 자격증명이 들어 있어 OWNER/ADMIN만 조회할 수 있다. 비밀은 저장돼 있지 않고 매번 파생되므로 몇 번이든 다시 볼 수 있다.
+         */
+        get: operations["merchant-get-webhook"];
+        /**
+         * Webhook 수신 URL 설정
+         * @description `webhookUrl`을 비우거나 생략하면 설정이 해제되고, 그 뒤로는 전송 자체를 만들지 않는다.
+         */
+        put: operations["merchant-update-webhook-url"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/merchant/account-invitations/accept": {
         parameters: {
             query?: never;
@@ -206,6 +230,26 @@ export interface paths {
         get: operations["merchant-payment-detail"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merchant/webhook/rotate-secret": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Webhook 서명 비밀 교체
+         * @description 세대를 1 올려 새 비밀을 만든다. **되돌릴 수 없고 겹치는 기간도 없다** — 가맹점 서버에 새 비밀을 반영하기 전까지 그 사이의 Webhook은 서명 불일치로 거부된다.
+         */
+        post: operations["merchant-rotate-webhook-secret"];
         delete?: never;
         options?: never;
         head?: never;
@@ -389,7 +433,12 @@ export interface components {
             /** @description 가맹점 내에서 유일한 이메일 */
             email: string;
         };
-        "merchant-logout-33084672": Record<string, never>;
+        /** UpdateMerchantWebhookUrlRequest */
+        UpdateMerchantWebhookUrlRequest: {
+            /** @description http:// 또는 https:// 로 시작하는 수신 URL. null이나 빈 문자열이면 해제. */
+            webhookUrl?: string | null;
+        };
+        "merchant-merchant-users-merchantUserId-invitation-resend-33084672": Record<string, never>;
         /** MerchantMeResponse */
         MerchantMeResponse: {
             /** @description OWNER | ADMIN | VIEWER */
@@ -451,6 +500,24 @@ export interface components {
                 /** @description INVITED | ACTIVE | LOCKED | SUSPENDED | TERMINATED */
                 status: string;
             }[];
+        };
+        /** MerchantWebhookSettingsResponse */
+        MerchantWebhookSettingsResponse: {
+            /** @description 서명 비밀의 세대. 교체할 때마다 1씩 증가한다. */
+            secretVersion: number;
+            /** @description 서명 비밀(`whsec_` 접두사). 이 값으로 X-PracticePay-Signature를 검증한다. */
+            signingSecret: string;
+            /** @description Webhook 수신 URL. 설정하지 않았으면 null. */
+            webhookUrl?: string | null;
+        };
+        /** ChangeMerchantUserStatusResponse */
+        ChangeMerchantUserStatusResponse: {
+            /** @description 변경 시각(UTC) */
+            changedAt: string;
+            /** @description 대상 가맹점 사용자 식별자 */
+            merchantUserId: string;
+            /** @description 변경 후 계정 상태 */
+            status: string;
         };
         /** ListSettlementReceivablesResponse */
         ListSettlementReceivablesResponse: {
@@ -517,15 +584,6 @@ export interface components {
                 /** @description ACTIVE | REVOKED | EXPIRED */
                 status: string;
             }[];
-        };
-        /** ChangeMerchantUserStatusResponse */
-        ChangeMerchantUserStatusResponse: {
-            /** @description 변경 시각(UTC) */
-            changedAt: string;
-            /** @description 대상 가맹점 사용자 식별자 */
-            merchantUserId: string;
-            /** @description 변경 후 계정 상태 */
-            status: string;
         };
         /** ListPaymentsResponse */
         ListPaymentsResponse: {
@@ -852,7 +910,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-logout-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-invitation-resend-33084672"];
             };
         };
         responses: {
@@ -969,6 +1027,50 @@ export interface operations {
             };
         };
     };
+    "merchant-get-webhook": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 200 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchantWebhookSettingsResponse"];
+                };
+            };
+        };
+    };
+    "merchant-update-webhook-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json;charset=UTF-8": components["schemas"]["UpdateMerchantWebhookUrlRequest"];
+            };
+        };
+        responses: {
+            /** @description 200 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchantWebhookSettingsResponse"];
+                };
+            };
+        };
+    };
     "merchant-accept-invitation": {
         parameters: {
             query?: never;
@@ -1005,7 +1107,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-logout-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-invitation-resend-33084672"];
             };
         };
         responses: {
@@ -1042,6 +1144,30 @@ export interface operations {
             };
         };
     };
+    "merchant-rotate-webhook-secret": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-invitation-resend-33084672"];
+            };
+        };
+        responses: {
+            /** @description 200 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchantWebhookSettingsResponse"];
+                };
+            };
+        };
+    };
     "merchant-reactivate-user": {
         parameters: {
             query?: never;
@@ -1054,7 +1180,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-logout-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-invitation-resend-33084672"];
             };
         };
         responses: {
@@ -1108,7 +1234,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-logout-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-invitation-resend-33084672"];
             };
         };
         responses: {
@@ -1135,7 +1261,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-logout-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-invitation-resend-33084672"];
             };
         };
         responses: {
@@ -1162,7 +1288,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-logout-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-invitation-resend-33084672"];
             };
         };
         responses: {
@@ -1189,7 +1315,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-logout-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-invitation-resend-33084672"];
             };
         };
         responses: {

@@ -14,10 +14,17 @@ import paytech.practice.pay.domain.shared.HttpUrl
  * 사실대로 돌려준다.
  */
 fun interface WebhookSender {
-	/** [destinationUrl]로 [payload](JSON 문자열)를 전송한다. */
+	/**
+	 * [destinationUrl]로 [payload](JSON 문자열)를 전송한다.
+	 *
+	 * [signatureHeaderValue]는 [WEBHOOK_SIGNATURE_HEADER]에 그대로 실린다 —
+	 * 값을 만드는 것은 [WebhookSigner]의 몫이고, 이 Port는 그것을 헤더에 얹어
+	 * 보내기만 한다(전송 수단은 서명 방식을 몰라야 한다).
+	 */
 	fun send(
 		destinationUrl: HttpUrl,
 		payload: String,
+		signatureHeaderValue: String,
 	): WebhookSendResult
 }
 

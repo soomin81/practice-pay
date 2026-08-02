@@ -415,7 +415,8 @@ MVP 포함:
 - 비밀번호 만료
 - 로그인 IP 정책
 - API Key IP Allowlist
-- API 요청 서명(HMAC Signature)
+- API **요청** 서명(HMAC Signature) — 가맹점 서버 → PG 방향. PG → 가맹점 방향의
+  **Webhook 서명은 MVP에 있다**(`docs/architecture/webhook-api.md`) — 방향이 반대인 별개의 기능이다.
 - Key 자동 Rotation
 - 계정 승인 워크플로
 - 세분화된 RBAC

@@ -38,6 +38,7 @@ export function ConsoleShell({ me, children }: { me: MeResponse; children: React
 					<ConsoleNavLink to="/payments">결제 내역</ConsoleNavLink>
 					<ConsoleNavLink to="/settlements">정산</ConsoleNavLink>
 					<ConsoleNavLink to="/team">팀 계정</ConsoleNavLink>
+					<ConsoleNavLink to="/webhook">Webhook</ConsoleNavLink>
 				</nav>
 			</header>
 			<main className="mx-auto max-w-4xl px-6 py-6">{children}</main>

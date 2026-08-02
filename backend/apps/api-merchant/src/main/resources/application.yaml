@@ -49,3 +49,10 @@ app:
     # 달라져, 방금 발급한 Key로 결제 API를 호출해도 곧바로 401이 난다 — 자세한
     # 배경은 api-payment/application.yaml의 같은 자리 주석 참고.
     pepper: ${APP_API_KEY_PEPPER:dev-only-api-key-pepper-change-in-production}
+  webhook-signature:
+    # 가맹점에게 서명 비밀을 "보여주기" 위해 필요하다 — 이 앱은 Webhook을 보내지
+    # 않는다(보내는 쪽은 batch). 비밀은 저장돼 있지 않고 이 Pepper로 파생한다.
+    #
+    # !! 이 값은 batch의 같은 설정과 반드시 일치해야 한다 !!
+    # 자세한 배경은 apps/batch/application.yaml의 같은 자리 주석 참고.
+    pepper: ${APP_WEBHOOK_SIGNATURE_PEPPER:dev-only-webhook-signature-pepper-change-in-production}

@@ -28,6 +28,7 @@ import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import paytech.practice.pay.api.merchant.config.SecurityConfig
 import paytech.practice.pay.api.merchant.security.MerchantUserPrincipal
@@ -53,6 +54,10 @@ import paytech.practice.pay.application.identity.ResendMerchantUserInvitationRes
 import paytech.practice.pay.application.identity.ResendMerchantUserInvitationUseCase
 import paytech.practice.pay.application.identity.RevokeMerchantUserInvitationResult
 import paytech.practice.pay.application.identity.RevokeMerchantUserInvitationUseCase
+import paytech.practice.pay.application.merchant.GetMerchantWebhookSettingsUseCase
+import paytech.practice.pay.application.merchant.MerchantWebhookSettings
+import paytech.practice.pay.application.merchant.RotateMerchantWebhookSecretUseCase
+import paytech.practice.pay.application.merchant.UpdateMerchantWebhookUrlUseCase
 import paytech.practice.pay.application.payment.ExportMerchantPaymentsUseCase
 import paytech.practice.pay.application.payment.GetMerchantPaymentDetailUseCase
 import paytech.practice.pay.application.payment.ListMerchantPaymentsUseCase
@@ -155,6 +160,7 @@ private fun merchantResource(
 		MerchantSubAccountController::class,
 		MerchantPaymentController::class,
 		MerchantSettlementReceivableController::class,
+		MerchantWebhookController::class,
 		AcceptAccountInvitationController::class,
 	],
 )
@@ -197,6 +203,15 @@ class MerchantApiDocumentationTest : FunSpec() {
 
 	@MockkBean
 	lateinit var getMerchantPaymentDetailUseCase: GetMerchantPaymentDetailUseCase
+
+	@MockkBean
+	lateinit var getMerchantWebhookSettingsUseCase: GetMerchantWebhookSettingsUseCase
+
+	@MockkBean
+	lateinit var updateMerchantWebhookUrlUseCase: UpdateMerchantWebhookUrlUseCase
+
+	@MockkBean
+	lateinit var rotateMerchantWebhookSecretUseCase: RotateMerchantWebhookSecretUseCase
 
 	@MockkBean
 	lateinit var acceptAccountInvitationUseCase: AcceptAccountInvitationUseCase
@@ -890,5 +905,97 @@ class MerchantApiDocumentationTest : FunSpec() {
 				.andExpect(status().isOk)
 				.andDo(document("merchant-settlement-receivables", snippet))
 		}
+
+		test("GET /merchant/webhook is documented") {
+			every { getMerchantWebhookSettingsUseCase.execute(OWNER.merchantId) } returns webhookSettings()
+
+			mockMvc
+				.perform(get("/merchant/webhook").with(authenticatedAs(OWNER)))
+				.andExpect(status().isOk)
+				.andDo(
+					document(
+						"merchant-get-webhook",
+						merchantResource(
+							summary = "Webhook 설정 조회",
+							description =
+								"수신 URL과 **서명 비밀**을 돌려준다. 응답에 자격증명이 들어 있어 OWNER/ADMIN만 조회할 수 있다. " +
+									"비밀은 저장돼 있지 않고 매번 파생되므로 몇 번이든 다시 볼 수 있다.",
+							responseSchema = "MerchantWebhookSettingsResponse",
+							responseFields = webhookSettingsFields(),
+						),
+					),
+				)
+		}
+
+		test("PUT /merchant/webhook is documented") {
+			every { updateMerchantWebhookUrlUseCase.execute(OWNER.merchantId, any()) } returns Unit
+			every { getMerchantWebhookSettingsUseCase.execute(OWNER.merchantId) } returns webhookSettings()
+
+			mockMvc
+				.perform(
+					put("/merchant/webhook")
+						.with(authenticatedAs(OWNER))
+						.with(csrf())
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""{"webhookUrl":"https://merchant.example.com/webhooks"}"""),
+				).andExpect(status().isOk)
+				.andDo(
+					document(
+						"merchant-update-webhook-url",
+						merchantResource(
+							summary = "Webhook 수신 URL 설정",
+							description = "`webhookUrl`을 비우거나 생략하면 설정이 해제되고, 그 뒤로는 전송 자체를 만들지 않는다.",
+							requestSchema = "UpdateMerchantWebhookUrlRequest",
+							requestFields =
+								listOf(
+									fieldWithPath("webhookUrl")
+										.type(JsonFieldType.STRING)
+										.description("http:// 또는 https:// 로 시작하는 수신 URL. null이나 빈 문자열이면 해제.")
+										.optional(),
+								),
+							responseSchema = "MerchantWebhookSettingsResponse",
+							responseFields = webhookSettingsFields(),
+						),
+					),
+				)
+		}
+
+		test("POST /merchant/webhook/rotate-secret is documented") {
+			every { rotateMerchantWebhookSecretUseCase.execute(OWNER.merchantId) } returns webhookSettings(secretVersion = 2)
+
+			mockMvc
+				.perform(post("/merchant/webhook/rotate-secret").with(authenticatedAs(OWNER)).with(csrf()))
+				.andExpect(status().isOk)
+				.andDo(
+					document(
+						"merchant-rotate-webhook-secret",
+						merchantResource(
+							summary = "Webhook 서명 비밀 교체",
+							description =
+								"세대를 1 올려 새 비밀을 만든다. **되돌릴 수 없고 겹치는 기간도 없다** — " +
+									"가맹점 서버에 새 비밀을 반영하기 전까지 그 사이의 Webhook은 서명 불일치로 거부된다.",
+							responseSchema = "MerchantWebhookSettingsResponse",
+							responseFields = webhookSettingsFields(),
+						),
+					),
+				)
+		}
 	}
 }
+
+private fun webhookSettings(secretVersion: Int = 1) =
+	MerchantWebhookSettings(
+		webhookUrl = "https://merchant.example.com/webhooks",
+		signingSecret = "whsec_QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo",
+		secretVersion = secretVersion,
+	)
+
+private fun webhookSettingsFields() =
+	listOf(
+		fieldWithPath("webhookUrl")
+			.type(JsonFieldType.STRING)
+			.description("Webhook 수신 URL. 설정하지 않았으면 null.")
+			.optional(),
+		fieldWithPath("signingSecret").description("서명 비밀(`whsec_` 접두사). 이 값으로 X-PracticePay-Signature를 검증한다."),
+		fieldWithPath("secretVersion").description("서명 비밀의 세대. 교체할 때마다 1씩 증가한다."),
+	)

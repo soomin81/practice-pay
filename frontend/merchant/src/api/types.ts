@@ -131,3 +131,8 @@ export type SettlementFilters = {
 }
 
 export type PaymentDetailResponse = JsonResponse<'merchant-payment-detail', 200>
+
+/** Webhook 설정 응답. `signingSecret`이 들어 있어 화면에서 다룰 때 주의한다. */
+export type MerchantWebhookSettingsResponse = JsonResponse<'merchant-get-webhook', 200>
+
+export type UpdateWebhookUrlRequest = JsonRequest<'merchant-update-webhook-url'>

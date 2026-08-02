@@ -84,6 +84,10 @@ class SecurityConfig {
 				// — `/merchant/api-keys/**`에서 이미 확인한 Spring PathPattern 동작이다.
 				authorize("/merchant/merchant-users/**", hasAnyRole("OWNER", "ADMIN"))
 				authorize("/merchant/api-keys/**", hasAnyRole("OWNER", "ADMIN"))
+				// **조회(GET)까지 함께 막는다.** 응답에 Webhook 서명 비밀이 들어 있어서,
+				// 읽을 수 있는 사람은 곧 Webhook을 위조할 수 있다 — 다른 경로에서 GET을
+				// 넓게 열어 둔 것과 달리 여기서는 읽기 자체가 자격증명 노출이다.
+				authorize("/merchant/webhook/**", hasAnyRole("OWNER", "ADMIN"))
 				authorize(anyRequest, authenticated)
 			}
 		}

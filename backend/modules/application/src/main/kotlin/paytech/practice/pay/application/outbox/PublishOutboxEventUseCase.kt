@@ -8,6 +8,7 @@ import paytech.practice.pay.application.port.outbound.TransactionManager
 import paytech.practice.pay.application.port.outbound.WebhookDeliveryRepository
 import paytech.practice.pay.application.port.outbound.WebhookSendResult
 import paytech.practice.pay.application.port.outbound.WebhookSender
+import paytech.practice.pay.application.port.outbound.WebhookSigner
 import paytech.practice.pay.domain.merchant.Merchant
 import paytech.practice.pay.domain.outbox.OutboxEvent
 import paytech.practice.pay.domain.outbox.OutboxEventStatus
@@ -60,6 +61,7 @@ class PublishOutboxEventUseCase(
 	private val paymentRepository: PaymentRepository,
 	private val merchantRepository: MerchantRepository,
 	private val webhookSender: WebhookSender,
+	private val webhookSigner: WebhookSigner,
 	private val idGenerator: IdGenerator,
 	private val transactionManager: TransactionManager,
 	private val clock: Clock,
@@ -103,7 +105,18 @@ class PublishOutboxEventUseCase(
 				)
 		webhookDelivery.startDelivering(now)
 
-		when (val sendResult = webhookSender.send(webhookUrl, outboxEvent.payload)) {
+		// 서명은 전송 직전에 만든다 — 헤더에 실리는 `t`가 "이 요청을 보낸 시각"이어야
+		// 가맹점이 재전송 여부를 판단할 수 있다. 재시도할 때마다 새 서명이 나가는 것도
+		// 같은 이유로 의도한 동작이다(옛 `t`를 재사용하면 재시도가 오래된 요청으로 보인다).
+		val signatureHeaderValue =
+			webhookSigner.signatureHeaderValue(
+				merchantId = merchant.id,
+				secretVersion = merchant.webhookSecretVersion,
+				payload = outboxEvent.payload,
+				signedAt = now,
+			)
+
+		when (val sendResult = webhookSender.send(webhookUrl, outboxEvent.payload, signatureHeaderValue)) {
 			is WebhookSendResult.Responded ->
 				if (sendResult.httpStatus in SUCCESS_HTTP_STATUS_RANGE) {
 					webhookDelivery.succeed(sendResult.httpStatus, now)

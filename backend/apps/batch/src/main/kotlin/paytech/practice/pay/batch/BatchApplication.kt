@@ -27,6 +27,10 @@ import org.springframework.scheduling.annotation.EnableScheduling
 		"paytech.practice.pay.infra.support.id",
 		"paytech.practice.pay.infra.support.exchange",
 		"paytech.practice.pay.infra.support.webhook",
+		// 서명(webhooksignature)은 전송(webhook)과 하위 패키지가 다르다 — 서명 쪽만
+		// `app.webhook-signature.pepper`를 요구해서, 보내지 않고 비밀만 보여주는
+		// `api-merchant`가 전송 구현까지 끌고 오지 않게 하려는 분리다.
+		"paytech.practice.pay.infra.support.webhooksignature",
 	],
 )
 class BatchApplication

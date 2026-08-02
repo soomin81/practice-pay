@@ -25,6 +25,9 @@ import org.springframework.boot.runApplication
 		"paytech.practice.pay.infra.support.export",
 		"paytech.practice.pay.infra.support.id",
 		"paytech.practice.pay.infra.support.apikey",
+		// 서명 비밀을 **파생해 보여주기 위해서**다 — 이 앱은 Webhook을 보내지 않으므로
+		// 전송 구현이 있는 `infra.support.webhook`은 스캔하지 않는다.
+		"paytech.practice.pay.infra.support.webhooksignature",
 	],
 )
 class MerchantApiApplication

@@ -1,6 +1,7 @@
 package paytech.practice.pay.infra.support.webhook
 
 import org.springframework.stereotype.Component
+import paytech.practice.pay.application.port.outbound.WEBHOOK_SIGNATURE_HEADER
 import paytech.practice.pay.application.port.outbound.WebhookSendResult
 import paytech.practice.pay.application.port.outbound.WebhookSender
 import paytech.practice.pay.domain.shared.HttpUrl
@@ -36,12 +37,14 @@ class HttpWebhookSender : WebhookSender {
 	override fun send(
 		destinationUrl: HttpUrl,
 		payload: String,
+		signatureHeaderValue: String,
 	): WebhookSendResult {
 		val request =
 			HttpRequest
 				.newBuilder(URI.create(destinationUrl.value))
 				.timeout(REQUEST_TIMEOUT)
 				.header("Content-Type", "application/json")
+				.header(WEBHOOK_SIGNATURE_HEADER, signatureHeaderValue)
 				.POST(HttpRequest.BodyPublishers.ofString(payload))
 				.build()
 

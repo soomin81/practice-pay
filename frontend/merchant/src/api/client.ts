@@ -21,7 +21,9 @@ import type {
 	LoginRequest,
 	LoginResponse,
 	MeResponse,
+	MerchantWebhookSettingsResponse,
 	RevokeApiKeyResponse,
+	UpdateWebhookUrlRequest,
 } from './types'
 
 import { ConsoleApiError, createDownload, createRequest } from './http'
@@ -115,6 +117,19 @@ export const merchantApi = {
 	/** 정산 채권(정산 예정일 최신순). 응답의 totalNetAmount는 필터 전체의 합계다. */
 	listSettlementReceivables: (filters: SettlementFilters = {}) =>
 		request<ListSettlementReceivablesResponse>(`/merchant/settlement-receivables${settlementQueryString(filters)}`),
+
+	/**
+	 * Webhook 설정. **응답에 서명 비밀이 들어 있다** — 백엔드가 이 경로를 OWNER/ADMIN으로
+	 * 막지만, 화면에서도 값을 기본으로 가리고 로그에 남기지 않는다.
+	 */
+	getWebhookSettings: () => request<MerchantWebhookSettingsResponse>('/merchant/webhook'),
+
+	updateWebhookUrl: (body: UpdateWebhookUrlRequest) =>
+		request<MerchantWebhookSettingsResponse>('/merchant/webhook', { method: 'PUT', body: JSON.stringify(body) }),
+
+	/** 서명 비밀 교체. **되돌릴 수 없다** — 옛 비밀로 검증하던 가맹점 서버는 즉시 실패한다. */
+	rotateWebhookSecret: () =>
+		request<MerchantWebhookSettingsResponse>('/merchant/webhook/rotate-secret', { method: 'POST' }),
 
 	listMerchantUsers: () => request<ListMerchantUsersResponse>('/merchant/merchant-users'),
 

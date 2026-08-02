@@ -14,6 +14,7 @@ import paytech.practice.pay.application.port.outbound.TransactionManager
 import paytech.practice.pay.application.port.outbound.WebhookDeliveryRepository
 import paytech.practice.pay.application.port.outbound.WebhookSendResult
 import paytech.practice.pay.application.port.outbound.WebhookSender
+import paytech.practice.pay.application.port.outbound.WebhookSigner
 import paytech.practice.pay.domain.merchant.Merchant
 import paytech.practice.pay.domain.merchant.MerchantCode
 import paytech.practice.pay.domain.merchant.MerchantId
@@ -92,6 +93,24 @@ private class PublishFakeIdGenerator : IdGenerator {
 	}
 }
 
+/**
+ * 서명 자체의 정확성은 `HmacWebhookSignerTest`가 지킨다 — 여기서는 Use Case가
+ * **서명을 만들어 전송에 넘기는지**만 보면 되므로, 입력을 그대로 드러내는 가짜를 쓴다.
+ */
+private class FakeWebhookSigner : WebhookSigner {
+	override fun deriveSecret(
+		merchantId: MerchantId,
+		secretVersion: Int,
+	): String = "whsec_${merchantId.value}_$secretVersion"
+
+	override fun signatureHeaderValue(
+		merchantId: MerchantId,
+		secretVersion: Int,
+		payload: String,
+		signedAt: Instant,
+	): String = "t=${signedAt.epochSecond},v1=${merchantId.value}:$secretVersion:${payload.length}"
+}
+
 private fun newUseCase(
 	outboxEventRepository: OutboxEventRepository,
 	webhookDeliveryRepository: WebhookDeliveryRepository = mockk(relaxed = true),
@@ -105,6 +124,7 @@ private fun newUseCase(
 		paymentRepository = paymentRepository,
 		merchantRepository = merchantRepository,
 		webhookSender = webhookSender,
+		webhookSigner = FakeWebhookSigner(),
 		idGenerator = PublishFakeIdGenerator(),
 		transactionManager = PublishImmediateTransactionManager(),
 		clock = FIXED_CLOCK,
@@ -141,7 +161,7 @@ class PublishOutboxEventUseCaseTest :
 			every { paymentRepository.findById(PAYMENT_ID) } returns newPayment()
 			every { merchantRepository.findById(MERCHANT_ID) } returns newMerchant(webhookUrl = WEBHOOK_URL)
 			every { webhookDeliveryRepository.findByEventIdAndMerchantId(EVENT_ID, MERCHANT_ID) } returns null
-			every { webhookSender.send(WEBHOOK_URL, any()) } returns WebhookSendResult.Responded(200)
+			every { webhookSender.send(WEBHOOK_URL, any(), any()) } returns WebhookSendResult.Responded(200)
 			val savedDeliveries = mutableListOf<WebhookDelivery>()
 			every { webhookDeliveryRepository.save(capture(savedDeliveries)) } returns Unit
 
@@ -151,6 +171,34 @@ class PublishOutboxEventUseCaseTest :
 
 			result.outboxEventStatus shouldBe OutboxEventStatus.PUBLISHED
 			savedDeliveries.single().status shouldBe WebhookDeliveryStatus.SUCCEEDED
+		}
+
+		/**
+		 * **서명 없이 나가면 이 기능 전체가 무의미하다** — 가맹점은 받은 요청이 PG에서
+		 * 온 것인지 확인할 수 없고, 수신 URL만 아는 누구나 `payment.succeeded`를 위조할
+		 * 수 있다. 그래서 "전송에 서명이 실려 나간다"를 회귀로 고정한다.
+		 */
+		test("the outgoing webhook carries a signature derived from the merchant's secret version") {
+			val outboxEventRepository = mockk<OutboxEventRepository>(relaxed = true)
+			val webhookDeliveryRepository = mockk<WebhookDeliveryRepository>(relaxed = true)
+			val paymentRepository = mockk<PaymentRepository>()
+			val merchantRepository = mockk<MerchantRepository>()
+			val webhookSender = mockk<WebhookSender>()
+			val rotatedMerchant =
+				newMerchant(webhookUrl = WEBHOOK_URL).apply { rotateWebhookSecret(NOW) }
+			every { outboxEventRepository.findById(EVENT_ID) } returns newOutboxEvent()
+			every { paymentRepository.findById(PAYMENT_ID) } returns newPayment()
+			every { merchantRepository.findById(MERCHANT_ID) } returns rotatedMerchant
+			every { webhookDeliveryRepository.findByEventIdAndMerchantId(EVENT_ID, MERCHANT_ID) } returns null
+			val signatures = mutableListOf<String>()
+			every { webhookSender.send(WEBHOOK_URL, any(), capture(signatures)) } returns WebhookSendResult.Responded(200)
+
+			newUseCase(outboxEventRepository, webhookDeliveryRepository, paymentRepository, merchantRepository, webhookSender)
+				.execute(PublishOutboxEventCommand(EVENT_ID))
+
+			// 교체된 세대(2)가 서명에 반영돼야 한다 — 반영되지 않으면 교체가 아무것도
+			// 무효화하지 못한다.
+			signatures.single() shouldBe "t=${NOW.epochSecond},v1=${MERCHANT_ID.value}:2:${newOutboxEvent().payload.length}"
 		}
 
 		test("a non-2xx webhook response below the attempt limit schedules a retry on both aggregates") {
@@ -163,7 +211,7 @@ class PublishOutboxEventUseCaseTest :
 			every { paymentRepository.findById(PAYMENT_ID) } returns newPayment()
 			every { merchantRepository.findById(MERCHANT_ID) } returns newMerchant(webhookUrl = WEBHOOK_URL)
 			every { webhookDeliveryRepository.findByEventIdAndMerchantId(EVENT_ID, MERCHANT_ID) } returns null
-			every { webhookSender.send(WEBHOOK_URL, any()) } returns WebhookSendResult.Responded(500)
+			every { webhookSender.send(WEBHOOK_URL, any(), any()) } returns WebhookSendResult.Responded(500)
 			val savedDeliveries = mutableListOf<WebhookDelivery>()
 			val savedOutboxEvents = mutableListOf<OutboxEvent>()
 			every { webhookDeliveryRepository.save(capture(savedDeliveries)) } returns Unit
@@ -204,7 +252,7 @@ class PublishOutboxEventUseCaseTest :
 			every { paymentRepository.findById(PAYMENT_ID) } returns newPayment()
 			every { merchantRepository.findById(MERCHANT_ID) } returns newMerchant(webhookUrl = WEBHOOK_URL)
 			every { webhookDeliveryRepository.findByEventIdAndMerchantId(EVENT_ID, MERCHANT_ID) } returns existingDelivery
-			every { webhookSender.send(WEBHOOK_URL, any()) } returns WebhookSendResult.Failed("connection refused")
+			every { webhookSender.send(WEBHOOK_URL, any(), any()) } returns WebhookSendResult.Failed("connection refused")
 			val savedDeliveries = mutableListOf<WebhookDelivery>()
 			val savedOutboxEvents = mutableListOf<OutboxEvent>()
 			every { webhookDeliveryRepository.save(capture(savedDeliveries)) } returns Unit

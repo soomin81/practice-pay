@@ -9,6 +9,7 @@ import { PaymentDetailPage } from '@/console/PaymentDetailPage'
 import { PaymentsPage } from '@/console/PaymentsPage'
 import { SettlementPage } from '@/console/SettlementPage'
 import { TeamPage } from '@/console/TeamPage'
+import { WebhookPage } from '@/console/WebhookPage'
 import { AcceptInvitationPage } from '@/invitation/AcceptInvitationPage'
 import { Button } from '@/components/ui/button'
 
@@ -59,6 +60,7 @@ function ConsoleRoutes() {
 			<Routes>
 				<Route path="/" element={<ApiKeysPage />} />
 				<Route path="/team" element={<TeamPage />} />
+				<Route path="/webhook" element={<WebhookPage />} />
 				<Route path="/payments" element={<PaymentsPage />} />
 				<Route path="/settlements" element={<SettlementPage />} />
 				<Route path="/payments/:paymentId" element={<PaymentDetailPage />} />

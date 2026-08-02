@@ -33,3 +33,16 @@ app:
       # 전용 프로바이더 URL은 대개 API Key를 경로에 포함하므로(비밀값) 여기 직접
       # 적지 않는다 — Pepper와 같은 취급이다(backend/CLAUDE.md의 "설정과 비밀값" 절).
       rpc-url: ${APP_BLOCKCHAIN_BASE_SEPOLIA_RPC_URL:https://sepolia.base.org}
+  webhook-signature:
+    # 가맹점별 Webhook 서명 비밀을 파생하는 Pepper다. **비밀 자체는 DB에 없다** —
+    # HMAC(pepper, "{merchantId}:{version}")로 매번 만든다(HmacWebhookSigner).
+    #
+    # !! 이 값은 api-merchant의 같은 설정과 반드시 일치해야 한다 !!
+    # 서명을 "만드는" 쪽은 이 앱이고, 그 비밀을 가맹점에게 "보여주는" 쪽은
+    # api-merchant다. 두 값이 어긋나면 콘솔이 알려준 비밀로는 어떤 서명도
+    # 검증되지 않고, 증상이 "가맹점 구현이 틀렸다"처럼 보여 추적이 어렵다.
+    #
+    # !! 이 값을 바꾸면 모든 가맹점의 서명 비밀이 한꺼번에 무효가 된다 !!
+    # 세대(webhook_secret_version)를 올리지 않았는데도 파생 결과가 달라지기
+    # 때문이다. 개별 가맹점의 비밀 교체는 콘솔의 "교체"(세대 증가)를 쓴다.
+    pepper: ${APP_WEBHOOK_SIGNATURE_PEPPER:dev-only-webhook-signature-pepper-change-in-production}

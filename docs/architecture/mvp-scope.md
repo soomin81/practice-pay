@@ -53,7 +53,9 @@ Payment 생성
 - SSO
 - 세분화된 RBAC
 - API Key IP Allowlist
-- HMAC 요청 서명
+- HMAC **요청** 서명 — 가맹점 서버가 PG **결제 API를 호출할 때** 요청에 서명하는 것.
+  PG가 **보내는** Webhook에 서명하는 것(`docs/architecture/webhook-api.md`)은
+  **MVP에 포함돼 있다** — 방향이 반대인 별개의 기능이니 혼동하지 않는다.
 - 자동 Key Rotation
 
 ## MVP 완료 경계

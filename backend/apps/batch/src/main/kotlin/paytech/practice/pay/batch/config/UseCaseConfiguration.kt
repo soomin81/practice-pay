@@ -19,6 +19,7 @@ import paytech.practice.pay.application.port.outbound.SettlementReceivableReposi
 import paytech.practice.pay.application.port.outbound.TransactionManager
 import paytech.practice.pay.application.port.outbound.WebhookDeliveryRepository
 import paytech.practice.pay.application.port.outbound.WebhookSender
+import paytech.practice.pay.application.port.outbound.WebhookSigner
 import paytech.practice.pay.application.sweep.ExpireAccountInvitationUseCase
 import paytech.practice.pay.application.sweep.ExpireCheckoutUseCase
 import java.time.Clock
@@ -59,6 +60,7 @@ class UseCaseConfiguration {
 		paymentRepository: PaymentRepository,
 		merchantRepository: MerchantRepository,
 		webhookSender: WebhookSender,
+		webhookSigner: WebhookSigner,
 		idGenerator: IdGenerator,
 		transactionManager: TransactionManager,
 		clock: Clock,
@@ -69,6 +71,7 @@ class UseCaseConfiguration {
 			paymentRepository = paymentRepository,
 			merchantRepository = merchantRepository,
 			webhookSender = webhookSender,
+			webhookSigner = webhookSigner,
 			idGenerator = idGenerator,
 			transactionManager = transactionManager,
 			clock = clock,

@@ -13,6 +13,9 @@ import paytech.practice.pay.application.identity.InviteMerchantSubAccountUseCase
 import paytech.practice.pay.application.identity.ListMerchantUsersUseCase
 import paytech.practice.pay.application.identity.ResendMerchantUserInvitationUseCase
 import paytech.practice.pay.application.identity.RevokeMerchantUserInvitationUseCase
+import paytech.practice.pay.application.merchant.GetMerchantWebhookSettingsUseCase
+import paytech.practice.pay.application.merchant.RotateMerchantWebhookSecretUseCase
+import paytech.practice.pay.application.merchant.UpdateMerchantWebhookUrlUseCase
 import paytech.practice.pay.application.payment.ExportMerchantPaymentsUseCase
 import paytech.practice.pay.application.payment.GetMerchantPaymentDetailUseCase
 import paytech.practice.pay.application.payment.ListMerchantPaymentsUseCase
@@ -33,6 +36,7 @@ import paytech.practice.pay.application.port.outbound.PaymentExportWriter
 import paytech.practice.pay.application.port.outbound.PaymentListProjection
 import paytech.practice.pay.application.port.outbound.SettlementReceivableListProjection
 import paytech.practice.pay.application.port.outbound.TransactionManager
+import paytech.practice.pay.application.port.outbound.WebhookSigner
 import paytech.practice.pay.application.settlement.ListMerchantSettlementReceivablesUseCase
 import java.time.Clock
 
@@ -210,4 +214,23 @@ class UseCaseConfiguration {
 	fun listMerchantSettlementReceivablesUseCase(
 		settlementReceivableListProjection: SettlementReceivableListProjection,
 	): ListMerchantSettlementReceivablesUseCase = ListMerchantSettlementReceivablesUseCase(settlementReceivableListProjection)
+
+	@Bean
+	fun getMerchantWebhookSettingsUseCase(
+		merchantRepository: MerchantRepository,
+		webhookSigner: WebhookSigner,
+	): GetMerchantWebhookSettingsUseCase = GetMerchantWebhookSettingsUseCase(merchantRepository, webhookSigner)
+
+	@Bean
+	fun updateMerchantWebhookUrlUseCase(
+		merchantRepository: MerchantRepository,
+		clock: Clock,
+	): UpdateMerchantWebhookUrlUseCase = UpdateMerchantWebhookUrlUseCase(merchantRepository, clock)
+
+	@Bean
+	fun rotateMerchantWebhookSecretUseCase(
+		merchantRepository: MerchantRepository,
+		webhookSigner: WebhookSigner,
+		clock: Clock,
+	): RotateMerchantWebhookSecretUseCase = RotateMerchantWebhookSecretUseCase(merchantRepository, webhookSigner, clock)
 }

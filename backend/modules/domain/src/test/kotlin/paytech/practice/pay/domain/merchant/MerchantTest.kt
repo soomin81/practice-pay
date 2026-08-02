@@ -146,11 +146,48 @@ class MerchantTest :
 					createdAt = CREATED_AT,
 					status = MerchantStatus.SUSPENDED,
 					webhookUrl = null,
+					webhookSecretVersion = 3,
 					updatedAt = updatedAt,
 				)
 
 			merchant.status shouldBe MerchantStatus.SUSPENDED
 			merchant.canAcceptPayments() shouldBe false
 			merchant.updatedAt shouldBe updatedAt
+			merchant.webhookSecretVersion shouldBe 3
+		}
+
+		test("a new merchant starts at webhook secret version 1") {
+			newMerchant().webhookSecretVersion shouldBe 1
+		}
+
+		/**
+		 * 교체의 **목적**이 이 테스트다 — 세대가 바뀌면 파생 입력이 달라져 이전 비밀이
+		 * 무효가 된다. 도메인은 비밀을 모르므로 여기서는 세대만 확인하고, 실제로 다른
+		 * 비밀이 나오는지는 `HmacWebhookSignerTest`가 지킨다.
+		 */
+		test("rotateWebhookSecret advances the version without a status transition") {
+			val merchant = newMerchant()
+			val changedAt = CREATED_AT.plusSeconds(1)
+
+			merchant.rotateWebhookSecret(changedAt)
+
+			merchant.webhookSecretVersion shouldBe 2
+			merchant.status shouldBe MerchantStatus.ACTIVE
+			merchant.updatedAt shouldBe changedAt
+		}
+
+		test("reconstitute rejects a webhook secret version below 1") {
+			shouldThrow<IllegalArgumentException> {
+				Merchant.reconstitute(
+					id = MerchantId("mrc_test_005"),
+					code = MerchantCode("TEST_MERCHANT_5"),
+					name = "테스트 가맹점",
+					createdAt = CREATED_AT,
+					status = MerchantStatus.ACTIVE,
+					webhookUrl = null,
+					webhookSecretVersion = 0,
+					updatedAt = CREATED_AT,
+				)
+			}
 		}
 	})
