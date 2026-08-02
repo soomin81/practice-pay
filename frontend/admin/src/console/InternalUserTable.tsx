@@ -44,7 +44,7 @@ export function InternalUserTable({
 						<Td className="text-xs text-muted-foreground">{user.email}</Td>
 						<Td className="text-xs">{String(user.role)}</Td>
 						<Td>
-							<StatusBadge status={String(user.status)} />
+							<StatusBadge kind="account" status={String(user.status)} />
 						</Td>
 						<Td variant="mono" className="text-xs">
 							{formatDateTime(user.lastLoginAt)}

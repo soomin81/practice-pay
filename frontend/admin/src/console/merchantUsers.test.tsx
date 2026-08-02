@@ -29,7 +29,7 @@ describe('AdminMerchantUserTable', () => {
 		renderTable([member()])
 		expect(screen.getByText('member01')).toBeInTheDocument()
 		expect(screen.getByText('member01@example.com')).toBeInTheDocument()
-		expect(screen.getByText('ACTIVE')).toBeInTheDocument()
+		expect(screen.getByText('활성')).toBeInTheDocument()
 	})
 
 	it('빈 명부는 안내 문구를 보여준다', () => {

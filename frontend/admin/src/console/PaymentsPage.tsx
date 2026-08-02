@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Download } from 'lucide-react'
 import { LiveStamp, PageHeader } from '@/components/console/PageHeader'
 import { Panel } from '@/components/console/Panel'
+import { labelFor } from '@/components/console/statusLabel'
 import { StatStrip, type Stat } from '@/components/console/StatStrip'
 import { FilterChips } from '@/components/console/FilterChips'
 import { RANGE_OPTIONS, rangeFilters, type RangePreset } from '@/console/dateRange'
@@ -118,7 +119,8 @@ export function PaymentsPage() {
 								<option value="">전체</option>
 								{PAYMENT_STATUSES.map((status) => (
 									<option key={status} value={status}>
-										{status}
+										{/* value는 코드 그대로다 — 쿼리스트링과 API 계약은 바뀌지 않는다. */}
+										{labelFor('payment', status)}
 									</option>
 								))}
 							</select>

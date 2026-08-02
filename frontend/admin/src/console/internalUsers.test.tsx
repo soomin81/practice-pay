@@ -49,14 +49,14 @@ describe('InternalUserTable', () => {
 		renderWithRouter(<InternalUserTable internalUsers={[member()]} />)
 		expect(screen.getByText('operator01')).toBeInTheDocument()
 		expect(screen.getByText('operator01@example.com')).toBeInTheDocument()
-		expect(screen.getByText('ACTIVE')).toBeInTheDocument()
+		expect(screen.getByText('활성')).toBeInTheDocument()
 	})
 
 	it('INVITED 계정을 구분해 보여주고 로그인 이력이 없으면 대시로 그린다', () => {
 		renderWithRouter(
 			<InternalUserTable internalUsers={[member({ status: 'INVITED', lastLoginAt: null })]} />,
 		)
-		expect(screen.getByText('INVITED')).toBeInTheDocument()
+		expect(screen.getByText('초대됨')).toBeInTheDocument()
 		expect(screen.getByText('—')).toBeInTheDocument()
 	})
 

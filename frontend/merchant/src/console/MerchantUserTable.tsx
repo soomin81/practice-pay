@@ -44,7 +44,7 @@ export function MerchantUserTable({
 						<Td className="text-xs text-muted-foreground">{user.email}</Td>
 						<Td className="text-xs">{String(user.role)}</Td>
 						<Td>
-							<StatusBadge status={String(user.status)} />
+							<StatusBadge kind="account" status={String(user.status)} />
 							{String(user.status) === 'INVITED' && <InvitationHint expiresAt={user.pendingInvitationExpiresAt} />}
 						</Td>
 						<Td variant="mono" className="text-xs">

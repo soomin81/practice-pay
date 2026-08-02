@@ -173,7 +173,7 @@ describe('결제 상세', () => {
 		)
 		renderDetail()
 
-		expect(await screen.findByText('FAILED')).toBeInTheDocument()
+		expect(await screen.findByText('결제 실패')).toBeInTheDocument()
 		expect(screen.getByText('AMOUNT_INSUFFICIENT')).toBeInTheDocument()
 		expect(screen.getByText(/0x40a0473b/)).toBeInTheDocument()
 	})

@@ -38,7 +38,7 @@ export function MerchantLoginAuditTable({ entries }: { entries: readonly Merchan
 						</Td>
 						<Td>{entry.userName ?? <span className="text-xs text-muted-foreground">—</span>}</Td>
 						<Td>
-							<StatusBadge status={String(entry.outcome)} label={outcomeLabel(String(entry.outcome))} />
+							<StatusBadge kind="audit" status={String(entry.outcome)} />
 						</Td>
 						<Td variant="mono" className="text-xs">
 							{entry.clientIp ?? '—'}
@@ -48,12 +48,4 @@ export function MerchantLoginAuditTable({ entries }: { entries: readonly Merchan
 			)}
 		</DataTable>
 	)
-}
-
-/** 감사 결과는 코드가 아니라 한글로 읽힌다(`LoginAuditTable`과 같은 규칙). */
-function outcomeLabel(outcome: string): string {
-	if (outcome === 'SUCCESS') return '성공'
-	if (outcome === 'LOCKED') return '잠김'
-	if (outcome === 'INVALID_CREDENTIALS') return '실패'
-	return outcome
 }

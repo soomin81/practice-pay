@@ -33,7 +33,7 @@ export function LoginAuditTable({ entries }: { entries: readonly LoginAuditEntry
 						</Td>
 						<Td>{entry.userName ?? <span className="text-xs text-muted-foreground">알 수 없는 계정</span>}</Td>
 						<Td>
-							<StatusBadge status={String(entry.outcome)} label={outcomeLabel(String(entry.outcome))} />
+							<StatusBadge kind="audit" status={String(entry.outcome)} />
 						</Td>
 						<Td variant="mono" className="text-xs">
 							{entry.clientIp ?? '—'}
@@ -43,12 +43,4 @@ export function LoginAuditTable({ entries }: { entries: readonly LoginAuditEntry
 			)}
 		</DataTable>
 	)
-}
-
-/** 감사 결과는 코드가 아니라 한글로 읽힌다 — 이 표는 사람이 훑어보는 것이 목적이다. */
-function outcomeLabel(outcome: string): string {
-	if (outcome === 'SUCCESS') return '성공'
-	if (outcome === 'LOCKED') return '잠김'
-	if (outcome === 'INVALID_CREDENTIALS') return '실패'
-	return outcome
 }

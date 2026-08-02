@@ -36,7 +36,7 @@ export function MerchantTable({ merchants }: { merchants: readonly MerchantSumma
 							</Link>
 						</Td>
 						<Td>
-							<StatusBadge status={String(merchant.status)} />
+							<StatusBadge kind="merchant" status={String(merchant.status)} />
 						</Td>
 						<Td variant="mono" className="text-xs">
 							{formatDateTime(merchant.createdAt)}

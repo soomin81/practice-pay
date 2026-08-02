@@ -8,6 +8,7 @@ import { formatKrw } from '@/console/format'
 import { Button } from '@/components/ui/button'
 import { LiveStamp, PageHeader } from '@/components/console/PageHeader'
 import { Panel } from '@/components/console/Panel'
+import { labelFor } from '@/components/console/statusLabel'
 import { StatStrip } from '@/components/console/StatStrip'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
@@ -95,7 +96,8 @@ export function SettlementPage() {
 								<option value="">전체</option>
 								{SETTLEMENT_RECEIVABLE_STATUSES.map((status) => (
 									<option key={status} value={status}>
-										{status}
+										{/* value는 코드 그대로다 — 쿼리스트링과 API 계약은 바뀌지 않는다. */}
+										{labelFor('settlement', status)}
 									</option>
 								))}
 							</select>

@@ -33,7 +33,7 @@ export function ApiKeyTable({ apiKeys }: { apiKeys: readonly ApiKeySummary[] }) 
 						</Td>
 						<Td className="text-xs text-muted-foreground">{key.scopes.map(String).join(', ')}</Td>
 						<Td>
-							<StatusBadge status={String(key.status)} />
+							<StatusBadge kind="apiKey" status={String(key.status)} />
 						</Td>
 						<Td variant="mono" className="text-xs">
 							{formatDateTime(key.createdAt)}

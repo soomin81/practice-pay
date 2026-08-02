@@ -35,7 +35,7 @@ describe('ApiKeyTable', () => {
 		renderWithQuery(<ApiKeyTable apiKeys={[activeKey()]} />)
 		expect(screen.getByText('운영 서버용')).toBeInTheDocument()
 		expect(screen.getByText('sk_test_ab12cd34')).toBeInTheDocument()
-		expect(screen.getByText('ACTIVE')).toBeInTheDocument()
+		expect(screen.getByText('사용 중')).toBeInTheDocument()
 		expect(screen.getByRole('button', { name: '폐기' })).toBeInTheDocument()
 	})
 
@@ -45,7 +45,7 @@ describe('ApiKeyTable', () => {
 				apiKeys={[activeKey({ merchantApiKeyId: 'mak_2', status: 'REVOKED', revokedAt: '2026-07-20T00:00:00Z' })]}
 			/>,
 		)
-		expect(screen.getByText('REVOKED')).toBeInTheDocument()
+		expect(screen.getByText('폐기됨')).toBeInTheDocument()
 		expect(screen.queryByRole('button', { name: '폐기' })).not.toBeInTheDocument()
 	})
 

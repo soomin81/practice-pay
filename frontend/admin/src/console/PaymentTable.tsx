@@ -49,7 +49,7 @@ export function PaymentTable({ payments }: { payments: PaymentSummary[] }) {
 							<span className="text-muted-foreground">{payment.paymentAsset}</span>
 						</Td>
 						<Td>
-							<StatusBadge status={payment.status} />
+							<StatusBadge kind="payment" status={payment.status} />
 							{/* **실패 사유는 코드 그대로 보여준다** — 운영자가 원인 코드를 그대로 본다. */}
 							{payment.failureReason ? (
 								<div className="mt-0.5 text-xs text-muted-foreground">{payment.failureReason}</div>

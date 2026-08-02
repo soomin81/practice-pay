@@ -1,16 +1,20 @@
+import { labelFor, type StatusKind } from '@/components/console/statusLabel'
+
 /**
- * 상태를 파스텔 배지로 보여준다.
+ * 상태를 파스텔 배지로 **한글과 함께** 보여준다.
  *
- * **상태 이름이 아니라 성격으로 색을 고른다.** 이 시스템에는 상태 집합이 여러 개
- * 있고(`Payment`, `SettlementReceivable`, `MerchantApiKey`, 계정, `WebhookDelivery`),
- * 이름은 제각각이지만 사람이 표를 훑을 때 알고 싶은 것은 다섯 가지뿐이다 —
- * **끝났나 / 기다리나 / 진행 중인가 / 닫혔나 / 잘못됐나**. 그래서 색을 다섯 성격에
- * 배정하고 각 상태를 거기에 매핑한다.
+ * **색은 코드로, 말은 맥락으로 고른다.** 색은 상태 이름이 아니라 성격으로 정하는데, 사람이
+ * 표를 훑을 때 알고 싶은 것이 다섯 가지뿐이기 때문이다 — **끝났나 / 기다리나 / 진행 중인가 /
+ * 닫혔나 / 잘못됐나**. 색은 거칠어서 코드가 겹쳐도 문제가 없다(`READY`는 어느 집합에서든
+ * "정상"이다).
  *
- * 모르는 상태는 `off`(회색)로 떨어뜨린다 — 새 상태가 생겼을 때 화면이 깨지는 대신
+ * 말은 다르다 — 같은 코드가 애그리게이트마다 다른 뜻이라 [StatusKind]가 필요하다. 근거와
+ * 표기 목록은 `statusLabel.ts`에 있다.
+ *
+ * 모르는 상태는 색을 `off`(회색)로 떨어뜨린다 — 새 상태가 생겼을 때 화면이 깨지는 대신
  * 눈에 띄지 않는 회색으로 나오고, 그건 "색을 정해 달라"는 신호다.
  */
-export type StateTone = 'ok' | 'wait' | 'move' | 'off' | 'bad'
+type StateTone = 'ok' | 'wait' | 'move' | 'off' | 'bad'
 
 const TONE_CLASS: Record<StateTone, string> = {
 	ok: 'bg-state-ok text-state-ok-fg',
@@ -21,7 +25,7 @@ const TONE_CLASS: Record<StateTone, string> = {
 }
 
 /**
- * 상태 코드 → 성격. 여러 애그리게이트의 상태가 한 표에 들어 있다.
+ * 상태 코드 → 성격(색).
  *
  * - `ok` 끝났고 정상이다 — 결제 성공, 정산 준비됨, 전송 성공, 활성 계정/Key
  * - `wait` 아직 손대지 않았다 — 생성됨, 대기
@@ -68,18 +72,31 @@ const TONE_BY_STATUS: Record<string, StateTone> = {
 	// ExchangeOrder
 	REQUESTED: 'wait',
 	COMPLETED: 'ok',
+	// CheckoutSession
+	OPEN: 'wait',
+	WALLET_CONNECTED: 'move',
+	PAYMENT_SUBMITTED: 'move',
 }
 
-function toneFor(status: string): StateTone {
-	return TONE_BY_STATUS[status] ?? 'off'
-}
-
-export function StatusBadge({ status, label }: { status: string; label?: string }) {
+export function StatusBadge({
+	kind,
+	status,
+	label,
+}: {
+	kind: StatusKind
+	status: string
+	/** 표기를 직접 지정한다. 지정하지 않으면 [kind]에 맞는 한글을 고른다. */
+	label?: string
+}) {
 	return (
 		<span
-			className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium whitespace-nowrap ${TONE_CLASS[toneFor(status)]}`}
+			className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium whitespace-nowrap ${
+				TONE_CLASS[TONE_BY_STATUS[status] ?? 'off']
+			}`}
+			// 코드를 완전히 감추지 않는다 — 운영자가 API 문서·로그와 대조해야 할 때가 있다.
+			title={status}
 		>
-			{label ?? status}
+			{label ?? labelFor(kind, status)}
 		</span>
 	)
 }

@@ -49,7 +49,7 @@ export function SettlementTable({ rows }: { rows: SettlementReceivableSummary[] 
 								: formatSignedKrw(row.exchangeProfitLossAmount)}
 						</Td>
 						<Td>
-							<StatusBadge status={row.status} />
+							<StatusBadge kind="settlement" status={row.status} />
 						</Td>
 					</tr>
 				))

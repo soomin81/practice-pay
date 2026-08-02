@@ -55,7 +55,7 @@ export function PaymentDetailPage() {
 			<div className="flex flex-col gap-6">
 			<Section title="결제" description="주문과 결제 금액, 현재 상태">
 				<Field label="상태">
-					<StatusBadge status={payment.status} />
+					<StatusBadge kind="payment" status={payment.status} />
 					{payment.failureReason && <span className="ml-2 text-xs text-destructive">{payment.failureReason}</span>}
 				</Field>
 				<Field label="가맹점">{payment.merchantName}</Field>
@@ -85,7 +85,7 @@ export function PaymentDetailPage() {
 
 			<Section title="체크아웃" description="고객이 결제를 진행한 세션">
 				<Field label="상태">
-					<StatusBadge status={checkoutSession.status} />
+					<StatusBadge kind="checkout" status={checkoutSession.status} />
 				</Field>
 				<Field label="연결된 지갑" mono>
 					{checkoutSession.connectedWallet ?? '아직 연결되지 않음'}
@@ -96,7 +96,7 @@ export function PaymentDetailPage() {
 				{blockchainTransaction ? (
 					<>
 						<Field label="상태">
-							<StatusBadge status={blockchainTransaction.status} />{' '}
+							<StatusBadge kind="onchain" status={blockchainTransaction.status} />{' '}
 							<span className="tabular text-xs text-muted-foreground">
 								{blockchainTransaction.confirmationCount} / {blockchainTransaction.requiredConfirmationCount} Confirm
 							</span>
@@ -126,7 +126,7 @@ export function PaymentDetailPage() {
 				{exchangeOrder ? (
 					<>
 						<Field label="상태">
-							<StatusBadge status={exchangeOrder.status} />{' '}
+							<StatusBadge kind="exchange" status={exchangeOrder.status} />{' '}
 							<span className="text-xs text-muted-foreground">{exchangeOrder.providerCode}</span>
 						</Field>
 						<Field label="체결 환율">{exchangeOrder.averageExecutionRate ?? '—'}</Field>
@@ -144,7 +144,7 @@ export function PaymentDetailPage() {
 				{settlementReceivable ? (
 					<>
 						<Field label="상태">
-							<StatusBadge status={settlementReceivable.status} />
+							<StatusBadge kind="settlement" status={settlementReceivable.status} />
 						</Field>
 						<Field label="정산 기준">{formatKrw(settlementReceivable.grossAmount)}</Field>
 						<Field label="수수료">−{formatKrw(settlementReceivable.feeAmount)}</Field>
@@ -180,7 +180,7 @@ export function PaymentDetailPage() {
 								<tr key={delivery.webhookDeliveryId}>
 									<Td className="mono-cell text-foreground">{delivery.eventType}</Td>
 									<Td>
-										<StatusBadge status={delivery.status} />
+										<StatusBadge kind="webhook" status={delivery.status} />
 									</Td>
 									<Td variant="amount">{delivery.attemptCount}회</Td>
 									<Td variant="amount">{delivery.lastHttpStatus ?? '—'}</Td>

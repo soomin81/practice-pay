@@ -43,7 +43,7 @@ describe('MerchantTable', () => {
 		renderWithRouter(<MerchantTable merchants={[merchant()]} />)
 		expect(screen.getByText('TEST_MERCHANT')).toBeInTheDocument()
 		expect(screen.getByText('테스트 가맹점')).toBeInTheDocument()
-		expect(screen.getByText('ACTIVE')).toBeInTheDocument()
+		expect(screen.getByText('활성')).toBeInTheDocument()
 	})
 
 	it('빈 목록은 안내 문구를 보여준다', () => {

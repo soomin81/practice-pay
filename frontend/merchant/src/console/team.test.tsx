@@ -34,14 +34,14 @@ describe('MerchantUserTable', () => {
 		renderWithRouter(<MerchantUserTable merchantUsers={[member()]} />)
 		expect(screen.getByText('member01')).toBeInTheDocument()
 		expect(screen.getByText('member01@example.com')).toBeInTheDocument()
-		expect(screen.getByText('ACTIVE')).toBeInTheDocument()
+		expect(screen.getByText('활성')).toBeInTheDocument()
 	})
 
 	it('INVITED 계정을 그 상태로 구분해 보여준다', () => {
 		renderWithRouter(
 			<MerchantUserTable merchantUsers={[member({ merchantUserId: 'mu_2', status: 'INVITED', lastLoginAt: null })]} />,
 		)
-		expect(screen.getByText('INVITED')).toBeInTheDocument()
+		expect(screen.getByText('초대됨')).toBeInTheDocument()
 		// 로그인한 적이 없으면 대시로 그린다.
 		expect(screen.getByText('—')).toBeInTheDocument()
 	})
