@@ -16,6 +16,7 @@ import type {
 	ListMerchantsResponse,
 	ListPaymentsResponse,
 	PaymentDetailResponse,
+	RedeliverWebhookResponse,
 	ListSettlementReceivablesResponse,
 	SettlementFilters,
 	PaymentListFilters,
@@ -152,6 +153,16 @@ export const adminApi = {
 	/** 어느 가맹점의 사용자 명부를 조회한다(VIEWER 포함 인증된 내부 사용자 전원). */
 	listMerchantUsers: (merchantId: string) =>
 		request<ListMerchantUsersResponse>(`/admin/merchants/${encodeURIComponent(merchantId)}/users`),
+
+	/**
+	 * 실패한 Webhook 전송을 다시 보내도록 **예약한다** — 이 요청이 발송하는 것이 아니라,
+	 * 전송을 `PENDING`으로 되돌려 놓으면 발행 Worker(10초 주기)가 평소 경로로 보낸다.
+	 */
+	redeliverWebhook: (webhookDeliveryId: string) =>
+		request<RedeliverWebhookResponse>(
+			`/admin/webhook-deliveries/${encodeURIComponent(webhookDeliveryId)}/redeliver`,
+			{ method: 'POST' },
+		),
 
 	/** 가맹점 사용자 정지·재개·종료. 세 경로가 요청·응답 형태를 공유해서 하나로 다룬다. */
 	changeMerchantUserStatus: (merchantId: string, merchantUserId: string, action: MerchantUserStatusAction) =>

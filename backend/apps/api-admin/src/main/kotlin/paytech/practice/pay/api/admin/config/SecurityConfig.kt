@@ -105,6 +105,9 @@ class SecurityConfig {
 				// 액션의 인가를 이 정적 규칙에만 맡기므로(AdminMerchantUserController의 KDoc), 이
 				// 규칙이 mutation의 1차이자 유일한 관문이다.
 				authorize(HttpMethod.POST, "/admin/merchants/**", hasAnyRole("SUPER_ADMIN", "OPERATOR"))
+				// Webhook 재전송은 **상태를 바꾸는 운영 행위**다 — 조회 전용 역할이 누를
+				// 일이 아니다. 이 경로에는 POST만 있어서 메서드로 좁힐 필요가 없다.
+				authorize("/admin/webhook-deliveries/**", hasAnyRole("SUPER_ADMIN", "OPERATOR"))
 				authorize(anyRequest, authenticated)
 			}
 		}

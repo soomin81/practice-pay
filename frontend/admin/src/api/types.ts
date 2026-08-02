@@ -160,3 +160,9 @@ export type SettlementFilters = {
 }
 
 export type PaymentDetailResponse = JsonResponse<'admin-payment-detail', 200>
+
+/**
+ * Webhook 재전송 예약 결과. **`status`가 `PENDING`이라는 것은 "아직 보내지 않았다"는 뜻**이라,
+ * 화면은 이 응답을 "성공"이 아니라 "예약됨"으로 읽어야 한다.
+ */
+export type RedeliverWebhookResponse = JsonResponse<'admin-redeliver-webhook', 200>

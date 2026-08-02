@@ -122,6 +122,34 @@ class OutboxEventTest :
 			shouldThrow<IllegalStateException> { event.fail(CREATED_AT.plusSeconds(1)) }
 		}
 
+		/**
+		 * **`WebhookDelivery.redeliver`와 짝으로만 쓰인다** — 전송만 되돌리고 이쪽을 두면
+		 * 발행 Worker(`findPendingPublication`)가 대상으로 집지 않아 아무 일도 안 일어난다.
+		 * 되돌려 놓으면 평소와 똑같은 경로로 다시 발행된다.
+		 */
+		test("reopenForRedelivery moves FAILED back to PENDING so the worker picks it up again") {
+			val event = newEvent()
+			event.startPublishing(CREATED_AT.plusSeconds(1))
+			event.fail(CREATED_AT.plusSeconds(2))
+			val reopenedAt = CREATED_AT.plusSeconds(600)
+
+			event.reopenForRedelivery(reopenedAt)
+
+			event.status shouldBe OutboxEventStatus.PENDING
+			event.updatedAt shouldBe reopenedAt
+			event.nextRetryAt.shouldBeNull()
+		}
+
+		/** 예외를 **좁게** 둔다 — `FAILED`만 되돌릴 수 있고 `PUBLISHED`는 아니다. */
+		test("reopenForRedelivery refuses anything other than FAILED") {
+			shouldThrow<IllegalStateException> { newEvent().reopenForRedelivery(CREATED_AT.plusSeconds(1)) }
+
+			val published = newEvent()
+			published.startPublishing(CREATED_AT.plusSeconds(1))
+			published.publish(CREATED_AT.plusSeconds(2))
+			shouldThrow<IllegalStateException> { published.reopenForRedelivery(CREATED_AT.plusSeconds(3)) }
+		}
+
 		test("reconstitute rejects PUBLISHED without publishedAt") {
 			shouldThrow<IllegalArgumentException> {
 				OutboxEvent.reconstitute(

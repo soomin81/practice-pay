@@ -292,6 +292,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/webhook-deliveries/{webhookDeliveryId}/redeliver": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 실패한 Webhook 전송 재전송
+         * @description SUPER_ADMIN/OPERATOR만 실행할 수 있다. **보내는 것이 아니라 예약한다** — 전송과 OutboxEvent를 PENDING으로 되돌려 놓으면 기존 발행 Worker(10초 주기)가 평소 경로로 다시 보낸다. FAILED가 아닌 전송은 409, 없는 전송은 404.
+         */
+        post: operations["admin-redeliver-webhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/merchants/mrc_001/users/mu_001/role": {
         parameters: {
             query?: never;
@@ -336,23 +356,6 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /** IssueInternalUserResponse */
-        IssueInternalUserResponse: {
-            /** @description 부여된 역할 */
-            role: string;
-            /** @description 로그인 아이디 */
-            loginId: string;
-            /** @description 초대 만료 시각(UTC) */
-            invitationExpiresAt: string;
-            /** @description 초대 Token 원문. 최초 1회만 노출된다. */
-            invitationToken: string;
-            /** @description 사용자 이름 */
-            userName: string;
-            /** @description 이메일 */
-            email: string;
-            /** @description 생성된 내부 운영자 식별자 */
-            internalUserId: string;
-        };
         /** AcceptAccountInvitationRequest */
         AcceptAccountInvitationRequest: {
             /** @description 설정할 새 비밀번호 */
@@ -368,35 +371,6 @@ export interface components {
             loginId: string;
             /** @description 내부 운영자 식별자 */
             internalUserId: string;
-        };
-        /** ListMerchantLoginAuditResponse */
-        ListMerchantLoginAuditResponse: {
-            /** @description 가맹점 로그인 감사 기록 배열(최신순) */
-            entries: {
-                /** @description 감사 기록 식별자 */
-                auditId: string;
-                /** @description 시도 시각(UTC) */
-                occurredAt: string;
-                /** @description 시도가 가리킨 가맹점 식별자. 없는 가맹점이면 null. */
-                merchantId?: string | null;
-                /** @description 요청 원격 주소. 없으면 null. */
-                clientIp?: string | null;
-                /** @description 시도에 쓰인 로그인 아이디 */
-                attemptedLoginId: string;
-                /** @description 계정 이름. 없는 계정이면 null. */
-                userName?: string | null;
-                /** @description SUCCESS | INVALID_CREDENTIALS | LOCKED */
-                outcome: string;
-                /** @description 시도에 쓰인 가맹점 코드 */
-                attemptedMerchantCode: string;
-                /** @description 가맹점 이름. 없는 가맹점이면 null. */
-                merchantName?: string | null;
-            }[];
-        };
-        /** ChangeMerchantUserRoleRequest */
-        ChangeMerchantUserRoleRequest: {
-            /** @description 변경할 역할(ADMIN | VIEWER) */
-            role: string;
         };
         /** AdminLoginResponse */
         AdminLoginResponse: {
@@ -431,22 +405,7 @@ export interface components {
                 status: string;
             }[];
         };
-        /** RegisterMerchantRequest */
-        RegisterMerchantRequest: {
-            /** @description 가맹점 코드(전 시스템에서 유일, 가맹점 사용자 로그인에 쓰인다) */
-            merchantCode: string;
-            /** @description 최초 OWNER의 이름 */
-            ownerUserName: string;
-            /** @description 최초 OWNER의 로그인 아이디 */
-            ownerLoginId: string;
-            /** @description 결제 결과를 받을 Webhook URL. 선택값이다. */
-            webhookUrl?: string | null;
-            /** @description 최초 OWNER의 이메일 */
-            ownerEmail: string;
-            /** @description 가맹점 이름 */
-            merchantName: string;
-        };
-        "admin-logout-33084672": Record<string, never>;
+        "admin-webhook-deliveries-webhookDeliveryId-redeliver-33084672": Record<string, never>;
         /** ListLoginAuditResponse */
         ListLoginAuditResponse: {
             /** @description 로그인 감사 기록 배열(최신순) */
@@ -466,116 +425,6 @@ export interface components {
                 /** @description 시도가 가리킨 계정 식별자. 없는 계정이면 null. */
                 internalUserId?: string | null;
             }[];
-        };
-        /** ChangeInternalUserStatusResponse */
-        ChangeInternalUserStatusResponse: {
-            /** @description 변경 시각(UTC) */
-            changedAt: string;
-            /** @description 대상 내부 운영자 식별자 */
-            internalUserId: string;
-            /** @description 변경된 상태(ACTIVE | SUSPENDED | TERMINATED) */
-            status: string;
-        };
-        /** ListPaymentsResponse */
-        ListPaymentsResponse: {
-            /** @description 실제로 적용된 페이지 크기. 상한에 걸리면 요청값과 다르다. */
-            size: number;
-            /** @description 결제 배열(생성 시각 최신순) */
-            payments: {
-                /** @description 가맹점이 부여한 주문 식별자 */
-                merchantOrderId: string;
-                /** @description 결제 토큰 금액. Minor Unit 정수를 문자열로 준다. */
-                paymentAmount: string;
-                /** @description 온체인 거래 Hash. 고객이 제출하기 전이면 null. */
-                transactionHash?: string | null;
-                /** @description 블록체인 네트워크 코드 */
-                network: string;
-                /** @description 가맹점 이름 */
-                merchantName: string;
-                /** @description 결제 자산 코드(USDC) */
-                paymentAsset: string;
-                /** @description 결제 생성 시각(UTC) */
-                createdAt: string;
-                /** @description KRW 주문 금액(원 단위 정수) */
-                orderAmount: number;
-                /** @description 가맹점 식별자 */
-                merchantId: string;
-                /** @description 토큰 소수 자릿수(USDC는 6) */
-                tokenDecimals: number;
-                /** @description 결제 식별자 */
-                paymentId: string;
-                /** @description 실패 사유. FAILED가 아니면 null. */
-                failureReason?: string | null;
-                /** @description 결제 완료 시각(UTC). SUCCEEDED가 아니면 null. */
-                paidAt?: string | null;
-                /** @description PaymentStatus 값 */
-                status: string;
-                /** @description 주문명 */
-                orderName: string;
-            }[];
-            /** @description SUCCEEDED 결제의 주문 금액 합계(KRW). **성공한 것만 더한다** — 전체를 더하면 만료·실패한 결제까지 매출처럼 보인다. */
-            succeededAmount: number;
-            /** @description 그중 SUCCEEDED인 건수. totalCount와 함께 승인율의 재료다. */
-            succeededCount: number;
-            /** @description 조회한 페이지 번호(0부터) */
-            page: number;
-            /** @description 필터 전체에 걸린 건수(현재 페이지 건수가 아니다) */
-            totalCount: number;
-        };
-        /** ListSettlementReceivablesResponse */
-        ListSettlementReceivablesResponse: {
-            /** @description 실제로 적용된 페이지 크기 */
-            size: number;
-            /** @description 필터 전체의 정산 예정 금액 합계 */
-            totalNetAmount: number;
-            /** @description 조회한 페이지 번호(0부터) */
-            page: number;
-            /** @description 정산 채권 배열(정산 예정일 최신순) */
-            settlementReceivables: {
-                /** @description 정산 예정 금액 = gross - fee + adjustment */
-                netAmount: number;
-                /** @description 확보액과 정산 기준 금액의 차이(PG 마진). 음수 가능, READY 전에는 null. */
-                exchangeProfitLossAmount?: number | null;
-                /** @description 정산 기준 금액 */
-                grossAmount: number;
-                /** @description 가맹점이 부여한 주문 식별자 */
-                merchantOrderId: string;
-                /** @description 적용 수수료율 */
-                feeRate: number;
-                /** @description 가맹점 이름 */
-                merchantName: string;
-                /** @description 생성 시각(UTC) */
-                createdAt: string;
-                /** @description 수수료 */
-                feeAmount: number;
-                /** @description 정산 통화(KRW) */
-                settlementCurrency: string;
-                /** @description 가맹점 식별자 */
-                merchantId: string;
-                /** @description 이 채권을 만든 결제 */
-                paymentId: string;
-                /** @description 정산 예정일(YYYY-MM-DD) */
-                eligibleDate: string;
-                /** @description 환전으로 확보한 KRW. READY 전에는 null. */
-                exchangeReceivedAmount?: number | null;
-                /** @description 조정 금액(음수 가능) */
-                adjustmentAmount: number;
-                /** @description 정산 채권 식별자 */
-                settlementReceivableId: string;
-                /** @description SettlementReceivableStatus 값(MVP 종착은 READY) */
-                status: string;
-            }[];
-            /** @description 필터 전체에 걸린 건수 */
-            totalCount: number;
-        };
-        /** ChangeInternalUserRoleResponse */
-        ChangeInternalUserRoleResponse: {
-            /** @description 변경된 역할 */
-            role: string;
-            /** @description 변경 시각(UTC) */
-            changedAt: string;
-            /** @description 대상 내부 운영자 식별자 */
-            internalUserId: string;
         };
         /** AcceptAccountInvitationResponse */
         AcceptAccountInvitationResponse: {
@@ -744,6 +593,205 @@ export interface components {
                 status: string;
             };
         };
+        /** ChangeMerchantUserRoleResponse */
+        ChangeMerchantUserRoleResponse: {
+            /** @description 변경된 역할 */
+            role: string;
+            /** @description 변경 시각(UTC) */
+            changedAt: string;
+            /** @description 대상 가맹점 사용자 식별자 */
+            merchantUserId: string;
+        };
+        /** RegisterMerchantResponse */
+        RegisterMerchantResponse: {
+            /** @description 가맹점 코드 */
+            merchantCode: string;
+            /** @description 생성된 가맹점 식별자 */
+            merchantId: string;
+            /** @description 초대 만료 시각(UTC) */
+            invitationExpiresAt: string;
+            /** @description 생성된 OWNER 계정 식별자 */
+            ownerMerchantUserId: string;
+            /** @description OWNER 로그인 아이디 */
+            ownerLoginId: string;
+            /** @description OWNER 초대 Token 원문. 최초 1회만 노출된다. */
+            invitationToken: string;
+            /** @description OWNER 이메일 */
+            ownerEmail: string;
+            /** @description 가맹점 이름 */
+            merchantName: string;
+        };
+        /** IssueInternalUserResponse */
+        IssueInternalUserResponse: {
+            /** @description 부여된 역할 */
+            role: string;
+            /** @description 로그인 아이디 */
+            loginId: string;
+            /** @description 초대 만료 시각(UTC) */
+            invitationExpiresAt: string;
+            /** @description 초대 Token 원문. 최초 1회만 노출된다. */
+            invitationToken: string;
+            /** @description 사용자 이름 */
+            userName: string;
+            /** @description 이메일 */
+            email: string;
+            /** @description 생성된 내부 운영자 식별자 */
+            internalUserId: string;
+        };
+        /** ListMerchantLoginAuditResponse */
+        ListMerchantLoginAuditResponse: {
+            /** @description 가맹점 로그인 감사 기록 배열(최신순) */
+            entries: {
+                /** @description 감사 기록 식별자 */
+                auditId: string;
+                /** @description 시도 시각(UTC) */
+                occurredAt: string;
+                /** @description 시도가 가리킨 가맹점 식별자. 없는 가맹점이면 null. */
+                merchantId?: string | null;
+                /** @description 요청 원격 주소. 없으면 null. */
+                clientIp?: string | null;
+                /** @description 시도에 쓰인 로그인 아이디 */
+                attemptedLoginId: string;
+                /** @description 계정 이름. 없는 계정이면 null. */
+                userName?: string | null;
+                /** @description SUCCESS | INVALID_CREDENTIALS | LOCKED */
+                outcome: string;
+                /** @description 시도에 쓰인 가맹점 코드 */
+                attemptedMerchantCode: string;
+                /** @description 가맹점 이름. 없는 가맹점이면 null. */
+                merchantName?: string | null;
+            }[];
+        };
+        /** ChangeMerchantUserRoleRequest */
+        ChangeMerchantUserRoleRequest: {
+            /** @description 변경할 역할(ADMIN | VIEWER) */
+            role: string;
+        };
+        /** RegisterMerchantRequest */
+        RegisterMerchantRequest: {
+            /** @description 가맹점 코드(전 시스템에서 유일, 가맹점 사용자 로그인에 쓰인다) */
+            merchantCode: string;
+            /** @description 최초 OWNER의 이름 */
+            ownerUserName: string;
+            /** @description 최초 OWNER의 로그인 아이디 */
+            ownerLoginId: string;
+            /** @description 결제 결과를 받을 Webhook URL. 선택값이다. */
+            webhookUrl?: string | null;
+            /** @description 최초 OWNER의 이메일 */
+            ownerEmail: string;
+            /** @description 가맹점 이름 */
+            merchantName: string;
+        };
+        /** ChangeInternalUserStatusResponse */
+        ChangeInternalUserStatusResponse: {
+            /** @description 변경 시각(UTC) */
+            changedAt: string;
+            /** @description 대상 내부 운영자 식별자 */
+            internalUserId: string;
+            /** @description 변경된 상태(ACTIVE | SUSPENDED | TERMINATED) */
+            status: string;
+        };
+        /** ListPaymentsResponse */
+        ListPaymentsResponse: {
+            /** @description 실제로 적용된 페이지 크기. 상한에 걸리면 요청값과 다르다. */
+            size: number;
+            /** @description 결제 배열(생성 시각 최신순) */
+            payments: {
+                /** @description 가맹점이 부여한 주문 식별자 */
+                merchantOrderId: string;
+                /** @description 결제 토큰 금액. Minor Unit 정수를 문자열로 준다. */
+                paymentAmount: string;
+                /** @description 온체인 거래 Hash. 고객이 제출하기 전이면 null. */
+                transactionHash?: string | null;
+                /** @description 블록체인 네트워크 코드 */
+                network: string;
+                /** @description 가맹점 이름 */
+                merchantName: string;
+                /** @description 결제 자산 코드(USDC) */
+                paymentAsset: string;
+                /** @description 결제 생성 시각(UTC) */
+                createdAt: string;
+                /** @description KRW 주문 금액(원 단위 정수) */
+                orderAmount: number;
+                /** @description 가맹점 식별자 */
+                merchantId: string;
+                /** @description 토큰 소수 자릿수(USDC는 6) */
+                tokenDecimals: number;
+                /** @description 결제 식별자 */
+                paymentId: string;
+                /** @description 실패 사유. FAILED가 아니면 null. */
+                failureReason?: string | null;
+                /** @description 결제 완료 시각(UTC). SUCCEEDED가 아니면 null. */
+                paidAt?: string | null;
+                /** @description PaymentStatus 값 */
+                status: string;
+                /** @description 주문명 */
+                orderName: string;
+            }[];
+            /** @description SUCCEEDED 결제의 주문 금액 합계(KRW). **성공한 것만 더한다** — 전체를 더하면 만료·실패한 결제까지 매출처럼 보인다. */
+            succeededAmount: number;
+            /** @description 그중 SUCCEEDED인 건수. totalCount와 함께 승인율의 재료다. */
+            succeededCount: number;
+            /** @description 조회한 페이지 번호(0부터) */
+            page: number;
+            /** @description 필터 전체에 걸린 건수(현재 페이지 건수가 아니다) */
+            totalCount: number;
+        };
+        /** ListSettlementReceivablesResponse */
+        ListSettlementReceivablesResponse: {
+            /** @description 실제로 적용된 페이지 크기 */
+            size: number;
+            /** @description 필터 전체의 정산 예정 금액 합계 */
+            totalNetAmount: number;
+            /** @description 조회한 페이지 번호(0부터) */
+            page: number;
+            /** @description 정산 채권 배열(정산 예정일 최신순) */
+            settlementReceivables: {
+                /** @description 정산 예정 금액 = gross - fee + adjustment */
+                netAmount: number;
+                /** @description 확보액과 정산 기준 금액의 차이(PG 마진). 음수 가능, READY 전에는 null. */
+                exchangeProfitLossAmount?: number | null;
+                /** @description 정산 기준 금액 */
+                grossAmount: number;
+                /** @description 가맹점이 부여한 주문 식별자 */
+                merchantOrderId: string;
+                /** @description 적용 수수료율 */
+                feeRate: number;
+                /** @description 가맹점 이름 */
+                merchantName: string;
+                /** @description 생성 시각(UTC) */
+                createdAt: string;
+                /** @description 수수료 */
+                feeAmount: number;
+                /** @description 정산 통화(KRW) */
+                settlementCurrency: string;
+                /** @description 가맹점 식별자 */
+                merchantId: string;
+                /** @description 이 채권을 만든 결제 */
+                paymentId: string;
+                /** @description 정산 예정일(YYYY-MM-DD) */
+                eligibleDate: string;
+                /** @description 환전으로 확보한 KRW. READY 전에는 null. */
+                exchangeReceivedAmount?: number | null;
+                /** @description 조정 금액(음수 가능) */
+                adjustmentAmount: number;
+                /** @description 정산 채권 식별자 */
+                settlementReceivableId: string;
+                /** @description SettlementReceivableStatus 값(MVP 종착은 READY) */
+                status: string;
+            }[];
+            /** @description 필터 전체에 걸린 건수 */
+            totalCount: number;
+        };
+        /** ChangeInternalUserRoleResponse */
+        ChangeInternalUserRoleResponse: {
+            /** @description 변경된 역할 */
+            role: string;
+            /** @description 변경 시각(UTC) */
+            changedAt: string;
+            /** @description 대상 내부 운영자 식별자 */
+            internalUserId: string;
+        };
         /** IssueInternalUserRequest */
         IssueInternalUserRequest: {
             /** @description OPERATOR | VIEWER. **SUPER_ADMIN을 보내면 400이다** — 최초 SUPER_ADMIN은 Bootstrap으로만 생성한다. */
@@ -754,6 +802,15 @@ export interface components {
             userName: string;
             /** @description 전 시스템에서 유일한 이메일 */
             email: string;
+        };
+        /** RedeliverWebhookResponse */
+        RedeliverWebhookResponse: {
+            /** @description 누적 시도 횟수. 재전송은 이 값을 초기화하지 않는다(재시도 예산을 새로 주지 않는다). */
+            attemptCount: number;
+            /** @description 되돌린 전송 식별자 */
+            webhookDeliveryId: string;
+            /** @description 되돌린 뒤의 상태(PENDING). **아직 보내지 않았다는 뜻**이라 '성공'으로 읽으면 안 된다. */
+            status: string;
         };
         /** AdminListMerchantUsersResponse */
         AdminListMerchantUsersResponse: {
@@ -778,15 +835,6 @@ export interface components {
                 /** @description INVITED | ACTIVE | LOCKED | SUSPENDED | TERMINATED */
                 status: string;
             }[];
-        };
-        /** ChangeMerchantUserRoleResponse */
-        ChangeMerchantUserRoleResponse: {
-            /** @description 변경된 역할 */
-            role: string;
-            /** @description 변경 시각(UTC) */
-            changedAt: string;
-            /** @description 대상 가맹점 사용자 식별자 */
-            merchantUserId: string;
         };
         /** ChangeMerchantUserStatusResponse */
         ChangeMerchantUserStatusResponse: {
@@ -824,25 +872,6 @@ export interface components {
             password: string;
             /** @description 내부 운영자 로그인 아이디 */
             loginId: string;
-        };
-        /** RegisterMerchantResponse */
-        RegisterMerchantResponse: {
-            /** @description 가맹점 코드 */
-            merchantCode: string;
-            /** @description 생성된 가맹점 식별자 */
-            merchantId: string;
-            /** @description 초대 만료 시각(UTC) */
-            invitationExpiresAt: string;
-            /** @description 생성된 OWNER 계정 식별자 */
-            ownerMerchantUserId: string;
-            /** @description OWNER 로그인 아이디 */
-            ownerLoginId: string;
-            /** @description OWNER 초대 Token 원문. 최초 1회만 노출된다. */
-            invitationToken: string;
-            /** @description OWNER 이메일 */
-            ownerEmail: string;
-            /** @description 가맹점 이름 */
-            merchantName: string;
         };
     };
     responses: never;
@@ -950,7 +979,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["admin-logout-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["admin-webhook-deliveries-webhookDeliveryId-redeliver-33084672"];
             };
         };
         responses: {
@@ -1166,7 +1195,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["admin-logout-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["admin-webhook-deliveries-webhookDeliveryId-redeliver-33084672"];
             };
         };
         responses: {
@@ -1197,6 +1226,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminListMerchantUsersResponse"];
+                };
+            };
+        };
+    };
+    "admin-redeliver-webhook": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 재전송할 Webhook 전송 식별자 */
+                webhookDeliveryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/x-www-form-urlencoded": components["schemas"]["admin-webhook-deliveries-webhookDeliveryId-redeliver-33084672"];
+            };
+        };
+        responses: {
+            /** @description 200 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RedeliverWebhookResponse"];
                 };
             };
         };
@@ -1234,7 +1290,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["admin-logout-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["admin-webhook-deliveries-webhookDeliveryId-redeliver-33084672"];
             };
         };
         responses: {

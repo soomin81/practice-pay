@@ -3,6 +3,7 @@ package paytech.practice.pay.application.port.outbound
 import paytech.practice.pay.domain.merchant.MerchantId
 import paytech.practice.pay.domain.shared.EventId
 import paytech.practice.pay.domain.webhook.WebhookDelivery
+import paytech.practice.pay.domain.webhook.WebhookDeliveryId
 
 /**
  * [WebhookDelivery] Aggregate를 저장·복원하는 Command Repository Outbound Port다.
@@ -22,4 +23,12 @@ interface WebhookDeliveryRepository {
 		eventId: EventId,
 		merchantId: MerchantId,
 	): WebhookDelivery?
+
+	/**
+	 * `webhook_delivery_id`로 찾는다. 없으면 `null`이다.
+	 *
+	 * 자동 발행 경로는 [findByEventIdAndMerchantId]로 충분하다 — 이쪽은 **사람이 화면에서
+	 * 특정 전송을 골라 재전송할 때** 쓴다(`RedeliverWebhookUseCase`).
+	 */
+	fun findById(webhookDeliveryId: WebhookDeliveryId): WebhookDelivery?
 }

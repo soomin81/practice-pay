@@ -1,5 +1,7 @@
 package paytech.practice.pay.api.admin.web
 
+import com.epages.restdocs.apispec.ParameterDescriptorWithType
+import com.epages.restdocs.apispec.ResourceDocumentation.parameterWithName
 import com.epages.restdocs.apispec.ResourceDocumentation.resource
 import com.epages.restdocs.apispec.ResourceSnippet
 import com.epages.restdocs.apispec.ResourceSnippetParameters
@@ -14,6 +16,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest
 import org.springframework.context.annotation.Import
 import org.springframework.http.MediaType
 import org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.document
+import org.springframework.restdocs.mockmvc.RestDocumentationRequestBuilders
 import org.springframework.restdocs.payload.FieldDescriptor
 import org.springframework.restdocs.payload.JsonFieldType
 import org.springframework.restdocs.payload.PayloadDocumentation.fieldWithPath
@@ -66,6 +69,8 @@ import paytech.practice.pay.application.port.outbound.PaymentListEntry
 import paytech.practice.pay.application.port.outbound.SettlementReceivableListEntry
 import paytech.practice.pay.application.settlement.ListSettlementReceivablesResult
 import paytech.practice.pay.application.settlement.ListSettlementReceivablesUseCase
+import paytech.practice.pay.application.webhook.RedeliverWebhookResult
+import paytech.practice.pay.application.webhook.RedeliverWebhookUseCase
 import paytech.practice.pay.domain.blockchain.TransactionHash
 import paytech.practice.pay.domain.identity.AccountStatus
 import paytech.practice.pay.domain.identity.Email
@@ -89,6 +94,8 @@ import paytech.practice.pay.domain.shared.Asset
 import paytech.practice.pay.domain.shared.BlockchainNetwork
 import paytech.practice.pay.domain.shared.Money
 import paytech.practice.pay.domain.shared.TokenAmount
+import paytech.practice.pay.domain.webhook.WebhookDeliveryId
+import paytech.practice.pay.domain.webhook.WebhookDeliveryStatus
 import tools.jackson.databind.ObjectMapper
 import java.math.BigDecimal
 import java.time.Instant
@@ -119,6 +126,7 @@ private fun adminResource(
 	responseFields: List<FieldDescriptor> = emptyList(),
 	requestSchema: String? = null,
 	requestFields: List<FieldDescriptor> = emptyList(),
+	pathParameters: List<ParameterDescriptorWithType> = emptyList(),
 ): ResourceSnippet {
 	val builder =
 		ResourceSnippetParameters
@@ -131,6 +139,10 @@ private fun adminResource(
 	if (responseFields.isNotEmpty()) builder.responseFields(responseFields)
 	requestSchema?.let { builder.requestSchema(Schema(it)) }
 	if (requestFields.isNotEmpty()) builder.requestFields(requestFields)
+	// **선언하지 않으면 스펙의 경로에 예시 ID가 그대로 박힌다**(`/admin/.../wh_test_001/...`).
+	// `RestDocumentationRequestBuilders`로 요청하고 여기에 이름을 선언해야 `{id}` 템플릿이 된다.
+	// 이 앱에는 아직 그렇게 하지 않은 기존 경로가 몇 개 남아 있다(알려진 gap).
+	if (pathParameters.isNotEmpty()) builder.pathParameters(*pathParameters.toTypedArray())
 
 	return resource(builder.build())
 }
@@ -155,6 +167,7 @@ private fun adminResource(
 		MerchantLoginAuditController::class,
 		AdminPaymentController::class,
 		AdminSettlementReceivableController::class,
+		WebhookDeliveryController::class,
 		AcceptAccountInvitationController::class,
 	],
 )
@@ -217,6 +230,9 @@ class AdminApiDocumentationTest : FunSpec() {
 
 	@MockkBean
 	lateinit var getPaymentDetailUseCase: GetPaymentDetailUseCase
+
+	@MockkBean
+	lateinit var redeliverWebhookUseCase: RedeliverWebhookUseCase
 
 	init {
 		extensions(SpringExtension)
@@ -1012,6 +1028,45 @@ class AdminApiDocumentationTest : FunSpec() {
 				.perform(get("/admin/settlement-receivables").with(authenticatedAs(VIEWER)))
 				.andExpect(status().isOk)
 				.andDo(document("admin-settlement-receivables", snippet))
+		}
+
+		test("POST /admin/webhook-deliveries/{id}/redeliver is documented") {
+			every { redeliverWebhookUseCase.execute(any()) } returns
+				RedeliverWebhookResult(
+					webhookDeliveryId = WebhookDeliveryId("wh_test_001"),
+					status = WebhookDeliveryStatus.PENDING,
+					attemptCount = 5,
+				)
+
+			mockMvc
+				.perform(
+					RestDocumentationRequestBuilders
+						.post("/admin/webhook-deliveries/{webhookDeliveryId}/redeliver", "wh_test_001")
+						.with(authenticatedAs(OPERATOR))
+						.with(csrf()),
+				).andExpect(status().isOk)
+				.andDo(
+					document(
+						"admin-redeliver-webhook",
+						adminResource(
+							pathParameters = listOf(parameterWithName("webhookDeliveryId").description("재전송할 Webhook 전송 식별자")),
+							summary = "실패한 Webhook 전송 재전송",
+							description =
+								"SUPER_ADMIN/OPERATOR만 실행할 수 있다. **보내는 것이 아니라 예약한다** — 전송과 OutboxEvent를 " +
+									"PENDING으로 되돌려 놓으면 기존 발행 Worker(10초 주기)가 평소 경로로 다시 보낸다. " +
+									"FAILED가 아닌 전송은 409, 없는 전송은 404.",
+							responseSchema = "RedeliverWebhookResponse",
+							responseFields =
+								listOf(
+									fieldWithPath("webhookDeliveryId").description("되돌린 전송 식별자"),
+									fieldWithPath("status")
+										.description("되돌린 뒤의 상태(PENDING). **아직 보내지 않았다는 뜻**이라 '성공'으로 읽으면 안 된다."),
+									fieldWithPath("attemptCount")
+										.description("누적 시도 횟수. 재전송은 이 값을 초기화하지 않는다(재시도 예산을 새로 주지 않는다)."),
+								),
+						),
+					),
+				)
 		}
 	}
 }

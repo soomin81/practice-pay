@@ -132,6 +132,30 @@ class WebhookDelivery private constructor(
 		updatedAt = failedAt
 	}
 
+	/**
+	 * `FAILED` → `PENDING`. **내부 운영자가 명시적으로 재전송을 실행할 때만** 호출한다.
+	 *
+	 * 이 시스템에서 **유일하게 종료 상태를 되돌리는 전이**이고, 공통 규칙("종료 상태는
+	 * 재사용하지 않는다")의 의도된 예외다 — 근거는 `docs/domain/state-transitions.md`의
+	 * "수동 재전송" 절에 있다. 요약하면: 자동 재시도가 소진된 원인은 대개 가맹점 쪽
+	 * 일시 장애이고, `uk_webhook_event_merchant` 때문에 같은 이벤트로 새 행을 만들 수도
+	 * 없어서 기존 행을 되돌리는 것 말고는 길이 없다.
+	 *
+	 * **`attemptCount`를 초기화하지 않는다.** 그 값은 "이 이벤트를 몇 번 시도했나"라는
+	 * 누적 사실이라 0으로 되돌리면 이력이 지워진다. 그래서 재전송 한 번은 자동 재시도
+	 * 예산을 새로 주는 것이 아니라 **시도 한 번**을 뜻한다.
+	 *
+	 * `nextRetryAt`은 비운다 — 자동 재시도 대기가 아니라 즉시 발행 대상이다.
+	 *
+	 * `SUCCEEDED`는 되돌리지 않는다(중복 발송이지 재전송이 아니다).
+	 */
+	fun redeliver(changedAt: Instant) {
+		checkTransition(status == WebhookDeliveryStatus.FAILED, WebhookDeliveryStatus.PENDING)
+		status = WebhookDeliveryStatus.PENDING
+		nextRetryAt = null
+		updatedAt = changedAt
+	}
+
 	private fun checkTransition(
 		allowed: Boolean,
 		target: WebhookDeliveryStatus,

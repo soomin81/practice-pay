@@ -12,6 +12,7 @@ import paytech.practice.pay.domain.shared.HttpUrl
 import paytech.practice.pay.domain.webhook.WebhookDelivery
 import paytech.practice.pay.domain.webhook.WebhookDeliveryId
 import paytech.practice.pay.domain.webhook.WebhookDeliveryStatus
+import paytech.practice.pay.infra.persistence.jooq.merchantId
 import paytech.practice.pay.infra.persistence.jooq.merchantSeq
 import paytech.practice.pay.infra.persistence.jooq.toUtcInstant
 import paytech.practice.pay.infra.persistence.jooq.toUtcLocalDateTime
@@ -74,6 +75,17 @@ class WebhookDeliveryRepositoryAdapter(
 			.and(WEBHOOK_DELIVERY.MERCHANT_SEQ.eq(dsl.merchantSeq(merchantId)))
 			.fetchOne()
 			?.toDomain(merchantId)
+
+	/**
+	 * `merchantId`를 인자로 받지 않으므로 행에서 **거꾸로 얻는다** — 화면이 넘기는 것은
+	 * 전송 식별자 하나뿐이다(`RedeliverWebhookUseCase`).
+	 */
+	override fun findById(webhookDeliveryId: WebhookDeliveryId): WebhookDelivery? =
+		dsl
+			.selectFrom(WEBHOOK_DELIVERY)
+			.where(WEBHOOK_DELIVERY.WEBHOOK_DELIVERY_ID.eq(webhookDeliveryId.value))
+			.fetchOne()
+			?.let { it.toDomain(dsl.merchantId(it.merchantSeq!!)) }
 
 	private fun WebhookDeliveryRecord.fillFrom(webhookDelivery: WebhookDelivery) {
 		webhookDeliveryId = webhookDelivery.id.value

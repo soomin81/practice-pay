@@ -108,6 +108,24 @@ class OutboxEvent private constructor(
 		updatedAt = failedAt
 	}
 
+	/**
+	 * `FAILED` → `PENDING`. **내부 운영자가 Webhook 재전송을 실행할 때만** 호출한다.
+	 *
+	 * `WebhookDelivery.redeliver`와 **짝으로만** 쓰인다 — 전송을 되돌려 놓아도 이쪽이
+	 * `FAILED`로 남아 있으면 발행 Worker(`findPendingPublication`)가 대상으로 집지 않아
+	 * 아무 일도 일어나지 않는다. 되돌려 놓으면 **평소와 똑같은 경로로** 다시 발행된다
+	 * (재전송 전용 경로를 따로 만들지 않는 이유다).
+	 *
+	 * 공통 규칙("종료 상태는 재사용하지 않는다")의 의도된 예외이고, 근거는
+	 * `docs/domain/state-transitions.md`의 "수동 재전송" 절에 있다.
+	 */
+	fun reopenForRedelivery(changedAt: Instant) {
+		checkTransition(status == OutboxEventStatus.FAILED, OutboxEventStatus.PENDING)
+		status = OutboxEventStatus.PENDING
+		nextRetryAt = null
+		updatedAt = changedAt
+	}
+
 	private fun checkTransition(
 		allowed: Boolean,
 		target: OutboxEventStatus,

@@ -58,6 +58,7 @@ PG 내부 운영자용 콘솔(브라우저 SPA, `frontend/admin`)이 호출하�
 | `GET /admin/payments/{paymentId}` | **내부 운영자 전원**(VIEWER 포함) | — | 200 결제 상세(전체 맥락) | 401, 404 없는 결제 |
 | `GET /admin/payments/export` | **내부 운영자 전원**(VIEWER 포함) | — | 200 `.xlsx` 첨부 | 400 잘못된 status, 401 |
 | `GET /admin/settlement-receivables` | **내부 운영자 전원**(VIEWER 포함) | — | 200 정산 채권(전 가맹점, 정산 예정일 최신순) | 400 잘못된 status, 401 |
+| `POST /admin/webhook-deliveries/{id}/redeliver` | SUPER_ADMIN/OPERATOR | 필요 | 200 되돌린 상태(**PENDING**) | 401, 403(VIEWER), 404 없는 전송, **409 FAILED가 아님** |
 | `GET /admin/merchants/{merchantId}/users` | **내부 운영자 전원**(VIEWER 포함) | — | 200 명부 | 401 |
 | `POST /admin/merchants/{merchantId}/users/{id}/suspend` | SUPER_ADMIN/OPERATOR | 필요 | 200 상태(SUSPENDED) | 401, 403, 404, 409(마지막 OWNER·잘못된 전이) |
 | `POST /admin/merchants/{merchantId}/users/{id}/reactivate` | SUPER_ADMIN/OPERATOR | 필요 | 200 상태(ACTIVE) | 401, 403, 404, 409(잘못된 전이) |
@@ -215,6 +216,28 @@ PG 내부 운영자용 콘솔(브라우저 SPA, `frontend/admin`)이 호출하�
 - **가맹점 콘솔 응답에는 가맹점 열이 없다**(언제나 자기 가맹점 하나다).
 - 정렬은 정산 예정일 최신순 고정이다.
 - **엑셀 다운로드는 아직 없다** — 결제 내역에는 있다(4.2). 필요해지면 같은 방식으로 붙인다.
+
+### 4.4 Webhook 재전송 — 보내는 것이 아니라 예약한다
+
+`POST /admin/webhook-deliveries/{webhookDeliveryId}/redeliver`. 결제 상세(4.1.1)의 Webhook
+표에서 **`FAILED` 행에만** 버튼이 나온다.
+
+- **응답의 `status`는 `PENDING`이다** — 이 요청은 전송과 `OutboxEvent`를 되돌려 놓기만 하고,
+  실제 발송은 기존 발행 Worker(`apps:batch`, 10초 주기)가 평소 경로로 한다. **화면은 이 값을
+  "성공"이 아니라 "예약됨"으로 읽어야 한다.** 결과는 잠시 뒤 상세를 다시 열어 확인한다.
+  - 재전송 전용 전송 경로를 만들지 않은 이유: 서명·재시도·상태 갱신이 두 벌이 되면 둘이
+    어긋나는 순간 "화면에서 보낸 것과 자동으로 나간 것이 다르다"는 진단하기 어려운 상황이 된다.
+- **`FAILED`가 아니면 `409`**이고, 응답 문구에 현재 상태가 담긴다("왜 안 되는지"를 모르면
+  같은 버튼을 계속 누르게 된다). 이미 성공한 전송을 다시 보내는 것은 재전송이 아니라
+  중복 발송이라 막는다.
+- **`attemptCount`를 초기화하지 않는다** — 재전송 한 번은 자동 재시도 예산을 새로 주는 것이
+  아니라 **시도 한 번**을 뜻한다.
+- **`VIEWER`는 실행할 수 없다.** 조회는 전원에게 열려 있지만 이건 상태를 바꾸는 운영 행위다.
+- **가맹점 콘솔에는 없다** — 장애 대응은 PG가 하고, 가맹점에게 열면 자기 서버로 요청을
+  반복시킬 여지가 생긴다.
+
+종료 상태를 되돌리는 이 전이가 왜 예외로 허용됐는지는
+[state-transitions.md](../domain/state-transitions.md)의 "수동 재전송" 절에 있다.
 
 ## 5. 초대 링크가 **두 종류**다 — 가리키는 콘솔이 다르다
 

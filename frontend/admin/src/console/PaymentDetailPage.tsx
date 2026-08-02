@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { AdminApiError } from '@/api/client'
-import { usePaymentDetail } from '@/console/usePaymentDetail'
+import { usePaymentDetail, useRedeliverWebhook } from '@/console/usePaymentDetail'
 import { formatDateTime, formatKrw, formatTokenAmount } from '@/console/format'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/console/PageHeader'
@@ -22,6 +22,7 @@ import { StatusBadge } from '@/components/console/StatusBadge'
 export function PaymentDetailPage() {
 	const { paymentId = '' } = useParams()
 	const detail = usePaymentDetail(paymentId)
+	const redeliver = useRedeliverWebhook(paymentId)
 
 	if (detail.isPending) return <p className="text-sm text-muted-foreground">불러오는 중…</p>
 
@@ -162,7 +163,7 @@ export function PaymentDetailPage() {
 				{webhookDeliveries.length === 0 ? (
 					<NotYet>전송 이력이 없습니다(가맹점이 Webhook URL을 설정하지 않았을 수 있습니다).</NotYet>
 				) : (
-					<div className="sm:col-span-2">
+					<div className="flex flex-col gap-3 sm:col-span-2">
 						<DataTable
 							head={
 								<>
@@ -171,6 +172,7 @@ export function PaymentDetailPage() {
 									<Th align="right">시도</Th>
 									<Th align="right">응답</Th>
 									<Th>시각</Th>
+									<Th align="right"> </Th>
 								</>
 							}
 						>
@@ -183,9 +185,34 @@ export function PaymentDetailPage() {
 									<Td variant="amount">{delivery.attemptCount}회</Td>
 									<Td variant="amount">{delivery.lastHttpStatus ?? '—'}</Td>
 									<Td variant="mono">{formatDateTime(delivery.createdAt)}</Td>
+									<Td className="text-right">
+										{/* **실패한 전송에만** 버튼을 그린다 — 성공한 것을 다시 보내는 것은
+										    재전송이 아니라 중복 발송이고, 서버도 409로 거절한다. */}
+										{delivery.status === 'FAILED' ? (
+											<Button
+												size="sm"
+												variant="outline"
+												disabled={redeliver.isPending}
+												onClick={() => redeliver.mutate(delivery.webhookDeliveryId)}
+											>
+												{redeliver.isPending ? '예약 중…' : '재전송'}
+											</Button>
+										) : null}
+									</Td>
 								</tr>
 							))}
 						</DataTable>
+
+						{redeliver.error ? (
+							<p className="text-sm text-destructive">{redeliverErrorMessage(redeliver.error)}</p>
+						) : null}
+						{/* **"보냈다"가 아니라 "예약했다"** — 실제 발송은 발행 Worker가 하므로,
+						    이 시점에는 아직 결과를 모른다. 성공으로 읽히면 사용자가 거짓 정보를 갖는다. */}
+						{redeliver.isSuccess && !redeliver.error ? (
+							<p className="text-sm text-muted-foreground">
+								재전송을 예약했습니다. 잠시 뒤 다시 시도되며, 결과는 이 표에서 확인하세요.
+							</p>
+						) : null}
 					</div>
 				)}
 			</Section>
@@ -228,4 +255,12 @@ function errorMessage(error: unknown): string {
 		return error.message
 	}
 	return '결제 상세를 불러오지 못했습니다.'
+}
+
+/**
+ * 재전송 실패 문구. **`409`는 "잘못된 요청"이 아니라 "지금은 그 상태가 아니다"**라
+ * 서버가 준 설명을 그대로 보여준다 — 왜 안 되는지 모르면 같은 버튼을 계속 누른다.
+ */
+function redeliverErrorMessage(error: unknown): string {
+	return error instanceof AdminApiError ? error.message : '재전송을 예약하지 못했습니다.'
 }

@@ -18,6 +18,8 @@ import paytech.practice.pay.application.identity.LastActiveOwnerException
 import paytech.practice.pay.application.identity.LastActiveSuperAdminException
 import paytech.practice.pay.application.identity.MerchantUserNotFoundException
 import paytech.practice.pay.application.payment.PaymentNotFoundException
+import paytech.practice.pay.application.webhook.WebhookDeliveryNotFoundException
+import paytech.practice.pay.application.webhook.WebhookDeliveryNotRedeliverableException
 
 /**
  * `application`/`domain` 계층이 던지는 예외를 HTTP 상태 코드로 옮긴다 — 이 매핑
@@ -54,6 +56,21 @@ class AdminApiExceptionHandler {
 	@ExceptionHandler(PaymentNotFoundException::class)
 	@ResponseStatus(HttpStatus.NOT_FOUND)
 	fun handlePaymentNotFound(ex: PaymentNotFoundException): ErrorResponse = ErrorResponse(ex.message ?: "결제를 찾을 수 없습니다.")
+
+	@ExceptionHandler(WebhookDeliveryNotFoundException::class)
+	@ResponseStatus(HttpStatus.NOT_FOUND)
+	fun handleWebhookDeliveryNotFound(ex: WebhookDeliveryNotFoundException): ErrorResponse =
+		ErrorResponse(ex.message ?: "Webhook 전송을 찾을 수 없습니다.")
+
+	/**
+	 * `409`인 이유: 요청 자체는 올바른데 **대상의 현재 상태가 그 동작을 허용하지 않는다**
+	 * (`400`은 요청이 잘못됐다는 뜻이라 맞지 않는다). 이미 성공한 전송을 다시 보내려는
+	 * 경우가 대표적이다.
+	 */
+	@ExceptionHandler(WebhookDeliveryNotRedeliverableException::class)
+	@ResponseStatus(HttpStatus.CONFLICT)
+	fun handleWebhookDeliveryNotRedeliverable(ex: WebhookDeliveryNotRedeliverableException): ErrorResponse =
+		ErrorResponse(ex.message ?: "실패한 전송만 다시 보낼 수 있습니다.")
 
 	@ExceptionHandler(InternalUserNotManageableException::class)
 	@ResponseStatus(HttpStatus.FORBIDDEN)
