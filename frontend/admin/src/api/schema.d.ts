@@ -446,7 +446,7 @@ export interface components {
             /** @description 가맹점 이름 */
             merchantName: string;
         };
-        "admin-internal-users-iu_002-suspend-33084672": Record<string, never>;
+        "admin-logout-33084672": Record<string, never>;
         /** ListLoginAuditResponse */
         ListLoginAuditResponse: {
             /** @description 로그인 감사 기록 배열(최신순) */
@@ -466,6 +466,15 @@ export interface components {
                 /** @description 시도가 가리킨 계정 식별자. 없는 계정이면 null. */
                 internalUserId?: string | null;
             }[];
+        };
+        /** ChangeInternalUserStatusResponse */
+        ChangeInternalUserStatusResponse: {
+            /** @description 변경 시각(UTC) */
+            changedAt: string;
+            /** @description 대상 내부 운영자 식별자 */
+            internalUserId: string;
+            /** @description 변경된 상태(ACTIVE | SUSPENDED | TERMINATED) */
+            status: string;
         };
         /** ListPaymentsResponse */
         ListPaymentsResponse: {
@@ -504,19 +513,14 @@ export interface components {
                 /** @description 주문명 */
                 orderName: string;
             }[];
+            /** @description SUCCEEDED 결제의 주문 금액 합계(KRW). **성공한 것만 더한다** — 전체를 더하면 만료·실패한 결제까지 매출처럼 보인다. */
+            succeededAmount: number;
+            /** @description 그중 SUCCEEDED인 건수. totalCount와 함께 승인율의 재료다. */
+            succeededCount: number;
             /** @description 조회한 페이지 번호(0부터) */
             page: number;
             /** @description 필터 전체에 걸린 건수(현재 페이지 건수가 아니다) */
             totalCount: number;
-        };
-        /** ChangeInternalUserStatusResponse */
-        ChangeInternalUserStatusResponse: {
-            /** @description 변경 시각(UTC) */
-            changedAt: string;
-            /** @description 대상 내부 운영자 식별자 */
-            internalUserId: string;
-            /** @description 변경된 상태(ACTIVE | SUSPENDED | TERMINATED) */
-            status: string;
         };
         /** ListSettlementReceivablesResponse */
         ListSettlementReceivablesResponse: {
@@ -775,15 +779,6 @@ export interface components {
                 status: string;
             }[];
         };
-        /** ChangeMerchantUserStatusResponse */
-        ChangeMerchantUserStatusResponse: {
-            /** @description 변경 시각(UTC) */
-            changedAt: string;
-            /** @description 대상 가맹점 사용자 식별자 */
-            merchantUserId: string;
-            /** @description 변경된 상태(ACTIVE | SUSPENDED | TERMINATED) */
-            status: string;
-        };
         /** ChangeMerchantUserRoleResponse */
         ChangeMerchantUserRoleResponse: {
             /** @description 변경된 역할 */
@@ -792,6 +787,15 @@ export interface components {
             changedAt: string;
             /** @description 대상 가맹점 사용자 식별자 */
             merchantUserId: string;
+        };
+        /** ChangeMerchantUserStatusResponse */
+        ChangeMerchantUserStatusResponse: {
+            /** @description 변경 시각(UTC) */
+            changedAt: string;
+            /** @description 대상 가맹점 사용자 식별자 */
+            merchantUserId: string;
+            /** @description 변경된 상태(ACTIVE | SUSPENDED | TERMINATED) */
+            status: string;
         };
         /** ChangeInternalUserRoleRequest */
         ChangeInternalUserRoleRequest: {
@@ -946,7 +950,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["admin-internal-users-iu_002-suspend-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["admin-logout-33084672"];
             };
         };
         responses: {
@@ -1162,7 +1166,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["admin-internal-users-iu_002-suspend-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["admin-logout-33084672"];
             };
         };
         responses: {
@@ -1230,7 +1234,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["admin-internal-users-iu_002-suspend-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["admin-logout-33084672"];
             };
         };
         responses: {

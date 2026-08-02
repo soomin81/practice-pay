@@ -88,7 +88,7 @@ describe('필터 쿼리스트링', () => {
 
 describe('결제 내역 페이지', () => {
 	it('필터를 바꾸면 첫 페이지로 돌아간다', async () => {
-		const fetchMock = routedFetch({ payments: [payment()], totalCount: 100, page: 1, size: 20 })
+		const fetchMock = routedFetch({ payments: [payment()], totalCount: 100, succeededCount: 100, succeededAmount: 2_000_000, page: 1, size: 20 })
 		vi.stubGlobal('fetch', fetchMock)
 
 		renderWithRouter(<PaymentsPage />)
@@ -110,7 +110,7 @@ describe('결제 내역 페이지', () => {
 	 * 가장 흔한 실수라 회귀로 고정한다.
 	 */
 	it('종료일은 그날 끝까지 포함한다', async () => {
-		const fetchMock = routedFetch({ payments: [], totalCount: 0, page: 0, size: 20 })
+		const fetchMock = routedFetch({ payments: [], totalCount: 0, succeededCount: 0, succeededAmount: 0, page: 0, size: 20 })
 		vi.stubGlobal('fetch', fetchMock)
 
 		renderWithRouter(<PaymentsPage />)
@@ -146,7 +146,7 @@ describe('엑셀 다운로드', () => {
 					}),
 				})
 			}
-			return Promise.resolve(fakeResponse({ payments: [], totalCount: 0, page: 0, size: 20, merchants: [] }))
+			return Promise.resolve(fakeResponse({ payments: [], totalCount: 0, succeededCount: 0, succeededAmount: 0, page: 0, size: 20, merchants: [] }))
 		})
 		vi.stubGlobal('fetch', fetchMock)
 		vi.stubGlobal('URL', { ...URL, createObjectURL: () => 'blob:x', revokeObjectURL: () => {} })
@@ -173,7 +173,7 @@ describe('엑셀 다운로드', () => {
 					headers: new Headers({ 'X-Export-Truncated': 'true' }),
 				})
 			}
-			return Promise.resolve(fakeResponse({ payments: [], totalCount: 0, page: 0, size: 20, merchants: [] }))
+			return Promise.resolve(fakeResponse({ payments: [], totalCount: 0, succeededCount: 0, succeededAmount: 0, page: 0, size: 20, merchants: [] }))
 		})
 		vi.stubGlobal('fetch', fetchMock)
 		vi.stubGlobal('URL', { ...URL, createObjectURL: () => 'blob:x', revokeObjectURL: () => {} })
@@ -182,6 +182,47 @@ describe('엑셀 다운로드', () => {
 		await userEvent.click(await screen.findByRole('button', { name: '엑셀 다운로드' }))
 
 		expect(await screen.findByText(/최대 10,000건까지만 담았습니다/)).toBeInTheDocument()
+	})
+
+	/**
+	 * 통계는 **필터 전체**에 대한 값이지 현재 페이지의 합계가 아니다 — 20건짜리 페이지의
+	 * 합계는 아무 질문에도 답하지 못한다.
+	 */
+	it('서버가 준 집계를 통계 줄에 그린다', async () => {
+		vi.stubGlobal(
+			'fetch',
+			routedFetch({
+				payments: [payment()],
+				totalCount: 8,
+				succeededCount: 6,
+				succeededAmount: 160_000,
+				page: 0,
+				size: 20,
+			}),
+		)
+
+		renderWithRouter(<PaymentsPage />)
+
+		expect(await screen.findByText('8건')).toBeInTheDocument()
+		expect(screen.getByText('6건')).toBeInTheDocument()
+		expect(screen.getByText('160,000원')).toBeInTheDocument()
+		expect(screen.getByText('75.0%')).toBeInTheDocument()
+	})
+
+	/**
+	 * **`0/0`을 0%로 그리면 "결제가 없다"와 "전부 실패했다"가 화면에서 같아진다.**
+	 * 둘은 운영자가 정반대로 반응해야 하는 상황이라 구분되어야 한다.
+	 */
+	it('결제가 하나도 없으면 승인율을 0%가 아니라 —로 그린다', async () => {
+		vi.stubGlobal(
+			'fetch',
+			routedFetch({ payments: [], totalCount: 0, succeededCount: 0, succeededAmount: 0, page: 0, size: 20 }),
+		)
+
+		renderWithRouter(<PaymentsPage />)
+
+		expect(await screen.findByText('0원')).toBeInTheDocument()
+		expect(screen.queryByText('0.0%')).not.toBeInTheDocument()
 	})
 })
 

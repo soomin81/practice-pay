@@ -41,6 +41,8 @@ class ListMerchantPaymentsUseCase(
 		return ListPaymentsResult(
 			entries = result.entries,
 			totalCount = result.totalCount,
+			succeededCount = result.succeededCount,
+			succeededAmount = result.succeededAmount,
 			page = page,
 			size = size,
 		)

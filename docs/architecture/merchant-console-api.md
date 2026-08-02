@@ -103,6 +103,10 @@
 
 - **`VIEWER`도 조회할 수 있다** — API Key 관리(OWNER/ADMIN 전용)와 다른 판단이다. 결제
   내역은 조회 전용 역할이 봐야 하는 대표적인 자료다.
+- **집계(`succeededCount`/`succeededAmount`)는 필터 전체에 대한 값**이고 `SUCCEEDED`만
+  더한다 — 상세와 근거는 [admin-console-api.md](admin-console-api.md)의 4.1에 한 번만 적었다.
+  **정산 화면의 `totalNetAmount`와는 다른 값이라는 점**만 여기서도 짚어 둔다: 이쪽은 고객이
+  낸 금액, 정산 쪽은 수수료를 뺀 받을 금액이다.
 - `totalCount`는 필터 전체 건수다(현재 페이지 건수가 아니다).
 - **`paymentAmount`는 Minor Unit 정수를 문자열로 준다**(`checkout-api.md`와 같은 이유 —
   토큰 금액이 JavaScript `Number`의 안전 정수 범위를 넘을 수 있다). `orderAmount`는 숫자다.

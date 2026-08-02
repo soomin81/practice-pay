@@ -764,6 +764,8 @@ class MerchantApiDocumentationTest : FunSpec() {
 							),
 						),
 					totalCount = 1L,
+					succeededCount = 1L,
+					succeededAmount = Money(20_000),
 					page = 0,
 					size = 50,
 				)
@@ -795,6 +797,9 @@ class MerchantApiDocumentationTest : FunSpec() {
 							fieldWithPath("payments[].paidAt").type(JsonFieldType.STRING).description("결제 완료 시각(UTC). SUCCEEDED가 아니면 null.").optional(),
 							fieldWithPath("payments[].createdAt").description("결제 생성 시각(UTC)"),
 							fieldWithPath("totalCount").description("필터 전체에 걸린 건수(현재 페이지 건수가 아니다)"),
+							fieldWithPath("succeededCount").description("그중 SUCCEEDED인 건수. totalCount와 함께 승인율의 재료다."),
+							fieldWithPath("succeededAmount")
+								.description("SUCCEEDED 결제의 주문 금액 합계(KRW). 정산 화면의 합계와 다르다 — 이쪽은 고객이 낸 금액이고, 정산 쪽은 수수료를 뺀 받을 금액이다."),
 							fieldWithPath("page").description("조회한 페이지 번호(0부터)"),
 							fieldWithPath("size").description("실제로 적용된 페이지 크기. 상한에 걸리면 요청값과 다르다."),
 						),

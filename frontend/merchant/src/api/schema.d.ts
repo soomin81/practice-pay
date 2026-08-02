@@ -404,15 +404,6 @@ export interface components {
             /** @description 발급 응답에서 받은 초대 Token 원문 */
             invitationToken: string;
         };
-        /** ResendInvitationResponse */
-        ResendInvitationResponse: {
-            /** @description 새 초대의 만료 시각(UTC) */
-            invitationExpiresAt: string;
-            /** @description 대상 가맹점 사용자 식별자 */
-            merchantUserId: string;
-            /** @description 새 초대 Token 원문. 최초 1회만 노출된다. */
-            invitationToken: string;
-        };
         /** ChangeMerchantUserRoleResponse */
         ChangeMerchantUserRoleResponse: {
             /** @description 변경 후 역할 */
@@ -433,12 +424,63 @@ export interface components {
             /** @description 가맹점 내에서 유일한 이메일 */
             email: string;
         };
+        /** ResendInvitationResponse */
+        ResendInvitationResponse: {
+            /** @description 새 초대의 만료 시각(UTC) */
+            invitationExpiresAt: string;
+            /** @description 대상 가맹점 사용자 식별자 */
+            merchantUserId: string;
+            /** @description 새 초대 Token 원문. 최초 1회만 노출된다. */
+            invitationToken: string;
+        };
         /** UpdateMerchantWebhookUrlRequest */
         UpdateMerchantWebhookUrlRequest: {
             /** @description http:// 또는 https:// 로 시작하는 수신 URL. null이나 빈 문자열이면 해제. */
             webhookUrl?: string | null;
         };
-        "merchant-merchant-users-merchantUserId-invitation-resend-33084672": Record<string, never>;
+        /** ListPaymentsResponse */
+        ListPaymentsResponse: {
+            /** @description 실제로 적용된 페이지 크기. 상한에 걸리면 요청값과 다르다. */
+            size: number;
+            /** @description 결제 배열(생성 시각 최신순) */
+            payments: {
+                /** @description 가맹점이 부여한 주문 식별자 */
+                merchantOrderId: string;
+                /** @description 결제 토큰 금액. Minor Unit 정수를 문자열로 준다. */
+                paymentAmount: string;
+                /** @description 온체인 거래 Hash. 고객이 제출하기 전이면 null. */
+                transactionHash?: string | null;
+                /** @description 블록체인 네트워크 코드 */
+                network: string;
+                /** @description 결제 자산 코드(USDC) */
+                paymentAsset: string;
+                /** @description 결제 생성 시각(UTC) */
+                createdAt: string;
+                /** @description KRW 주문 금액(원 단위 정수) */
+                orderAmount: number;
+                /** @description 토큰 소수 자릿수(USDC는 6) */
+                tokenDecimals: number;
+                /** @description 결제 식별자 */
+                paymentId: string;
+                /** @description 실패 사유. FAILED가 아니면 null. */
+                failureReason?: string | null;
+                /** @description 결제 완료 시각(UTC). SUCCEEDED가 아니면 null. */
+                paidAt?: string | null;
+                /** @description PaymentStatus 값 */
+                status: string;
+                /** @description 주문명 */
+                orderName: string;
+            }[];
+            /** @description SUCCEEDED 결제의 주문 금액 합계(KRW). 정산 화면의 합계와 다르다 — 이쪽은 고객이 낸 금액이고, 정산 쪽은 수수료를 뺀 받을 금액이다. */
+            succeededAmount: number;
+            /** @description 그중 SUCCEEDED인 건수. totalCount와 함께 승인율의 재료다. */
+            succeededCount: number;
+            /** @description 조회한 페이지 번호(0부터) */
+            page: number;
+            /** @description 필터 전체에 걸린 건수(현재 페이지 건수가 아니다) */
+            totalCount: number;
+        };
+        "merchant-merchant-users-merchantUserId-invitation-revoke-33084672": Record<string, never>;
         /** MerchantMeResponse */
         MerchantMeResponse: {
             /** @description OWNER | ADMIN | VIEWER */
@@ -584,44 +626,6 @@ export interface components {
                 /** @description ACTIVE | REVOKED | EXPIRED */
                 status: string;
             }[];
-        };
-        /** ListPaymentsResponse */
-        ListPaymentsResponse: {
-            /** @description 실제로 적용된 페이지 크기. 상한에 걸리면 요청값과 다르다. */
-            size: number;
-            /** @description 결제 배열(생성 시각 최신순) */
-            payments: {
-                /** @description 가맹점이 부여한 주문 식별자 */
-                merchantOrderId: string;
-                /** @description 결제 토큰 금액. Minor Unit 정수를 문자열로 준다. */
-                paymentAmount: string;
-                /** @description 온체인 거래 Hash. 고객이 제출하기 전이면 null. */
-                transactionHash?: string | null;
-                /** @description 블록체인 네트워크 코드 */
-                network: string;
-                /** @description 결제 자산 코드(USDC) */
-                paymentAsset: string;
-                /** @description 결제 생성 시각(UTC) */
-                createdAt: string;
-                /** @description KRW 주문 금액(원 단위 정수) */
-                orderAmount: number;
-                /** @description 토큰 소수 자릿수(USDC는 6) */
-                tokenDecimals: number;
-                /** @description 결제 식별자 */
-                paymentId: string;
-                /** @description 실패 사유. FAILED가 아니면 null. */
-                failureReason?: string | null;
-                /** @description 결제 완료 시각(UTC). SUCCEEDED가 아니면 null. */
-                paidAt?: string | null;
-                /** @description PaymentStatus 값 */
-                status: string;
-                /** @description 주문명 */
-                orderName: string;
-            }[];
-            /** @description 조회한 페이지 번호(0부터) */
-            page: number;
-            /** @description 필터 전체에 걸린 건수(현재 페이지 건수가 아니다) */
-            totalCount: number;
         };
         /** InviteMerchantSubAccountResponse */
         InviteMerchantSubAccountResponse: {
@@ -910,7 +914,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-invitation-resend-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-invitation-revoke-33084672"];
             };
         };
         responses: {
@@ -1107,7 +1111,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-invitation-resend-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-invitation-revoke-33084672"];
             };
         };
         responses: {
@@ -1153,7 +1157,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-invitation-resend-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-invitation-revoke-33084672"];
             };
         };
         responses: {
@@ -1180,7 +1184,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-invitation-resend-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-invitation-revoke-33084672"];
             };
         };
         responses: {
@@ -1234,7 +1238,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-invitation-resend-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-invitation-revoke-33084672"];
             };
         };
         responses: {
@@ -1261,7 +1265,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-invitation-resend-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-invitation-revoke-33084672"];
             };
         };
         responses: {
@@ -1288,7 +1292,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-invitation-resend-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-invitation-revoke-33084672"];
             };
         };
         responses: {
@@ -1315,7 +1319,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-invitation-resend-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-invitation-revoke-33084672"];
             };
         };
         responses: {

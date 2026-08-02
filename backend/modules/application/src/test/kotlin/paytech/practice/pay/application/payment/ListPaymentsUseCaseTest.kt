@@ -11,12 +11,14 @@ import paytech.practice.pay.application.port.outbound.PaymentListProjection
 import paytech.practice.pay.application.port.outbound.PaymentListQuery
 import paytech.practice.pay.domain.merchant.MerchantId
 import paytech.practice.pay.domain.payment.PaymentStatus
+import paytech.practice.pay.domain.shared.Money
 
 private val MERCHANT_ID = MerchantId("mrc_test_001")
 
 private fun projectionReturningEmpty(querySlot: CapturingSlot<PaymentListQuery>): PaymentListProjection {
 	val projection = mockk<PaymentListProjection>()
-	every { projection.find(capture(querySlot)) } returns PaymentListPage(entries = emptyList(), totalCount = 0L)
+	every { projection.find(capture(querySlot)) } returns
+		PaymentListPage(entries = emptyList(), totalCount = 0L, succeededCount = 0L, succeededAmount = Money(0))
 	return projection
 }
 

@@ -50,13 +50,29 @@ data class PaymentListQuery(
 )
 
 /**
- * 한 페이지의 결과와 **필터 전체에 걸린 총 건수**다. 총 건수를 함께 주는 것은 백오피스가
- * 페이지 이동 UI를 그리려면 필요해서다(기존 목록 Projection들이 `findRecent(limit)`으로
- * 끝나는 것과 다른 점).
+ * 한 페이지의 결과와 **필터 전체에 걸린 집계**다. 집계를 함께 주는 것은 백오피스가
+ * 페이지 이동 UI를 그리고(총 건수), 화면 위쪽에 "그래서 얼마인가"를 답하려면 필요해서다
+ * (기존 목록 Projection들이 `findRecent(limit)`으로 끝나는 것과 다른 점).
+ *
+ * **전부 현재 페이지가 아니라 필터 전체에 대한 값이다** — 20건짜리 페이지의 합계는
+ * 아무 질문에도 답하지 못한다.
+ *
+ * @property totalCount 필터에 걸린 전체 건수(상태와 무관).
+ * @property succeededCount 그중 `SUCCEEDED`인 건수. [totalCount]와 함께 승인율의 재료가 된다.
+ * @property succeededAmount `SUCCEEDED`인 결제의 **주문 금액 합계**(KRW).
+ *
+ * **`SUCCEEDED`만 더하는 것이 핵심이다.** 전체 주문 금액을 더하면 만료·실패한 결제까지
+ * 매출처럼 보이는데, 그 숫자는 사람이 반드시 오해한다. 정산 채권의 합계와도 어긋나서
+ * 두 화면을 대조하는 순간 어느 쪽이 맞는지 알 수 없게 된다.
+ *
+ * 정산 화면의 합계와는 여전히 다르다는 점에 주의한다 — 이쪽은 **고객이 낸 금액**이고,
+ * 정산 쪽은 거기서 수수료를 뺀 **가맹점이 받을 금액**이다.
  */
 data class PaymentListPage(
 	val entries: List<PaymentListEntry>,
 	val totalCount: Long,
+	val succeededCount: Long,
+	val succeededAmount: Money,
 )
 
 /**

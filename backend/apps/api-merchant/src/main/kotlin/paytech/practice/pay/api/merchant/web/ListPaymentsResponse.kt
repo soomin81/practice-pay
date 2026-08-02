@@ -10,11 +10,18 @@ import java.time.Instant
  * 서로를 모르는 독립 배포 단위라 DTO를 공유하지 않는다.
  *
  * @property totalCount 필터 전체에 걸린 건수(현재 페이지 건수가 아니다).
+ * @property succeededCount 그중 `SUCCEEDED`인 건수. [totalCount]와 함께 승인율의 재료다.
+ * @property succeededAmount `SUCCEEDED` 결제의 주문 금액 합계(KRW 원 단위 정수).
+ * **성공한 것만 더한다** — 전체를 더하면 만료·실패한 결제까지 매출처럼 보인다
+ * (`PaymentListPage`의 KDoc 참고). 정산 화면의 합계와도 다르다: 이쪽은 **고객이 낸
+ * 금액**이고, 정산 쪽은 거기서 수수료를 뺀 **받을 금액**이다.
  * @property size 실제로 적용된 페이지 크기 — 상한에 걸리면 요청값과 다를 수 있다.
  */
 data class ListPaymentsResponse(
 	val payments: List<PaymentSummaryResponse>,
 	val totalCount: Long,
+	val succeededCount: Long,
+	val succeededAmount: Long,
 	val page: Int,
 	val size: Int,
 )

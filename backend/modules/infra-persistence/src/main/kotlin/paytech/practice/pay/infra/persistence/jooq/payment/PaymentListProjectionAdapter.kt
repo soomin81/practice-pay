@@ -34,9 +34,12 @@ import paytech.practice.pay.infra.persistence.jooq.toUtcLocalDateTime
  * `uk_blockchain_payment_type`이 UNIQUE로 걸어 최대 한 건이라 행이 늘어나지 않는다
  * (`CheckoutViewProjectionAdapter`가 같은 제약을 근거로 삼는다).
  *
- * 총 건수는 같은 조건으로 `COUNT(*)`를 한 번 더 조회해서 얻는다 — 윈도우 함수
- * (`COUNT(*) OVER ()`)를 쓰면 쿼리 하나로 끝나지만, 마지막 페이지를 넘어선 요청처럼
- * **행이 0건이면 총 건수도 못 얻는다.** 백오피스는 그 경우에도 "전체 N건"을 그려야 한다.
+ * 집계(총 건수·승인 건수·승인 금액)는 같은 조건으로 한 번 더 조회해서 얻는다 — 윈도우
+ * 함수(`COUNT(*) OVER ()`)를 쓰면 쿼리 하나로 끝나지만, 마지막 페이지를 넘어선 요청처럼
+ * **행이 0건이면 집계도 못 얻는다.** 백오피스는 그 경우에도 "전체 N건"을 그려야 한다.
+ *
+ * 그 두 번째 조회는 `blockchain_transaction`을 조인하지 않는다 — 집계에 쓰는 값이
+ * `payment`에만 있고, `LEFT JOIN`은 행 수를 늘리지 않더라도 훑을 필요가 없는 테이블이다.
  */
 @Repository
 class PaymentListProjectionAdapter(
@@ -98,16 +101,29 @@ class PaymentListProjectionAdapter(
 					)
 				}
 
-		val totalCount =
+		// 총 건수와 승인 집계를 **한 쿼리에서** 얻는다 — 어차기 같은 조건으로 테이블을
+		// 한 번 더 훑어야 하므로, 집계를 따로 조회하면 왕복만 늘어난다.
+		val succeeded = PAYMENT.PAYMENT_STATUS.eq(PaymentStatus.SUCCEEDED.name)
+		val totals =
 			dsl
-				.selectCount()
-				.from(PAYMENT)
+				.select(
+					DSL.count(),
+					DSL.count().filterWhere(succeeded),
+					DSL.coalesce(DSL.sum(PAYMENT.ORDER_AMOUNT).filterWhere(succeeded), DSL.zero()),
+				).from(PAYMENT)
 				.join(MERCHANT)
 				.on(MERCHANT.MERCHANT_SEQ.eq(PAYMENT.MERCHANT_SEQ))
 				.where(conditions)
-				.fetchOne(0, Long::class.java) ?: 0L
+				.fetchOne()
 
-		return PaymentListPage(entries = entries, totalCount = totalCount)
+		return PaymentListPage(
+			entries = entries,
+			totalCount = totals?.value1()?.toLong() ?: 0L,
+			succeededCount = totals?.value2()?.toLong() ?: 0L,
+			// 필터에 걸린 행이 하나도 없으면 `SUM`은 NULL이라 COALESCE로 0을 만든다 —
+			// 화면이 "—"가 아니라 "0원"을 그려야 "조건에 맞는 결제가 없다"가 분명해진다.
+			succeededAmount = Money(totals?.value3()?.toLong() ?: 0L),
+		)
 	}
 
 	/**

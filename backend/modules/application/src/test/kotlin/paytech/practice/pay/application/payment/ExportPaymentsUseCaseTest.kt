@@ -47,7 +47,12 @@ private fun projectionReturning(
 ): PaymentListProjection {
 	val projection = mockk<PaymentListProjection>()
 	every { projection.find(capture(querySlot)) } returns
-		PaymentListPage(entries = (1..count).map(::exportEntry), totalCount = count.toLong())
+		PaymentListPage(
+			entries = (1..count).map(::exportEntry),
+			totalCount = count.toLong(),
+			succeededCount = 0L,
+			succeededAmount = Money(0),
+		)
 	return projection
 }
 

@@ -7,12 +7,18 @@ import java.time.Instant
  *
  * @property totalCount 필터 전체에 걸린 건수. 현재 페이지의 건수가 아니라 페이지 이동
  * UI를 그리는 데 쓰는 값이다.
+ * @property succeededCount 그중 `SUCCEEDED`인 건수. [totalCount]와 함께 승인율의 재료다.
+ * @property succeededAmount `SUCCEEDED` 결제의 주문 금액 합계(KRW 원 단위 정수).
+ * **성공한 것만 더한다** — 전체를 더하면 만료·실패한 결제까지 매출처럼 보인다
+ * (`PaymentListPage`의 KDoc 참고).
  * @property size 실제로 적용된 페이지 크기 — 요청값이 상한을 넘었으면 잘린 값이라
  * 요청과 다를 수 있다.
  */
 data class ListPaymentsResponse(
 	val payments: List<PaymentSummaryResponse>,
 	val totalCount: Long,
+	val succeededCount: Long,
+	val succeededAmount: Long,
 	val page: Int,
 	val size: Int,
 )

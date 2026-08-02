@@ -1,16 +1,18 @@
 import { useState } from 'react'
 import { Download } from 'lucide-react'
 import { MerchantApiError } from '@/api/client'
-import { PAYMENT_STATUSES, type PaymentListFilters, type PaymentStatus } from '@/api/types'
+import { PAYMENT_STATUSES, type ListPaymentsResponse, type PaymentListFilters, type PaymentStatus } from '@/api/types'
 import { PaymentTable } from '@/console/PaymentTable'
 import { usePayments } from '@/console/usePayments'
 import { exportErrorMessage, usePaymentExport } from '@/console/usePaymentExport'
+import { formatKrw } from '@/console/format'
 import { RANGE_OPTIONS, rangeFilters, type RangePreset } from '@/console/dateRange'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { LiveStamp, PageHeader } from '@/components/console/PageHeader'
 import { Panel } from '@/components/console/Panel'
+import { StatStrip, type Stat } from '@/components/console/StatStrip'
 import { FilterChips } from '@/components/console/FilterChips'
 
 const PAGE_SIZE = 20
@@ -46,6 +48,10 @@ export function PaymentsPage() {
 				description="우리 가맹점의 결제를 생성 시각 최신순으로 조회합니다. 기간은 결제 생성 시각 기준입니다."
 				action={<LiveStamp at={new Date()} />}
 			/>
+
+			<div className="pb-6">
+				<StatStrip stats={paymentStats(payments.data)} />
+			</div>
 
 			<Panel
 				title="결제 내역"
@@ -182,4 +188,33 @@ function toDateInput(iso: string | undefined): string {
 function listErrorMessage(error: unknown): string {
 	if (error instanceof MerchantApiError) return error.message
 	return '결제 내역을 불러오지 못했습니다.'
+}
+
+/**
+ * 화면 위쪽의 통계 네 칸. **전부 필터 전체에 대한 값**이고 현재 페이지와 무관하다.
+ *
+ * 승인율은 서버에서 받지 않고 여기서 나눈다 — 두 건수를 이미 받았으므로 서버가 한 번 더
+ * 계산할 이유가 없고, 반올림 방식을 화면이 정하는 편이 낫다.
+ *
+ * **분모가 0이면 "—"다.** `0/0`을 0%로 그리면 "결제가 없다"와 "전부 실패했다"가 화면에서
+ * 같아진다.
+ */
+function paymentStats(data: ListPaymentsResponse | undefined): Stat[] {
+	if (!data) {
+		return [
+			{ label: '거래건수', value: '—' },
+			{ label: '승인 건수', value: '—' },
+			{ label: '승인금액', value: '—' },
+			{ label: '승인율', value: '—' },
+		]
+	}
+	return [
+		{ label: '거래건수', value: `${data.totalCount.toLocaleString('ko-KR')}건` },
+		{ label: '승인 건수', value: `${data.succeededCount.toLocaleString('ko-KR')}건` },
+		{ label: '승인금액', value: formatKrw(data.succeededAmount) },
+		{
+			label: '승인율',
+			value: data.totalCount === 0 ? '—' : `${((data.succeededCount / data.totalCount) * 100).toFixed(1)}%`,
+		},
+	]
 }

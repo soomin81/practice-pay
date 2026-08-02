@@ -124,6 +124,8 @@ class AdminPaymentController(
 					)
 				},
 			totalCount = result.totalCount,
+			succeededCount = result.succeededCount,
+			succeededAmount = result.succeededAmount.amount,
 			page = result.page,
 			size = result.size,
 		)

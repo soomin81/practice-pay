@@ -102,7 +102,14 @@ class MerchantPaymentControllerTest : FunSpec() {
 
 		test("returns the payment list with paging metadata") {
 			every { listMerchantPaymentsUseCase.execute(any(), any()) } returns
-				ListPaymentsResult(entries = listOf(sampleEntry()), totalCount = 1L, page = 0, size = 50)
+				ListPaymentsResult(
+					entries = listOf(sampleEntry()),
+					totalCount = 1L,
+					succeededCount = 1L,
+					succeededAmount = Money(1 * 20_000L),
+					page = 0,
+					size = 50,
+				)
 
 			mockMvc
 				.perform(get("/merchant/payments").with(authenticatedAs(OWNER)))
@@ -121,7 +128,14 @@ class MerchantPaymentControllerTest : FunSpec() {
 		test("scopes to the authenticated merchant, not to a merchantId in the query string") {
 			val merchantSlot = slot<MerchantId>()
 			every { listMerchantPaymentsUseCase.execute(capture(merchantSlot), any()) } returns
-				ListPaymentsResult(entries = emptyList(), totalCount = 0L, page = 0, size = 50)
+				ListPaymentsResult(
+					entries = emptyList(),
+					totalCount = 0L,
+					succeededCount = 0L,
+					succeededAmount = Money(0 * 20_000L),
+					page = 0,
+					size = 50,
+				)
 
 			mockMvc
 				.perform(get("/merchant/payments").param("merchantId", "mrc_someone_else").with(authenticatedAs(OWNER)))
@@ -134,7 +148,14 @@ class MerchantPaymentControllerTest : FunSpec() {
 		// (OWNER/ADMIN으로 좁힌 API Key 관리와 다른 판단이다).
 		test("allows VIEWER") {
 			every { listMerchantPaymentsUseCase.execute(any(), any()) } returns
-				ListPaymentsResult(entries = emptyList(), totalCount = 0L, page = 0, size = 50)
+				ListPaymentsResult(
+					entries = emptyList(),
+					totalCount = 0L,
+					succeededCount = 0L,
+					succeededAmount = Money(0 * 20_000L),
+					page = 0,
+					size = 50,
+				)
 
 			mockMvc
 				.perform(get("/merchant/payments").with(authenticatedAs(VIEWER)))
@@ -148,7 +169,14 @@ class MerchantPaymentControllerTest : FunSpec() {
 		test("passes the status and period filters through") {
 			val commandSlot = slot<ListPaymentsCommand>()
 			every { listMerchantPaymentsUseCase.execute(any(), capture(commandSlot)) } returns
-				ListPaymentsResult(entries = emptyList(), totalCount = 0L, page = 0, size = 20)
+				ListPaymentsResult(
+					entries = emptyList(),
+					totalCount = 0L,
+					succeededCount = 0L,
+					succeededAmount = Money(0 * 20_000L),
+					page = 0,
+					size = 20,
+				)
 
 			mockMvc
 				.perform(

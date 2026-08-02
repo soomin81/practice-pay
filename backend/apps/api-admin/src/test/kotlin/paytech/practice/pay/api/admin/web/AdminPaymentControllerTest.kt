@@ -219,7 +219,14 @@ class AdminPaymentControllerTest : FunSpec() {
 
 		test("returns payments across every merchant with the merchant name") {
 			every { listPaymentsUseCase.execute(any()) } returns
-				ListPaymentsResult(entries = listOf(sampleEntry()), totalCount = 1L, page = 0, size = 50)
+				ListPaymentsResult(
+					entries = listOf(sampleEntry()),
+					totalCount = 1L,
+					succeededCount = 1L,
+					succeededAmount = Money(1 * 20_000L),
+					page = 0,
+					size = 50,
+				)
 
 			mockMvc
 				.perform(get("/admin/payments").with(authenticatedAs(SUPER_ADMIN)))
@@ -232,7 +239,14 @@ class AdminPaymentControllerTest : FunSpec() {
 		// 조회는 내부 사용자 전원에게 열려 있다(GET /admin/merchants와 같은 스코핑).
 		test("allows VIEWER") {
 			every { listPaymentsUseCase.execute(any()) } returns
-				ListPaymentsResult(entries = emptyList(), totalCount = 0L, page = 0, size = 50)
+				ListPaymentsResult(
+					entries = emptyList(),
+					totalCount = 0L,
+					succeededCount = 0L,
+					succeededAmount = Money(0 * 20_000L),
+					page = 0,
+					size = 50,
+				)
 
 			mockMvc
 				.perform(get("/admin/payments").with(authenticatedAs(VIEWER)))
@@ -246,7 +260,14 @@ class AdminPaymentControllerTest : FunSpec() {
 		test("passes the merchant, status and period filters through") {
 			val commandSlot = slot<ListPaymentsCommand>()
 			every { listPaymentsUseCase.execute(capture(commandSlot)) } returns
-				ListPaymentsResult(entries = emptyList(), totalCount = 0L, page = 0, size = 50)
+				ListPaymentsResult(
+					entries = emptyList(),
+					totalCount = 0L,
+					succeededCount = 0L,
+					succeededAmount = Money(0 * 20_000L),
+					page = 0,
+					size = 50,
+				)
 
 			mockMvc
 				.perform(
@@ -266,7 +287,14 @@ class AdminPaymentControllerTest : FunSpec() {
 		test("treats blank filter params as absent") {
 			val commandSlot = slot<ListPaymentsCommand>()
 			every { listPaymentsUseCase.execute(capture(commandSlot)) } returns
-				ListPaymentsResult(entries = emptyList(), totalCount = 0L, page = 0, size = 50)
+				ListPaymentsResult(
+					entries = emptyList(),
+					totalCount = 0L,
+					succeededCount = 0L,
+					succeededAmount = Money(0 * 20_000L),
+					page = 0,
+					size = 50,
+				)
 
 			mockMvc
 				.perform(

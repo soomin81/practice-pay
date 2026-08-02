@@ -43,6 +43,9 @@ fun insertTestPayment(
 	paymentId: String = "pay_${uniqueSuffix()}",
 	merchantOrderId: String = "order-${uniqueSuffix()}",
 	paymentStatus: String = "READY",
+	// 합계를 검증하는 테스트가 행마다 다른 금액을 넣을 수 있어야 한다 — 전부 같은
+	// 금액이면 `SUM`이 아니라 `COUNT * 상수`여도 통과해 버린다.
+	orderAmount: Long = 10_000,
 	createdAt: LocalDateTime = LocalDateTime.now(),
 	// ck_payment_paid_at이 "SUCCEEDED면 paid_at이 있어야 한다"를 강제한다 — 호출부가
 	// 상태만 바꿔도 제약에 걸리지 않도록 기본값을 상태에서 끌어낸다.
@@ -63,7 +66,7 @@ fun insertTestPayment(
 			this.merchantOrderId = merchantOrderId
 			orderName = "테스트 주문"
 			orderCurrency = "KRW"
-			orderAmount = 10_000
+			this.orderAmount = orderAmount
 			paymentAssetCode = "USDC"
 			paymentAmountMinor = 6_666_667
 			tokenDecimals = 6

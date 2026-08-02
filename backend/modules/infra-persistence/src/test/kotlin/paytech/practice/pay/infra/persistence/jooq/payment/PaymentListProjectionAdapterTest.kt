@@ -15,6 +15,7 @@ import paytech.practice.pay.domain.payment.PaymentId
 import paytech.practice.pay.domain.payment.PaymentStatus
 import paytech.practice.pay.domain.shared.Asset
 import paytech.practice.pay.domain.shared.BlockchainNetwork
+import paytech.practice.pay.domain.shared.Money
 import paytech.practice.pay.infra.persistence.jooq.PersistenceTestSupport
 import paytech.practice.pay.infra.persistence.jooq.blockchain.BlockchainTransactionRepositoryAdapter
 import paytech.practice.pay.infra.persistence.jooq.insertTestMerchant
@@ -97,6 +98,51 @@ class PaymentListProjectionAdapterTest :
 
 			page.entries.size shouldBe 0
 			page.totalCount shouldBe 2L
+		}
+
+		/**
+		 * **집계는 `SUCCEEDED`만 더한다.** 전체 주문 금액을 더하면 만료·실패한 결제까지
+		 * 매출처럼 보이는데, 그 숫자는 사람이 반드시 오해한다.
+		 *
+		 * 금액을 행마다 다르게 넣는 이유는 `SUM`이 아니라 `건수 × 상수`로 구현해도
+		 * 통과하는 테스트가 되지 않게 하기 위해서다.
+		 */
+		test("sums only SUCCEEDED order amounts and counts them separately") {
+			val merchantId = insertTestMerchant()
+			insertTestPayment(merchantId, paymentStatus = "SUCCEEDED", orderAmount = 20_000)
+			insertTestPayment(merchantId, paymentStatus = "SUCCEEDED", orderAmount = 35_000)
+			insertTestPayment(merchantId, paymentStatus = "EXPIRED", orderAmount = 99_000)
+			insertTestPayment(merchantId, paymentStatus = "READY", orderAmount = 77_000)
+
+			val page = projection.find(query(merchantId = MerchantId(merchantId)))
+
+			page.totalCount shouldBe 4L
+			page.succeededCount shouldBe 2L
+			page.succeededAmount shouldBe Money(55_000)
+		}
+
+		/**
+		 * 집계는 목록과 **같은 필터**에 걸려야 한다 — 필터를 좁혔는데 합계가 전체 값을
+		 * 그대로 두면 화면의 두 숫자가 서로를 부정한다.
+		 */
+		test("applies the same filters to the aggregates as to the rows") {
+			val merchantId = insertTestMerchant()
+			val other = insertTestMerchant()
+			insertTestPayment(merchantId, paymentStatus = "SUCCEEDED", orderAmount = 20_000)
+			insertTestPayment(other, paymentStatus = "SUCCEEDED", orderAmount = 50_000)
+
+			val page = projection.find(query(merchantId = MerchantId(merchantId)))
+
+			page.succeededAmount shouldBe Money(20_000)
+		}
+
+		/** 조건에 맞는 행이 없으면 `SUM`은 NULL이라 화면이 "—"가 된다 — 0으로 내려야 한다. */
+		test("reports zero rather than null when nothing matches") {
+			val page = projection.find(query(merchantId = MerchantId("mrc_no_such_${uniqueSuffix()}")))
+
+			page.totalCount shouldBe 0L
+			page.succeededCount shouldBe 0L
+			page.succeededAmount shouldBe Money(0)
 		}
 
 		test("paginates without repeating or dropping rows when created_at ties") {
