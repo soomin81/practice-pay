@@ -66,6 +66,7 @@ import paytech.practice.pay.application.port.outbound.MerchantApiKeySummary
 import paytech.practice.pay.application.port.outbound.MerchantUserSummary
 import paytech.practice.pay.application.port.outbound.PaymentListEntry
 import paytech.practice.pay.application.port.outbound.SettlementReceivableListEntry
+import paytech.practice.pay.application.settlement.ExportMerchantSettlementReceivablesUseCase
 import paytech.practice.pay.application.settlement.ListMerchantSettlementReceivablesUseCase
 import paytech.practice.pay.application.settlement.ListSettlementReceivablesResult
 import paytech.practice.pay.domain.apikey.ApiEnvironment
@@ -200,6 +201,9 @@ class MerchantApiDocumentationTest : FunSpec() {
 
 	@MockkBean
 	lateinit var listSettlementReceivablesUseCase: ListMerchantSettlementReceivablesUseCase
+
+	@MockkBean
+	lateinit var exportMerchantSettlementReceivablesUseCase: ExportMerchantSettlementReceivablesUseCase
 
 	@MockkBean
 	lateinit var getMerchantPaymentDetailUseCase: GetMerchantPaymentDetailUseCase

@@ -4,7 +4,6 @@ import org.springframework.http.ContentDisposition
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
-import paytech.practice.pay.application.payment.ExportPaymentsResult
 import java.time.Clock
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -19,7 +18,10 @@ private val FILE_DATE_FORMATTER: DateTimeFormatter =
 	DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(ZoneId.of("Asia/Seoul"))
 
 /**
- * 내보내기 결과를 다운로드 응답으로 감싼다. **api-admin의 같은 파일과 동일한 복제본이다** —
+ * 내보내기 결과를 다운로드 응답으로 감싼다 — **결제·정산 두 내보내기가 함께 쓴다**.
+ *
+ * 결과 타입이 아니라 바이트와 잘림 여부만 받는 이유는, 이 함수가 알아야 할 것이 그 둘뿐이라
+ * 새 내보내기가 생길 때마다 시그니처를 늘리지 않기 위해서다. **api-admin의 같은 파일과 동일한 복제본이다** —
  * 앱은 서로를 모르는 독립 배포 단위라 코드를 공유하지 않는다(CsrfCookieFilter와 같은 규율).
  * **한쪽을 고치면 다른 쪽도 함께 본다.**
  *
@@ -34,7 +36,8 @@ private val FILE_DATE_FORMATTER: DateTimeFormatter =
  *   교차 출처에서는 기본적으로 몇 개의 표준 헤더만 JS에 노출된다.
  */
 fun spreadsheetDownload(
-	result: ExportPaymentsResult,
+	spreadsheet: ByteArray,
+	truncated: Boolean,
 	filePrefix: String,
 	clock: Clock,
 ): ResponseEntity<ByteArray> {
@@ -50,7 +53,7 @@ fun spreadsheetDownload(
 				.filename(fileName)
 				.build()
 				.toString(),
-		).header(TRUNCATED_HEADER, result.truncated.toString())
+		).header(TRUNCATED_HEADER, truncated.toString())
 		.contentType(MediaType.parseMediaType(XLSX_CONTENT_TYPE))
-		.body(result.spreadsheet)
+		.body(spreadsheet)
 }

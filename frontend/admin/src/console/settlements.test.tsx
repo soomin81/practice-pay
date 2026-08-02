@@ -121,9 +121,68 @@ describe('정산 페이지', () => {
 			expect(lastUrl(fetchMock)).toContain('page=0')
 		})
 	})
+
+	/**
+	 * **다운로드 요청에 페이징을 실으면 안 된다** — 내보내기는 현재 페이지가 아니라 조건
+	 * 전체가 대상이다. 실수로 page/size가 붙으면 사용자는 20건짜리 파일을 받고도 모른다.
+	 */
+	it('내보내기는 현재 필터만 보내고 페이징은 뺀다', async () => {
+		const fetchMock = exportAwareFetch({ truncated: false })
+		vi.stubGlobal('fetch', fetchMock)
+		vi.stubGlobal('URL', { ...URL, createObjectURL: () => 'blob:x', revokeObjectURL: () => {} })
+
+		renderWithRouter(<SettlementPage />)
+		await userEvent.click(await screen.findByRole('button', { name: '엑셀 다운로드' }))
+
+		await waitFor(() => {
+			const url = exportUrl(fetchMock)
+			expect(url).toContain('/settlement-receivables/export')
+			expect(url).not.toContain('page=')
+			expect(url).not.toContain('size=')
+		})
+	})
+
+	// 조용히 일부만 담긴 파일을 받아가는 것이 이 기능에서 가장 위험한 실패다.
+	it('서버가 잘렸다고 알리면 화면에 경고를 띄운다', async () => {
+		vi.stubGlobal('fetch', exportAwareFetch({ truncated: true }))
+		vi.stubGlobal('URL', { ...URL, createObjectURL: () => 'blob:x', revokeObjectURL: () => {} })
+
+		renderWithRouter(<SettlementPage />)
+		await userEvent.click(await screen.findByRole('button', { name: '엑셀 다운로드' }))
+
+		expect(await screen.findByText(/최대 10,000건까지만 담았습니다/)).toBeInTheDocument()
+	})
 })
 
+/** 목록 조회·가맹점 목록·파일 다운로드 셋을 구분해 응답한다 — 한 화면에서 전부 나간다. */
+function exportAwareFetch({ truncated }: { truncated: boolean }) {
+	return vi.fn().mockImplementation((url: string) => {
+		if (String(url).includes('/settlement-receivables/export')) {
+			return Promise.resolve({
+				ok: true,
+				status: 200,
+				blob: async () => new Blob(['x']),
+				headers: new Headers({ 'X-Export-Truncated': String(truncated) }),
+			})
+		}
+		if (String(url).includes('/settlement-receivables')) {
+			return Promise.resolve(
+				fakeResponse({ settlementReceivables: [], totalCount: 0, totalNetAmount: 0, page: 0, size: 20 }),
+			)
+		}
+		return Promise.resolve(fakeResponse({ merchants: [{ merchantId: 'mrc_001', merchantName: '테스트 가맹점' }] }))
+	})
+}
+
+/** 목록 조회만 골라 마지막 것을 본다 — 가맹점 목록·다운로드가 섞여 있다. */
 function lastUrl(fetchMock: ReturnType<typeof vi.fn>): string {
-	const calls = fetchMock.mock.calls.filter((call) => String(call[0]).includes('/settlement-receivables'))
+	const calls = fetchMock.mock.calls.filter(
+		(call) => String(call[0]).includes('/settlement-receivables') && !String(call[0]).includes('/export'),
+	)
+	return String(calls[calls.length - 1][0])
+}
+
+function exportUrl(fetchMock: ReturnType<typeof vi.fn>): string {
+	const calls = fetchMock.mock.calls.filter((call) => String(call[0]).includes('/settlement-receivables/export'))
 	return String(calls[calls.length - 1][0])
 }

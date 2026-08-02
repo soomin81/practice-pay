@@ -115,6 +115,16 @@ export const adminApi = {
 	listSettlementReceivables: (filters: SettlementFilters = {}) =>
 		request<ListSettlementReceivablesResponse>(`/admin/settlement-receivables${settlementQueryString(filters)}`),
 
+	/**
+	 * 현재 필터에 걸린 정산 채권을 `.xlsx`로 받는다. **페이징 파라미터는 보내지 않는다** —
+	 * 내보내기는 페이지가 아니라 조건 전체가 대상이다(서버가 최대 10,000행에서 자르고,
+	 * 잘렸으면 응답의 `truncated`로 알려준다).
+	 */
+	exportSettlementReceivables: (filters: SettlementFilters = {}) =>
+		download(
+			`/admin/settlement-receivables/export${settlementQueryString({ ...filters, page: undefined, size: undefined })}`,
+		),
+
 	listInternalUsers: () => request<ListInternalUsersResponse>('/admin/internal-users'),
 
 	/** 로그인 감사 로그(최근 시도, 최신순). SUPER_ADMIN 전용 — 서버도 403으로 막는다. */

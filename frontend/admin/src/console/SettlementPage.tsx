@@ -3,7 +3,10 @@ import { AdminApiError } from '@/api/client'
 import { SETTLEMENT_RECEIVABLE_STATUSES, type SettlementFilters, type SettlementReceivableStatus } from '@/api/types'
 import { SettlementTable } from '@/console/SettlementTable'
 import { useSettlementReceivables } from '@/console/useSettlementReceivables'
+import { useSettlementExport } from '@/console/useSettlementExport'
+import { exportErrorMessage } from '@/console/usePaymentExport'
 import { useMerchants } from '@/console/useMerchants'
+import { Download } from 'lucide-react'
 import { formatKrw } from '@/console/format'
 import { Button } from '@/components/ui/button'
 import { LiveStamp, PageHeader } from '@/components/console/PageHeader'
@@ -27,6 +30,7 @@ const PAGE_SIZE = 20
 export function SettlementPage() {
 	const [filters, setFilters] = useState<SettlementFilters>({ page: 0, size: PAGE_SIZE })
 	const settlements = useSettlementReceivables(filters)
+	const exportSettlements = useSettlementExport()
 	const merchants = useMerchants()
 
 	// 필터를 바꾸면 첫 페이지로 돌아간다(결제 내역과 같은 이유).
@@ -64,8 +68,28 @@ export function SettlementPage() {
 			<Panel
 				title="정산 채권"
 				meta={settlements.data ? `조회 결과 ${totalCount.toLocaleString('ko-KR')}건` : '불러오는 중…'}
+				action={
+					<Button
+						variant="outline"
+						size="sm"
+						disabled={exportSettlements.isPending}
+						onClick={() => exportSettlements.mutate(filters)}
+					>
+						<Download className="size-4" />
+						{exportSettlements.isPending ? '만드는 중…' : '엑셀 다운로드'}
+					</Button>
+				}
 			>
 				<div className="flex flex-col gap-4">
+					{exportSettlements.isError && (
+						<p className="text-sm text-destructive">{exportErrorMessage(exportSettlements.error)}</p>
+					)}
+					{/* 잘린 파일을 그냥 받아가지 않도록 반드시 알린다. */}
+					{exportSettlements.data === true && (
+						<p className="text-sm text-destructive">
+							결과가 너무 많아 최대 10,000건까지만 담았습니다. 기간이나 조건을 좁혀 다시 받으세요.
+						</p>
+					)}
 					<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
 						<div className="flex flex-col gap-1.5">
 							<Label htmlFor="settle-merchant">가맹점</Label>

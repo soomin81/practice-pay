@@ -87,7 +87,7 @@ class MerchantPaymentController(
 					),
 			)
 
-		return spreadsheetDownload(result, filePrefix = "payments", clock = clock)
+		return spreadsheetDownload(result.spreadsheet, result.truncated, filePrefix = "payments", clock = clock)
 	}
 
 	@GetMapping

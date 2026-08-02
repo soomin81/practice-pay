@@ -119,6 +119,16 @@ export const merchantApi = {
 		request<ListSettlementReceivablesResponse>(`/merchant/settlement-receivables${settlementQueryString(filters)}`),
 
 	/**
+	 * 현재 필터에 걸린 **자기 가맹점** 정산 채권을 `.xlsx`로 받는다. 페이징 파라미터는 보내지
+	 * 않는다 — 내보내기는 조건 전체가 대상이다(서버가 최대 10,000행에서 자르고, 잘렸으면
+	 * 응답의 `truncated`로 알려준다).
+	 */
+	exportSettlementReceivables: (filters: SettlementFilters = {}) =>
+		download(
+			`/merchant/settlement-receivables/export${settlementQueryString({ ...filters, page: undefined, size: undefined })}`,
+		),
+
+	/**
 	 * Webhook 설정. **응답에 서명 비밀이 들어 있다** — 백엔드가 이 경로를 OWNER/ADMIN으로
 	 * 막지만, 화면에서도 값을 기본으로 가리고 로그에 남기지 않는다.
 	 */

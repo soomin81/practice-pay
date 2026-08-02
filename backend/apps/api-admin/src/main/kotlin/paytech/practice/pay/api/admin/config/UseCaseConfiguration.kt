@@ -35,9 +35,11 @@ import paytech.practice.pay.application.port.outbound.PasswordEncoder
 import paytech.practice.pay.application.port.outbound.PaymentDetailProjection
 import paytech.practice.pay.application.port.outbound.PaymentExportWriter
 import paytech.practice.pay.application.port.outbound.PaymentListProjection
+import paytech.practice.pay.application.port.outbound.SettlementExportWriter
 import paytech.practice.pay.application.port.outbound.SettlementReceivableListProjection
 import paytech.practice.pay.application.port.outbound.TransactionManager
 import paytech.practice.pay.application.port.outbound.WebhookDeliveryRepository
+import paytech.practice.pay.application.settlement.ExportSettlementReceivablesUseCase
 import paytech.practice.pay.application.settlement.ListSettlementReceivablesUseCase
 import paytech.practice.pay.application.webhook.RedeliverWebhookUseCase
 import java.time.Clock
@@ -187,6 +189,12 @@ class UseCaseConfiguration {
 	fun listSettlementReceivablesUseCase(
 		settlementReceivableListProjection: SettlementReceivableListProjection,
 	): ListSettlementReceivablesUseCase = ListSettlementReceivablesUseCase(settlementReceivableListProjection)
+
+	@Bean
+	fun exportSettlementReceivablesUseCase(
+		settlementReceivableListProjection: SettlementReceivableListProjection,
+		settlementExportWriter: SettlementExportWriter,
+	): ExportSettlementReceivablesUseCase = ExportSettlementReceivablesUseCase(settlementReceivableListProjection, settlementExportWriter)
 
 	@Bean
 	fun redeliverWebhookUseCase(

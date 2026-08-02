@@ -4,7 +4,6 @@ import org.springframework.http.ContentDisposition
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
-import paytech.practice.pay.application.payment.ExportPaymentsResult
 import java.time.Clock
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -19,7 +18,10 @@ private val FILE_DATE_FORMATTER: DateTimeFormatter =
 	DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(ZoneId.of("Asia/Seoul"))
 
 /**
- * 내보내기 결과를 다운로드 응답으로 감싼다.
+ * 내보내기 결과를 다운로드 응답으로 감싼다 — **결제·정산 두 내보내기가 함께 쓴다**.
+ *
+ * 결과 타입이 아니라 바이트와 잘림 여부만 받는 이유는, 이 함수가 알아야 할 것이 그 둘뿐이라
+ * 새 내보내기가 생길 때마다 시그니처를 늘리지 않기 위해서다.
  *
  * - **파일 이름은 ASCII로만 만든다**(`payments-20260801-153000.xlsx`). 한글을 쓰면
  *   `Content-Disposition`에 RFC 5987 인코딩(`filename*=UTF-8''...`)이 필요하고 브라우저마다
@@ -31,7 +33,8 @@ private val FILE_DATE_FORMATTER: DateTimeFormatter =
  *   교차 출처에서는 기본적으로 몇 개의 표준 헤더만 JS에 노출된다.
  */
 fun spreadsheetDownload(
-	result: ExportPaymentsResult,
+	spreadsheet: ByteArray,
+	truncated: Boolean,
 	filePrefix: String,
 	clock: Clock,
 ): ResponseEntity<ByteArray> {
@@ -47,7 +50,7 @@ fun spreadsheetDownload(
 				.filename(fileName)
 				.build()
 				.toString(),
-		).header(TRUNCATED_HEADER, result.truncated.toString())
+		).header(TRUNCATED_HEADER, truncated.toString())
 		.contentType(MediaType.parseMediaType(XLSX_CONTENT_TYPE))
-		.body(result.spreadsheet)
+		.body(spreadsheet)
 }

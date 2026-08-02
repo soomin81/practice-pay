@@ -58,6 +58,7 @@ PG 내부 운영자용 콘솔(브라우저 SPA, `frontend/admin`)이 호출하�
 | `GET /admin/payments/{paymentId}` | **내부 운영자 전원**(VIEWER 포함) | — | 200 결제 상세(전체 맥락) | 401, 404 없는 결제 |
 | `GET /admin/payments/export` | **내부 운영자 전원**(VIEWER 포함) | — | 200 `.xlsx` 첨부 | 400 잘못된 status, 401 |
 | `GET /admin/settlement-receivables` | **내부 운영자 전원**(VIEWER 포함) | — | 200 정산 채권(전 가맹점, 정산 예정일 최신순) | 400 잘못된 status, 401 |
+| `GET /admin/settlement-receivables/export` | **내부 운영자 전원**(VIEWER 포함) | — | 200 `.xlsx` 첨부 | 400 잘못된 status, 401 |
 | `POST /admin/webhook-deliveries/{id}/redeliver` | SUPER_ADMIN/OPERATOR | 필요 | 200 되돌린 상태(**PENDING**) | 401, 403(VIEWER), 404 없는 전송, **409 FAILED가 아님** |
 | `GET /admin/merchants/{merchantId}/users` | **내부 운영자 전원**(VIEWER 포함) | — | 200 명부 | 401 |
 | `POST /admin/merchants/{merchantId}/users/{id}/suspend` | SUPER_ADMIN/OPERATOR | 필요 | 200 상태(SUSPENDED) | 401, 403, 404, 409(마지막 OWNER·잘못된 전이) |
@@ -215,7 +216,14 @@ PG 내부 운영자용 콘솔(브라우저 SPA, `frontend/admin`)이 호출하�
   (환전이 일어나야 채워진다). 화면은 `0`이 아니라 빈 값으로 그려야 한다.
 - **가맹점 콘솔 응답에는 가맹점 열이 없다**(언제나 자기 가맹점 하나다).
 - 정렬은 정산 예정일 최신순 고정이다.
-- **엑셀 다운로드는 아직 없다** — 결제 내역에는 있다(4.2). 필요해지면 같은 방식으로 붙인다.
+- **엑셀 다운로드가 있다** — `GET /admin/settlement-receivables/export`. 결제 내역(4.2)과
+  같은 규칙이다: 조회와 **같은 필터**를 받되 페이징 파라미터는 받지 않고(내보내기는 조건
+  전체가 대상이다), 상한 10,000행을 넘으면 잘린 채 `X-Export-Truncated: true`로 알린다.
+  파일 이름은 `settlements-{yyyyMMdd-HHmmss}.xlsx`다.
+  - **상한 상수는 결제 쪽과 따로 둔다**(`SettlementExportPolicy`). 값은 지금 같지만 두
+    내보내기가 같아야 할 이유가 없다 — 한쪽을 조정할 때 다른 쪽이 딸려 오면 그게 사고다.
+  - 열 구성이 결제와 다르다: 정산 예정일·수수료율·수수료·조정·순액·환전 손익이 중심이다.
+    **환전 전에는 확보 금액과 손익이 빈 칸**이다(`0`을 쓰면 "손익 0"으로 읽힌다).
 
 ### 4.4 Webhook 재전송 — 보내는 것이 아니라 예약한다
 

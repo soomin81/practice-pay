@@ -67,6 +67,7 @@ import paytech.practice.pay.application.port.outbound.MerchantSummary
 import paytech.practice.pay.application.port.outbound.MerchantUserSummary
 import paytech.practice.pay.application.port.outbound.PaymentListEntry
 import paytech.practice.pay.application.port.outbound.SettlementReceivableListEntry
+import paytech.practice.pay.application.settlement.ExportSettlementReceivablesUseCase
 import paytech.practice.pay.application.settlement.ListSettlementReceivablesResult
 import paytech.practice.pay.application.settlement.ListSettlementReceivablesUseCase
 import paytech.practice.pay.application.webhook.RedeliverWebhookResult
@@ -233,6 +234,9 @@ class AdminApiDocumentationTest : FunSpec() {
 
 	@MockkBean
 	lateinit var redeliverWebhookUseCase: RedeliverWebhookUseCase
+
+	@MockkBean
+	lateinit var exportSettlementReceivablesUseCase: ExportSettlementReceivablesUseCase
 
 	init {
 		extensions(SpringExtension)

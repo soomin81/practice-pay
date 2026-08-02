@@ -14,11 +14,14 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.header
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import paytech.practice.pay.api.merchant.config.SecurityConfig
 import paytech.practice.pay.api.merchant.security.MerchantUserPrincipal
 import paytech.practice.pay.application.port.outbound.SettlementReceivableListEntry
+import paytech.practice.pay.application.settlement.ExportMerchantSettlementReceivablesUseCase
+import paytech.practice.pay.application.settlement.ExportSettlementReceivablesResult
 import paytech.practice.pay.application.settlement.ListMerchantSettlementReceivablesUseCase
 import paytech.practice.pay.application.settlement.ListSettlementReceivablesCommand
 import paytech.practice.pay.application.settlement.ListSettlementReceivablesResult
@@ -64,13 +67,16 @@ private fun entry() =
 	)
 
 @WebMvcTest(MerchantSettlementReceivableController::class)
-@Import(SecurityConfig::class)
+@Import(SecurityConfig::class, FixedClockConfiguration::class)
 class MerchantSettlementReceivableControllerTest : FunSpec() {
 	@Autowired
 	lateinit var mockMvc: MockMvc
 
 	@MockkBean
 	lateinit var listMerchantSettlementReceivablesUseCase: ListMerchantSettlementReceivablesUseCase
+
+	@MockkBean
+	lateinit var exportMerchantSettlementReceivablesUseCase: ExportMerchantSettlementReceivablesUseCase
 
 	init {
 		extensions(SpringExtension)
@@ -156,6 +162,68 @@ class MerchantSettlementReceivableControllerTest : FunSpec() {
 			mockMvc
 				.perform(get("/merchant/settlement-receivables").param("status", "NOPE").with(authenticatedAs(OWNER)))
 				.andExpect(status().isBadRequest)
+		}
+
+		test("export returns an xlsx attachment with a dated file name") {
+			every { exportMerchantSettlementReceivablesUseCase.execute(any(), any()) } returns
+				ExportSettlementReceivablesResult(spreadsheet = byteArrayOf(1, 2, 3), rowCount = 1, truncated = false)
+
+			mockMvc
+				.perform(get("/merchant/settlement-receivables/export").with(authenticatedAs(OWNER)))
+				.andExpect(status().isOk)
+				.andExpect(
+					header().string("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+				).andExpect(
+					header().string("Content-Disposition", """attachment; filename="settlements-20260801-153000.xlsx""""),
+				).andExpect(header().string("X-Export-Truncated", "false"))
+		}
+
+		/**
+		 * **조용히 잘린 파일을 받아가는 것이 이 기능에서 가장 위험한 실패다** — 본문이
+		 * 바이너리라 JSON 필드로 알릴 수 없어 헤더로 전한다.
+		 */
+		test("export flags truncation in a response header") {
+			every { exportMerchantSettlementReceivablesUseCase.execute(any(), any()) } returns
+				ExportSettlementReceivablesResult(spreadsheet = byteArrayOf(1), rowCount = 10_000, truncated = true)
+
+			mockMvc
+				.perform(get("/merchant/settlement-receivables/export").with(authenticatedAs(OWNER)))
+				.andExpect(status().isOk)
+				.andExpect(header().string("X-Export-Truncated", "true"))
+		}
+
+		/**
+		 * **정산은 결제보다 민감하다** — 새면 남의 가맹점 매출과 수취 예정 금액이 파일로
+		 * 통째로 빠져나간다. `merchantId`를 보내도 인증 주체가 이긴다.
+		 */
+		test("export scopes to the authenticated merchant even when another one is requested") {
+			val merchantSlot = slot<MerchantId>()
+			every { exportMerchantSettlementReceivablesUseCase.execute(capture(merchantSlot), any()) } returns
+				ExportSettlementReceivablesResult(spreadsheet = byteArrayOf(), rowCount = 0, truncated = false)
+
+			mockMvc
+				.perform(
+					get("/merchant/settlement-receivables/export")
+						.param("merchantId", "mrc_someone_else")
+						.with(authenticatedAs(OWNER)),
+				).andExpect(status().isOk)
+
+			merchantSlot.captured shouldBe MERCHANT_ID
+		}
+
+		/** `/export`가 목록 경로에 잡아먹히지 않는다 — 두 경로가 같은 prefix를 공유한다. */
+		test("export is not swallowed by the list route") {
+			every { exportMerchantSettlementReceivablesUseCase.execute(any(), any()) } returns
+				ExportSettlementReceivablesResult(spreadsheet = byteArrayOf(1), rowCount = 1, truncated = false)
+
+			mockMvc
+				.perform(get("/merchant/settlement-receivables/export").with(authenticatedAs(OWNER)))
+				.andExpect(status().isOk)
+				.andExpect(header().string("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+		}
+
+		test("export requires authentication") {
+			mockMvc.perform(get("/merchant/settlement-receivables/export")).andExpect(status().isUnauthorized)
 		}
 	}
 }

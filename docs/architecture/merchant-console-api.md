@@ -66,6 +66,7 @@
 | `GET /merchant/payments/{paymentId}` | **가맹점 사용자 전원**(VIEWER 포함) | — | 200 결제 상세(자기 가맹점) | 401, **404 없는 결제·남의 결제** |
 | `GET /merchant/payments/export` | **가맹점 사용자 전원**(VIEWER 포함) | — | 200 `.xlsx` 첨부(자기 가맹점) | 400 잘못된 status, 401 |
 | `GET /merchant/settlement-receivables` | **가맹점 사용자 전원**(VIEWER 포함) | — | 200 정산 채권(자기 가맹점, 정산 예정일 최신순) | 400 잘못된 status, 401 |
+| `GET /merchant/settlement-receivables/export` | **가맹점 사용자 전원**(VIEWER 포함) | — | 200 `.xlsx` 첨부(자기 가맹점) | 400 잘못된 status, 401 |
 | `GET /merchant/webhook` | OWNER/ADMIN | — | 200 수신 URL + **서명 비밀** + 세대 | 401, 403(VIEWER) |
 | `PUT /merchant/webhook` | OWNER/ADMIN | 필요 | 200 갱신된 설정 | 400 URL 형식, 401, 403 |
 | `POST /merchant/webhook/rotate-secret` | OWNER/ADMIN | 필요 | 200 새 비밀·세대 | 401, 403 |
@@ -139,6 +140,10 @@
 - 응답에 가맹점 열이 없다(언제나 자기 가맹점 하나다).
 - 금액은 전부 숫자다(KRW 원 단위 정수). `exchangeReceivedAmount`/`exchangeProfitLossAmount`는
   `READY` 전에는 `null`이다.
+
+- **엑셀 다운로드가 있다** — `GET /merchant/settlement-receivables/export`. 조회와 같은
+  필터를 받되 페이징은 받지 않고, **범위는 여기서도 인증 주체가 정한다**(`merchantId`를
+  보내도 무시된다). 파일로 빠져나가는 산출물이라 범위가 새면 되돌릴 수 없다.
 
 필드 상세와 나머지 계약은 [admin-console-api.md](admin-console-api.md)의 4.3에 한 번만 적었다.
 
