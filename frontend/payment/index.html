@@ -5,27 +5,14 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>결제</title>
-    <script>
-      // 다크 모드는 OS 설정을 따른다.
-      //
-      // shadcn 테마가 `.dark` **클래스** 기준이라(index.css의 @custom-variant), 이
-      // 클래스를 붙이는 코드가 없으면 테마 변수도 `dark:` 유틸리티도 전부 죽는다.
-      //
-      // 번들이 아니라 <head>에서 동기로 실행하는 이유는 깜빡임 때문이다 — 모듈에서
-      // 하면 JS가 로드될 때까지 밝은 화면이 먼저 그려졌다가 어두워진다. 테스트하기
-      // 좋은 위치는 아니지만, 결제 화면이 한 번 번쩍이는 것보다는 낫다고 봤다.
-      ;(function () {
-        var query = window.matchMedia('(prefers-color-scheme: dark)')
-        function apply(isDark) {
-          document.documentElement.classList.toggle('dark', isDark)
-        }
-        apply(query.matches)
-        // 결제 중에 OS 테마가 바뀌는 일은 드물지만, 바뀌면 따라간다.
-        query.addEventListener('change', function (event) {
-          apply(event.matches)
-        })
-      })()
-    </script>
+    <!--
+      **테마는 라이트로 고정한다** — 근거와 되살리는 방법은 merchant 앱의 index.html에
+      한 번만 적었다(세 앱이 같은 결정을 공유한다).
+
+      이 앱에서는 부수 효과가 하나 더 있다: 예전 스크립트를 <head>에서 동기로 돌린
+      이유가 **깜빡임**(밝게 그려졌다가 어두워짐)이었는데, 라이트로 고정하면 바꿀 것이
+      없으므로 그 문제 자체가 사라진다.
+    -->
   </head>
   <body>
     <div id="root"></div>

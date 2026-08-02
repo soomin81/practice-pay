@@ -5,23 +5,19 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>가맹점 콘솔</title>
-    <script>
-      // 다크 모드는 OS 설정을 따른다(payment 앱의 index.html과 같은 이유·같은 방식).
-      //
-      // shadcn 테마가 `.dark` **클래스** 기준이라(index.css의 @custom-variant), 이
-      // 클래스를 붙이는 코드가 없으면 테마 변수도 `dark:` 유틸리티도 전부 죽는다.
-      // <head>에서 동기로 실행하는 이유는 깜빡임을 막기 위해서다.
-      ;(function () {
-        var query = window.matchMedia('(prefers-color-scheme: dark)')
-        function apply(isDark) {
-          document.documentElement.classList.toggle('dark', isDark)
-        }
-        apply(query.matches)
-        query.addEventListener('change', function (event) {
-          apply(event.matches)
-        })
-      })()
-    </script>
+    <!--
+      **테마는 라이트로 고정한다.** 예전에는 OS 설정(prefers-color-scheme)을 따라
+      `.dark` 클래스를 붙였는데, 그러면 같은 화면이 보는 사람마다 다르게 나와서
+      운영자끼리 화면을 두고 이야기하기 어려웠다.
+
+      다크 토큰(index.css의 `.dark` 블록)은 **지우지 않고 남겨 뒀다** — 붙이는 코드가
+      없어서 지금은 쓰이지 않을 뿐이고, 나중에 테마 토글을 붙이면 그대로 살아난다.
+      되살리려면 `document.documentElement.classList.add('dark')`를 어디선가 부르면
+      되고, 그 코드는 깜빡임을 막으려면 여기 <head>에서 **동기로** 실행해야 한다.
+
+      세 앱(payment/merchant/admin)이 같은 결정을 공유한다 — 한 곳만 바꾸면 앱마다
+      모습이 갈린다.
+    -->
   </head>
   <body>
     <div id="root"></div>
