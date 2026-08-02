@@ -988,11 +988,17 @@ class MerchantApiDocumentationTest : FunSpec() {
 	}
 }
 
+/**
+ * 문서용 예시는 **겹침 기간 안**의 모습으로 만든다 — 이 필드들이 어떤 상황에서 값을 갖는지가
+ * 계약의 핵심인데, `null`인 예시만 두면 스펙에서 타입이 통째로 빠진다(payment에서 겪은 함정).
+ */
 private fun webhookSettings(secretVersion: Int = 1) =
 	MerchantWebhookSettings(
 		webhookUrl = "https://merchant.example.com/webhooks",
 		signingSecret = "whsec_QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo",
 		secretVersion = secretVersion,
+		previousSecret = "whsec_MDEyMzQ1Njc4OUFCQ0RFRkdISUpLTE0",
+		previousSecretValidUntil = NOW.plusSeconds(86_400),
 	)
 
 private fun webhookSettingsFields() =
@@ -1003,4 +1009,12 @@ private fun webhookSettingsFields() =
 			.optional(),
 		fieldWithPath("signingSecret").description("서명 비밀(`whsec_` 접두사). 이 값으로 X-PracticePay-Signature를 검증한다."),
 		fieldWithPath("secretVersion").description("서명 비밀의 세대. 교체할 때마다 1씩 증가한다."),
+		fieldWithPath("previousSecret")
+			.type(JsonFieldType.STRING)
+			.description("겹침 기간 동안만 값이 있는 **직전 비밀**. 그동안은 두 비밀 모두 통한다. 겹침이 끝나면 null.")
+			.optional(),
+		fieldWithPath("previousSecretValidUntil")
+			.type(JsonFieldType.STRING)
+			.description("직전 비밀이 무효가 되는 시각(UTC). previousSecret과 함께 있거나 함께 없다.")
+			.optional(),
 	)

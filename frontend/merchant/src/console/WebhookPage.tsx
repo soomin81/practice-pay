@@ -4,6 +4,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useRotateWebhookSecret, useUpdateWebhookUrl, useWebhookSettings } from '@/console/useWebhookSettings'
+import { formatDateTime } from '@/console/format'
 import { PageHeader } from '@/components/console/PageHeader'
 import { Panel } from '@/components/console/Panel'
 
@@ -35,7 +36,7 @@ export function WebhookPage() {
 	if (settings.error) return <p className="text-sm text-destructive">{messageOf(settings.error)}</p>
 	if (!settings.data) return null
 
-	const { signingSecret, secretVersion, webhookUrl } = settings.data
+	const { signingSecret, secretVersion, webhookUrl, previousSecret, previousSecretValidUntil } = settings.data
 
 	async function copySecret() {
 		try {
@@ -111,12 +112,30 @@ export function WebhookPage() {
 				</div>
 				<p className="text-sm text-muted-foreground">현재 세대: {secretVersion}</p>
 
+				{/* **겹침 중에만 나온다.** 교체 직후 "옛 비밀이 아직 통하나"를 확인할 수 있어야
+				    가맹점이 마음 놓고 배포한다 — 이 안내가 없으면 교체 버튼이 여전히 무섭다. */}
+				{previousSecret && previousSecretValidUntil ? (
+					<Alert className="flex flex-col gap-2">
+						<AlertTitle>직전 비밀도 아직 유효합니다</AlertTitle>
+						<AlertDescription>
+							<p className="mb-2">
+								{formatDateTime(previousSecretValidUntil)}까지는 <strong>두 비밀 모두</strong> 통합니다. 그때까지 새
+								비밀을 서버에 반영하세요. 그동안 Webhook에는 서명이 두 개(<code className="mono-cell">v1=</code>) 실려
+								나가고, <strong>하나라도 맞으면</strong> 검증에 성공합니다.
+							</p>
+							<code className="block w-full break-all rounded-md bg-muted px-2 py-1.5 font-mono text-xs text-foreground">
+								{secretShown ? previousSecret : '•'.repeat(24)}
+							</code>
+						</AlertDescription>
+					</Alert>
+				) : null}
+
 				{confirmingRotate ? (
 					<Alert variant="destructive" className="flex flex-col gap-3">
 						<AlertTitle>비밀을 교체하면 되돌릴 수 없습니다</AlertTitle>
 						<AlertDescription>
-							새 비밀을 서버에 반영하기 전까지, 그 사이에 발생한 Webhook은 서명이 맞지 않아 거부됩니다. 겹쳐 쓸 수 있는
-							기간은 없습니다.
+							교체 후 <strong>24시간 동안은 지금 비밀도 함께 유효</strong>하므로, 그 사이에 새 비밀을 서버에 반영하면
+							Webhook을 놓치지 않습니다. 24시간이 지나면 지금 비밀은 영영 무효가 되고 교체를 취소할 방법도 없습니다.
 						</AlertDescription>
 						<div className="flex items-center gap-2">
 							<Button

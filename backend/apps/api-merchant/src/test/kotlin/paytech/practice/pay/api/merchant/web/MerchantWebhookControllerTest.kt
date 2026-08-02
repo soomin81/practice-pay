@@ -32,8 +32,10 @@ import paytech.practice.pay.domain.identity.LoginId
 import paytech.practice.pay.domain.identity.MerchantUserId
 import paytech.practice.pay.domain.identity.MerchantUserRole
 import paytech.practice.pay.domain.merchant.MerchantId
+import java.time.Instant
 
 private val MERCHANT_ID = MerchantId("mrc_001")
+private val OVERLAP_ENDS_AT: Instant = Instant.parse("2026-08-03T00:00:00Z")
 private val OWNER = MerchantUserPrincipal(MerchantUserId("mu_owner"), MERCHANT_ID, LoginId("owner"), MerchantUserRole.OWNER)
 private val ADMIN = MerchantUserPrincipal(MerchantUserId("mu_admin"), MERCHANT_ID, LoginId("admin"), MerchantUserRole.ADMIN)
 private val VIEWER = MerchantUserPrincipal(MerchantUserId("mu_viewer"), MERCHANT_ID, LoginId("viewer"), MerchantUserRole.VIEWER)
@@ -46,7 +48,15 @@ private fun authenticatedAs(principal: MerchantUserPrincipal) =
 private fun settings(
 	url: String? = "https://merchant.example.com/webhooks",
 	version: Int = 1,
-) = MerchantWebhookSettings(webhookUrl = url, signingSecret = "whsec_dGVzdA", secretVersion = version)
+	previousSecret: String? = null,
+	previousSecretValidUntil: Instant? = null,
+) = MerchantWebhookSettings(
+	webhookUrl = url,
+	signingSecret = "whsec_dGVzdA",
+	secretVersion = version,
+	previousSecret = previousSecret,
+	previousSecretValidUntil = previousSecretValidUntil,
+)
 
 @WebMvcTest(MerchantWebhookController::class)
 @Import(SecurityConfig::class)
@@ -171,6 +181,32 @@ class MerchantWebhookControllerTest : FunSpec() {
 				.perform(post("/merchant/webhook/rotate-secret").with(authenticatedAs(OWNER)).with(csrf()))
 				.andExpect(status().isOk)
 				.andExpect(jsonPath("$.secretVersion").value(2))
+		}
+
+		/**
+		 * **교체 직후에는 직전 비밀도 함께 내려간다** — 가맹점이 "옛 비밀이 언제까지 통하나"를
+		 * 화면에서 확인할 수 있어야 마음 놓고 배포한다.
+		 */
+		test("the response carries the previous secret and its expiry while they overlap") {
+			every { rotateMerchantWebhookSecretUseCase.execute(MERCHANT_ID) } returns
+				settings(version = 2, previousSecret = "whsec_OLD", previousSecretValidUntil = OVERLAP_ENDS_AT)
+
+			mockMvc
+				.perform(post("/merchant/webhook/rotate-secret").with(authenticatedAs(OWNER)).with(csrf()))
+				.andExpect(status().isOk)
+				.andExpect(jsonPath("$.previousSecret").value("whsec_OLD"))
+				.andExpect(jsonPath("$.previousSecretValidUntil").exists())
+		}
+
+		/** 겹침이 끝났으면 두 값이 **함께** 빠진다 — 하나만 남으면 무엇이 유효한지 알 수 없다. */
+		test("the previous secret and its expiry are both absent once the overlap has passed") {
+			every { getMerchantWebhookSettingsUseCase.execute(MERCHANT_ID) } returns settings()
+
+			mockMvc
+				.perform(get("/merchant/webhook").with(authenticatedAs(OWNER)))
+				.andExpect(status().isOk)
+				.andExpect(jsonPath("$.previousSecret").doesNotExist())
+				.andExpect(jsonPath("$.previousSecretValidUntil").doesNotExist())
 		}
 
 		test("a request without a CSRF token cannot rotate the secret") {

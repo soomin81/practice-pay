@@ -219,7 +219,8 @@ class UseCaseConfiguration {
 	fun getMerchantWebhookSettingsUseCase(
 		merchantRepository: MerchantRepository,
 		webhookSigner: WebhookSigner,
-	): GetMerchantWebhookSettingsUseCase = GetMerchantWebhookSettingsUseCase(merchantRepository, webhookSigner)
+		clock: Clock,
+	): GetMerchantWebhookSettingsUseCase = GetMerchantWebhookSettingsUseCase(merchantRepository, webhookSigner, clock)
 
 	@Bean
 	fun updateMerchantWebhookUrlUseCase(

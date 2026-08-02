@@ -119,4 +119,53 @@ describe('WebhookPage', () => {
 		// 교체 직후에는 드러내 준다 — 곧바로 서버에 옮겨 적어야 하는 값이다.
 		expect(await screen.findByTestId('signing-secret')).toHaveTextContent('whsec_NEW')
 	})
+
+	/**
+	 * **겹침을 알려주지 않으면 교체 버튼은 여전히 무섭다.** 교체 후 옛 비밀이 언제까지
+	 * 통하는지 화면에서 확인할 수 있어야 가맹점이 마음 놓고 배포한다.
+	 */
+	it('겹침 기간에는 직전 비밀과 만료 시각을 함께 보여준다', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue(
+				fakeResponse(
+					settings({
+						secretVersion: 2,
+						previousSecret: 'whsec_OLD',
+						previousSecretValidUntil: '2026-08-03T00:00:00Z',
+					}),
+				),
+			),
+		)
+
+		renderWithRouter(<WebhookPage />)
+
+		expect(await screen.findByText('직전 비밀도 아직 유효합니다')).toBeInTheDocument()
+		// 직전 비밀도 현재 비밀과 같은 규칙으로 가려 둔다 — "보기"를 눌러야 드러난다.
+		await userEvent.click(screen.getByRole('button', { name: '보기' }))
+		expect(await screen.findByText('whsec_OLD')).toBeInTheDocument()
+	})
+
+	/** 겹침이 끝났으면 그 안내가 아예 없어야 한다 — 있으면 통하지 않는 비밀을 통한다고 말하는 셈이다. */
+	it('겹침이 끝나면 직전 비밀 안내를 그리지 않는다', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue(fakeResponse(settings({ secretVersion: 2 }))))
+
+		renderWithRouter(<WebhookPage />)
+
+		expect(await screen.findByText('현재 세대: 2')).toBeInTheDocument()
+		expect(screen.queryByText('직전 비밀도 아직 유효합니다')).not.toBeInTheDocument()
+	})
+
+	/**
+	 * 교체 확인 문구가 **실제 동작과 맞아야 한다** — 예전에는 "겹쳐 쓸 수 있는 기간은 없다"고
+	 * 적혀 있었고, 지금은 24시간 겹친다. 문구가 낡으면 사용자가 잘못된 계획을 세운다.
+	 */
+	it('교체 확인 문구가 겹침 기간을 알려준다', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue(fakeResponse(settings())))
+
+		renderWithRouter(<WebhookPage />)
+		await userEvent.click(await screen.findByRole('button', { name: '비밀 교체' }))
+
+		expect(screen.getByText(/24시간 동안은 지금 비밀도 함께 유효/)).toBeInTheDocument()
+	})
 })

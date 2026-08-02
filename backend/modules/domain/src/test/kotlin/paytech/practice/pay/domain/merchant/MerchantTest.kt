@@ -5,9 +5,13 @@ import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import paytech.practice.pay.domain.shared.HttpUrl
+import java.time.Duration
 import java.time.Instant
 
 private val CREATED_AT: Instant = Instant.parse("2026-07-17T00:00:00Z")
+
+/** 겹침 기간은 운영 정책이라 도메인이 상수로 갖지 않는다 — 테스트가 값을 정해 넘긴다. */
+private val OVERLAP: Duration = Duration.ofHours(24)
 
 private fun newMerchant(): Merchant =
 	Merchant.create(
@@ -147,6 +151,7 @@ class MerchantTest :
 					status = MerchantStatus.SUSPENDED,
 					webhookUrl = null,
 					webhookSecretVersion = 3,
+					webhookSecretRotatedAt = CREATED_AT,
 					updatedAt = updatedAt,
 				)
 
@@ -158,6 +163,56 @@ class MerchantTest :
 
 		test("a new merchant starts at webhook secret version 1") {
 			newMerchant().webhookSecretVersion shouldBe 1
+		}
+
+		/**
+		 * 세대 1에는 **직전이 없다** — 겹칠 것이 없으므로 교체한 적 없는 가맹점은 언제나
+		 * 세대 하나만 유효하다.
+		 */
+		test("a merchant that never rotated has exactly one active secret version") {
+			newMerchant().activeWebhookSecretVersions(CREATED_AT, OVERLAP) shouldBe listOf(1)
+		}
+
+		/**
+		 * **이 겹침이 이 기능 전체의 목적이다.** 교체 직후에도 직전 비밀이 함께 유효해야
+		 * 가맹점이 새 비밀을 자기 서버에 반영하는 동안 Webhook을 놓치지 않는다.
+		 */
+		test("both the new and the previous version are active during the overlap") {
+			val merchant = newMerchant()
+			merchant.rotateWebhookSecret(CREATED_AT)
+
+			merchant.activeWebhookSecretVersions(CREATED_AT, OVERLAP) shouldBe listOf(2, 1)
+			merchant.activeWebhookSecretVersions(CREATED_AT.plus(OVERLAP).minusSeconds(1), OVERLAP) shouldBe listOf(2, 1)
+		}
+
+		/** 겹침이 끝나면 직전 비밀은 **영영** 무효다 — 그러지 않으면 교체가 아무것도 회수하지 못한다. */
+		test("the previous version stops being active once the overlap has passed") {
+			val merchant = newMerchant()
+			merchant.rotateWebhookSecret(CREATED_AT)
+
+			merchant.activeWebhookSecretVersions(CREATED_AT.plus(OVERLAP), OVERLAP) shouldBe listOf(2)
+			merchant.activeWebhookSecretVersions(CREATED_AT.plus(OVERLAP).plusSeconds(1), OVERLAP) shouldBe listOf(2)
+		}
+
+		/**
+		 * 겹침 중에 또 교체하면 **직전은 방금 것 하나**다 — 세대를 셋 이상 살려 두면
+		 * 노출된 비밀이 예상보다 오래 유효해진다.
+		 */
+		test("rotating twice within the overlap keeps only the latest two versions") {
+			val merchant = newMerchant()
+			merchant.rotateWebhookSecret(CREATED_AT)
+			merchant.rotateWebhookSecret(CREATED_AT.plusSeconds(60))
+
+			merchant.activeWebhookSecretVersions(CREATED_AT.plusSeconds(60), OVERLAP) shouldBe listOf(3, 2)
+		}
+
+		test("rotateWebhookSecret records when it happened") {
+			val merchant = newMerchant()
+			val rotatedAt = CREATED_AT.plusSeconds(1)
+
+			merchant.rotateWebhookSecret(rotatedAt)
+
+			merchant.webhookSecretRotatedAt shouldBe rotatedAt
 		}
 
 		/**
@@ -186,6 +241,7 @@ class MerchantTest :
 					status = MerchantStatus.ACTIVE,
 					webhookUrl = null,
 					webhookSecretVersion = 0,
+					webhookSecretRotatedAt = null,
 					updatedAt = CREATED_AT,
 				)
 			}

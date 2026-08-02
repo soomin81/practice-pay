@@ -52,16 +52,24 @@ class HmacWebhookSigner(
 
 	override fun signatureHeaderValue(
 		merchantId: MerchantId,
-		secretVersion: Int,
+		secretVersions: List<Int>,
 		payload: String,
 		signedAt: Instant,
 	): String {
+		require(secretVersions.isNotEmpty()) { "서명할 비밀 세대가 최소 하나는 있어야 합니다." }
+
 		val timestamp = signedAt.epochSecond
-		val secret = deriveSecret(merchantId, secretVersion)
 		// 본문만이 아니라 "{t}.{본문}"에 서명한다 — 재전송 공격을 가맹점이
 		// 판단할 수 있게 하려는 것이다([WebhookSigner]의 KDoc 참고).
-		val signature = hmac(secret.toByteArray(Charsets.UTF_8), "$timestamp.$payload")
-		return "t=$timestamp,$SIGNATURE_SCHEME=${HexFormat.of().formatHex(signature)}"
+		val signedPayload = "$timestamp.$payload"
+		val signatures =
+			secretVersions.joinToString(",") { version ->
+				val secret = deriveSecret(merchantId, version)
+				val signature = hmac(secret.toByteArray(Charsets.UTF_8), signedPayload)
+				"$SIGNATURE_SCHEME=${HexFormat.of().formatHex(signature)}"
+			}
+		// 겹침 기간에는 v1이 두 개 실린다 — 가맹점은 하나라도 맞으면 받아들인다.
+		return "t=$timestamp,$signatures"
 	}
 
 	private fun hmac(

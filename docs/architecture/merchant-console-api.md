@@ -156,8 +156,10 @@
 - **`webhookUrl`을 비우거나 `null`로 보내면 해제**된다 — 해제 전용 엔드포인트는 없다.
   화면에서 입력란을 비우는 것이 곧 해제이므로, 빈 문자열을 URL 형식 검증에 걸어 400으로
   돌려주지 않는다.
-- **교체(`rotate-secret`)는 되돌릴 수 없고 겹치는 기간이 없다** — 세대를 올리는 순간 옛
-  비밀이 무효가 된다. 상세는 [webhook-api.md](webhook-api.md) 4.3.
+- **교체(`rotate-secret`) 후 24시간은 직전 비밀도 함께 유효하다** — 그동안 응답의
+  `previousSecret`/`previousSecretValidUntil`에 값이 있고, Webhook에는 서명이 두 개 실려
+  나간다. 겹침이 끝나면 두 값이 **함께** `null`이 된다. **교체 자체는 되돌릴 수 없다.**
+  상세는 [webhook-api.md](webhook-api.md) 4.3.
 
 전체 Webhook 계약(이벤트 종류, 서명 형식, **가맹점 측 검증 절차**)은
 [webhook-api.md](webhook-api.md)에 있다.

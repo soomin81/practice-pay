@@ -1,6 +1,7 @@
 package paytech.practice.pay.domain.merchant
 
 import paytech.practice.pay.domain.shared.HttpUrl
+import java.time.Duration
 import java.time.Instant
 
 /**
@@ -25,6 +26,7 @@ class Merchant private constructor(
 	status: MerchantStatus,
 	webhookUrl: HttpUrl?,
 	webhookSecretVersion: Int,
+	webhookSecretRotatedAt: Instant?,
 	updatedAt: Instant,
 ) {
 	var status: MerchantStatus = status
@@ -41,6 +43,16 @@ class Merchant private constructor(
 	 * 자격증명을 도메인에 새게 하지 않는다.
 	 */
 	var webhookSecretVersion: Int = webhookSecretVersion
+		private set
+
+	/**
+	 * 서명 비밀을 마지막으로 교체한 시각. `null`이면 한 번도 교체하지 않았다는 뜻이다.
+	 *
+	 * **직전 세대를 따로 저장하지 않는 이유**: 세대는 1씩 올라가므로 직전은 언제나
+	 * [webhookSecretVersion]` - 1`이다. 실제로 모르는 것은 "언제 교체했는가" 하나뿐이라
+	 * 그것만 들고 [activeWebhookSecretVersions]로 계산한다.
+	 */
+	var webhookSecretRotatedAt: Instant? = webhookSecretRotatedAt
 		private set
 
 	var updatedAt: Instant = updatedAt
@@ -88,15 +100,44 @@ class Merchant private constructor(
 	}
 
 	/**
-	 * Webhook 서명 비밀을 교체한다 — 세대를 1 올리면 파생 입력이 달라져
-	 * **이전 비밀은 즉시 무효가 된다.** 상태 전이는 아니다.
+	 * Webhook 서명 비밀을 교체한다 — 세대를 1 올리면 파생 입력이 달라져 새 비밀이 나온다.
+	 * 상태 전이는 아니다.
 	 *
-	 * 되돌릴 수 없다: 교체하는 순간 옛 비밀로 검증하던 가맹점 서버는 서명이
-	 * 맞지 않아 전부 거부하게 된다. 그래서 화면은 이 동작을 확인 절차 뒤에 둔다.
+	 * **직전 비밀이 곧바로 죽지는 않는다** — 교체 시각을 남겨 두고, 겹침 기간 동안은
+	 * [activeWebhookSecretVersions]가 두 세대를 함께 돌려준다. 그러지 않으면 가맹점이
+	 * 새 비밀을 자기 서버에 반영하기 전까지의 Webhook을 통째로 놓치는데, 그건 교체가
+	 * 필요한 상황(비밀 노출)에서 가장 하고 싶지 않은 일이다.
+	 *
+	 * 되돌릴 수는 없다 — 겹침 기간이 지나면 옛 비밀은 영영 무효다.
 	 */
 	fun rotateWebhookSecret(changedAt: Instant) {
 		webhookSecretVersion += 1
+		webhookSecretRotatedAt = changedAt
 		updatedAt = changedAt
+	}
+
+	/**
+	 * [at] 시점에 **유효한 서명 비밀 세대**를 최신순으로 돌려준다.
+	 *
+	 * 겹침 기간 안이면 `[현재, 직전]`, 아니면 `[현재]` 하나다. 세대 1은 직전이 없어
+	 * 언제나 하나다.
+	 *
+	 * **서명하는 쪽과 화면이 같은 답을 써야 한다** — "지금 어떤 비밀이 통하는가"를 두 곳이
+	 * 따로 계산하면 콘솔이 "아직 유효하다"고 말하는 동안 전송은 이미 새 비밀만 쓰는 상황이
+	 * 생긴다. 그래서 그 판단을 애그리게이트에 둔다.
+	 *
+	 * [overlap]을 인자로 받는 것은 **얼마나 겹칠지가 도메인 규칙이 아니라 운영 정책**이기
+	 * 때문이다(`PublishOutboxEventUseCase`가 상수로 정한다) — 여기서는 그 값을 받아
+	 * 계산만 한다.
+	 */
+	fun activeWebhookSecretVersions(
+		at: Instant,
+		overlap: Duration,
+	): List<Int> {
+		val rotatedAt = webhookSecretRotatedAt
+		val previous = webhookSecretVersion - 1
+		val stillOverlapping = rotatedAt != null && previous >= 1 && at < rotatedAt.plus(overlap)
+		return if (stillOverlapping) listOf(webhookSecretVersion, previous) else listOf(webhookSecretVersion)
 	}
 
 	private fun checkTransition(
@@ -123,6 +164,8 @@ class Merchant private constructor(
 				status = MerchantStatus.ACTIVE,
 				webhookUrl = webhookUrl,
 				webhookSecretVersion = INITIAL_WEBHOOK_SECRET_VERSION,
+				// 새 가맹점은 교체한 적이 없다 — 직전 세대가 없으므로 겹칠 것도 없다.
+				webhookSecretRotatedAt = null,
 				updatedAt = createdAt,
 			)
 
@@ -135,6 +178,7 @@ class Merchant private constructor(
 			status: MerchantStatus,
 			webhookUrl: HttpUrl?,
 			webhookSecretVersion: Int,
+			webhookSecretRotatedAt: Instant?,
 			updatedAt: Instant,
 		): Merchant =
 			Merchant(
@@ -145,6 +189,7 @@ class Merchant private constructor(
 				status = status,
 				webhookUrl = webhookUrl,
 				webhookSecretVersion = webhookSecretVersion,
+				webhookSecretRotatedAt = webhookSecretRotatedAt,
 				updatedAt = updatedAt,
 			)
 

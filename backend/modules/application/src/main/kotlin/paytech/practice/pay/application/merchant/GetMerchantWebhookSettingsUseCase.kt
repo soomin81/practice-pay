@@ -2,7 +2,10 @@ package paytech.practice.pay.application.merchant
 
 import paytech.practice.pay.application.port.outbound.MerchantRepository
 import paytech.practice.pay.application.port.outbound.WebhookSigner
+import paytech.practice.pay.domain.merchant.Merchant
 import paytech.practice.pay.domain.merchant.MerchantId
+import java.time.Clock
+import java.time.Instant
 
 /**
  * 가맹점 콘솔이 자기 Webhook 설정(수신 URL과 **서명 비밀**)을 조회하는 Use Case다
@@ -23,17 +26,14 @@ import paytech.practice.pay.domain.merchant.MerchantId
 class GetMerchantWebhookSettingsUseCase(
 	private val merchantRepository: MerchantRepository,
 	private val webhookSigner: WebhookSigner,
+	private val clock: Clock,
 ) {
 	fun execute(merchantId: MerchantId): MerchantWebhookSettings {
 		val merchant =
 			merchantRepository.findById(merchantId)
 				?: error("인증된 가맹점($merchantId)을 찾을 수 없습니다.")
 
-		return MerchantWebhookSettings(
-			webhookUrl = merchant.webhookUrl?.value,
-			signingSecret = webhookSigner.deriveSecret(merchant.id, merchant.webhookSecretVersion),
-			secretVersion = merchant.webhookSecretVersion,
-		)
+		return merchantWebhookSettings(merchant, webhookSigner, clock.instant())
 	}
 }
 
@@ -42,9 +42,39 @@ class GetMerchantWebhookSettingsUseCase(
  *
  * [webhookUrl]이 `null`이면 가맹점이 Webhook을 쓰지 않는 정상적인 상태다 —
  * `PublishOutboxEventUseCase`가 그 경우 전송을 아예 만들지 않는다.
+ *
+ * @property previousSecret 겹침 기간 동안만 값이 있다 — **직전 비밀도 아직 통한다**는
+ * 뜻이고, 지나면 `null`이다. 가맹점이 "지금 내 서버의 옛 비밀이 아직 유효한가"를 화면에서
+ * 확인할 수 있어야 교체를 마음 놓고 진행한다.
+ * @property previousSecretValidUntil 직전 비밀이 무효가 되는 시각. [previousSecret]과
+ * 함께 있거나 함께 없다.
  */
 data class MerchantWebhookSettings(
 	val webhookUrl: String?,
 	val signingSecret: String,
 	val secretVersion: Int,
+	val previousSecret: String?,
+	val previousSecretValidUntil: Instant?,
 )
+
+/**
+ * 조회와 교체가 **같은 모양의 답**을 만들도록 한곳에 모은다 — 교체 직후 화면이 그리는
+ * 값과, 그 뒤 새로고침해서 받는 값이 달라지면 안 된다.
+ */
+internal fun merchantWebhookSettings(
+	merchant: Merchant,
+	webhookSigner: WebhookSigner,
+	now: Instant,
+): MerchantWebhookSettings {
+	val activeVersions = merchant.activeWebhookSecretVersions(now, WebhookSignaturePolicy.SECRET_OVERLAP)
+	val previousVersion = activeVersions.getOrNull(1)
+
+	return MerchantWebhookSettings(
+		webhookUrl = merchant.webhookUrl?.value,
+		signingSecret = webhookSigner.deriveSecret(merchant.id, merchant.webhookSecretVersion),
+		secretVersion = merchant.webhookSecretVersion,
+		previousSecret = previousVersion?.let { webhookSigner.deriveSecret(merchant.id, it) },
+		// 겹침이 없으면 둘 다 null이다 — 유효 기간만 남기면 "무엇이 유효한지"를 알 수 없다.
+		previousSecretValidUntil = previousVersion?.let { merchant.webhookSecretRotatedAt?.plus(WebhookSignaturePolicy.SECRET_OVERLAP) },
+	)
+}

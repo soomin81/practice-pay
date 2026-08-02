@@ -48,6 +48,7 @@ class MerchantRepositoryAdapter(
 					merchantStatus = merchant.status.name
 					webhookUrl = merchant.webhookUrl?.value
 					webhookSecretVersion = merchant.webhookSecretVersion
+					webhookSecretRotatedAt = merchant.webhookSecretRotatedAt?.toUtcLocalDateTime()
 					createdAt = merchant.createdAt.toUtcLocalDateTime()
 					updatedAt = merchant.updatedAt.toUtcLocalDateTime()
 					version = 0L
@@ -58,6 +59,7 @@ class MerchantRepositoryAdapter(
 				.set(MERCHANT.MERCHANT_STATUS, merchant.status.name)
 				.set(MERCHANT.WEBHOOK_URL, merchant.webhookUrl?.value)
 				.set(MERCHANT.WEBHOOK_SECRET_VERSION, merchant.webhookSecretVersion)
+				.set(MERCHANT.WEBHOOK_SECRET_ROTATED_AT, merchant.webhookSecretRotatedAt?.toUtcLocalDateTime())
 				.set(MERCHANT.UPDATED_AT, merchant.updatedAt.toUtcLocalDateTime())
 				.set(MERCHANT.VERSION, (existing.version ?: 0L) + 1)
 				.where(MERCHANT.MERCHANT_SEQ.eq(existing.merchantSeq))
@@ -95,6 +97,7 @@ class MerchantRepositoryAdapter(
 			status = MerchantStatus.valueOf(merchantStatus!!),
 			webhookUrl = webhookUrl?.let { HttpUrl(it) },
 			webhookSecretVersion = webhookSecretVersion!!,
+			webhookSecretRotatedAt = webhookSecretRotatedAt?.toUtcInstant(),
 			updatedAt = updatedAt!!.toUtcInstant(),
 		)
 }

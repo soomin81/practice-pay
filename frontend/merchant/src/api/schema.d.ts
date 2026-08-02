@@ -404,6 +404,15 @@ export interface components {
             /** @description 발급 응답에서 받은 초대 Token 원문 */
             invitationToken: string;
         };
+        /** ResendInvitationResponse */
+        ResendInvitationResponse: {
+            /** @description 새 초대의 만료 시각(UTC) */
+            invitationExpiresAt: string;
+            /** @description 대상 가맹점 사용자 식별자 */
+            merchantUserId: string;
+            /** @description 새 초대 Token 원문. 최초 1회만 노출된다. */
+            invitationToken: string;
+        };
         /** ChangeMerchantUserRoleResponse */
         ChangeMerchantUserRoleResponse: {
             /** @description 변경 후 역할 */
@@ -423,15 +432,6 @@ export interface components {
             userName: string;
             /** @description 가맹점 내에서 유일한 이메일 */
             email: string;
-        };
-        /** ResendInvitationResponse */
-        ResendInvitationResponse: {
-            /** @description 새 초대의 만료 시각(UTC) */
-            invitationExpiresAt: string;
-            /** @description 대상 가맹점 사용자 식별자 */
-            merchantUserId: string;
-            /** @description 새 초대 Token 원문. 최초 1회만 노출된다. */
-            invitationToken: string;
         };
         /** UpdateMerchantWebhookUrlRequest */
         UpdateMerchantWebhookUrlRequest: {
@@ -480,7 +480,7 @@ export interface components {
             /** @description 필터 전체에 걸린 건수(현재 페이지 건수가 아니다) */
             totalCount: number;
         };
-        "merchant-merchant-users-merchantUserId-invitation-revoke-33084672": Record<string, never>;
+        "merchant-merchant-users-merchantUserId-suspend-33084672": Record<string, never>;
         /** MerchantMeResponse */
         MerchantMeResponse: {
             /** @description OWNER | ADMIN | VIEWER */
@@ -542,15 +542,6 @@ export interface components {
                 /** @description INVITED | ACTIVE | LOCKED | SUSPENDED | TERMINATED */
                 status: string;
             }[];
-        };
-        /** MerchantWebhookSettingsResponse */
-        MerchantWebhookSettingsResponse: {
-            /** @description 서명 비밀의 세대. 교체할 때마다 1씩 증가한다. */
-            secretVersion: number;
-            /** @description 서명 비밀(`whsec_` 접두사). 이 값으로 X-PracticePay-Signature를 검증한다. */
-            signingSecret: string;
-            /** @description Webhook 수신 URL. 설정하지 않았으면 null. */
-            webhookUrl?: string | null;
         };
         /** ChangeMerchantUserStatusResponse */
         ChangeMerchantUserStatusResponse: {
@@ -823,6 +814,19 @@ export interface components {
             /** @description 가맹점 내 로그인 아이디 */
             loginId: string;
         };
+        /** MerchantWebhookSettingsResponse */
+        MerchantWebhookSettingsResponse: {
+            /** @description 겹침 기간 동안만 값이 있는 **직전 비밀**. 그동안은 두 비밀 모두 통한다. 겹침이 끝나면 null. */
+            previousSecret?: string | null;
+            /** @description 서명 비밀의 세대. 교체할 때마다 1씩 증가한다. */
+            secretVersion: number;
+            /** @description 서명 비밀(`whsec_` 접두사). 이 값으로 X-PracticePay-Signature를 검증한다. */
+            signingSecret: string;
+            /** @description 직전 비밀이 무효가 되는 시각(UTC). previousSecret과 함께 있거나 함께 없다. */
+            previousSecretValidUntil?: string | null;
+            /** @description Webhook 수신 URL. 설정하지 않았으면 null. */
+            webhookUrl?: string | null;
+        };
         /** ChangeMerchantUserRoleRequest */
         ChangeMerchantUserRoleRequest: {
             /** @description 변경할 역할. ADMIN | VIEWER (OWNER 불가) */
@@ -914,7 +918,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-invitation-revoke-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-suspend-33084672"];
             };
         };
         responses: {
@@ -1111,7 +1115,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-invitation-revoke-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-suspend-33084672"];
             };
         };
         responses: {
@@ -1157,7 +1161,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-invitation-revoke-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-suspend-33084672"];
             };
         };
         responses: {
@@ -1184,7 +1188,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-invitation-revoke-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-suspend-33084672"];
             };
         };
         responses: {
@@ -1238,7 +1242,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-invitation-revoke-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-suspend-33084672"];
             };
         };
         responses: {
@@ -1265,7 +1269,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-invitation-revoke-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-suspend-33084672"];
             };
         };
         responses: {
@@ -1292,7 +1296,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-invitation-revoke-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-suspend-33084672"];
             };
         };
         responses: {
@@ -1319,7 +1323,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-invitation-revoke-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-suspend-33084672"];
             };
         };
         responses: {

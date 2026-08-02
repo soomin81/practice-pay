@@ -59,7 +59,7 @@ class HmacWebhookSignerTest :
 		 * (`docs/architecture/webhook-api.md`).
 		 */
 		test("the signature header carries the unix timestamp and a v1 hex signature") {
-			val header = signer().signatureHeaderValue(MERCHANT, 1, "{\"a\":1}", SIGNED_AT)
+			val header = signer().signatureHeaderValue(MERCHANT, listOf(1), "{\"a\":1}", SIGNED_AT)
 
 			header shouldStartWith "t=${SIGNED_AT.epochSecond},v1="
 			// SHA-256을 HEX로 적으면 언제나 64자다 — 길이가 흔들리면 알고리즘이나
@@ -76,7 +76,7 @@ class HmacWebhookSignerTest :
 		 */
 		test("the signature matches what a merchant recomputes from the documented recipe") {
 			val payload = "{\"paymentId\":\"pay_001\"}"
-			val header = signer().signatureHeaderValue(MERCHANT, 1, payload, SIGNED_AT)
+			val header = signer().signatureHeaderValue(MERCHANT, listOf(1), payload, SIGNED_AT)
 
 			val timestamp = header.substringAfter("t=").substringBefore(",")
 			val secret = signer().deriveSecret(MERCHANT, 1)
@@ -88,9 +88,52 @@ class HmacWebhookSignerTest :
 		}
 
 		test("the same payload signed at a different time produces a different signature") {
-			val a = signer().signatureHeaderValue(MERCHANT, 1, "{}", SIGNED_AT)
-			val b = signer().signatureHeaderValue(MERCHANT, 1, "{}", SIGNED_AT.plusSeconds(1))
+			val a = signer().signatureHeaderValue(MERCHANT, listOf(1), "{}", SIGNED_AT)
+			val b = signer().signatureHeaderValue(MERCHANT, listOf(1), "{}", SIGNED_AT.plusSeconds(1))
 
 			a.substringAfter("v1=") shouldNotBe b.substringAfter("v1=")
 		}
+
+		/**
+		 * **겹침 기간의 핵심이다** — 세대를 둘 넘기면 서명도 둘 실려야 하고, 각각 그
+		 * 세대의 비밀로 검증돼야 한다. 하나만 실리면 가맹점은 새 비밀을 반영하기 전까지
+		 * Webhook을 놓친다.
+		 */
+		test("two secret versions produce two v1 signatures that each verify with their own secret") {
+			val payload = "{\"paymentId\":\"pay_001\"}"
+
+			val header = signer().signatureHeaderValue(MERCHANT, listOf(2, 1), payload, SIGNED_AT)
+
+			val timestamp = header.substringAfter("t=").substringBefore(",")
+			val signatures = header.split(",").filter { it.startsWith("v1=") }.map { it.removePrefix("v1=") }
+			signatures.size shouldBe 2
+			signatures[0] shouldBe hmacHex(signer().deriveSecret(MERCHANT, 2), "$timestamp.$payload")
+			signatures[1] shouldBe hmacHex(signer().deriveSecret(MERCHANT, 1), "$timestamp.$payload")
+			// 서로 다른 비밀이므로 두 서명도 달라야 한다 — 같다면 세대를 안 쓴 것이다.
+			signatures[0] shouldNotBe signatures[1]
+		}
+
+		/** 타임스탬프는 **한 번만** 실린다 — 서명이 둘이어도 서명 대상 시각은 하나다. */
+		test("the timestamp appears once no matter how many signatures are carried") {
+			val header = signer().signatureHeaderValue(MERCHANT, listOf(2, 1), "{}", SIGNED_AT)
+
+			header.split(",").count { it.startsWith("t=") } shouldBe 1
+			header shouldStartWith "t=${SIGNED_AT.epochSecond},"
+		}
+
+		/** 서명할 비밀이 하나도 없으면 호출 자체가 잘못이다 — 서명 없는 요청이 나가면 안 된다. */
+		test("signing with no secret version at all is rejected") {
+			shouldThrow<IllegalArgumentException> {
+				signer().signatureHeaderValue(MERCHANT, emptyList(), "{}", SIGNED_AT)
+			}
+		}
 	})
+
+private fun hmacHex(
+	secret: String,
+	message: String,
+): String {
+	val mac = Mac.getInstance("HmacSHA256")
+	mac.init(SecretKeySpec(secret.toByteArray(Charsets.UTF_8), "HmacSHA256"))
+	return HexFormat.of().formatHex(mac.doFinal(message.toByteArray(Charsets.UTF_8)))
+}

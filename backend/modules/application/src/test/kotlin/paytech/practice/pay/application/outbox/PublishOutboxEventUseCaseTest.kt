@@ -34,6 +34,7 @@ import paytech.practice.pay.domain.webhook.WebhookDelivery
 import paytech.practice.pay.domain.webhook.WebhookDeliveryId
 import paytech.practice.pay.domain.webhook.WebhookDeliveryStatus
 import java.time.Clock
+import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
 
@@ -105,10 +106,38 @@ private class FakeWebhookSigner : WebhookSigner {
 
 	override fun signatureHeaderValue(
 		merchantId: MerchantId,
-		secretVersion: Int,
+		secretVersions: List<Int>,
 		payload: String,
 		signedAt: Instant,
-	): String = "t=${signedAt.epochSecond},v1=${merchantId.value}:$secretVersion:${payload.length}"
+	): String =
+		// 세대마다 v1을 하나씩 — 실제 구현과 같은 모양이라 "몇 개가 실렸나"를 단언할 수 있다.
+		"t=${signedAt.epochSecond}," + secretVersions.joinToString(",") { "v1=${merchantId.value}:$it:${payload.length}" }
+}
+
+/** 페이로드 길이는 가짜 서명의 재료라 상수로 둔다 — 단언마다 다시 계산하면 읽기 어렵다. */
+private val PAYLOAD_LENGTH = newOutboxEvent().payload.length
+
+/**
+ * [merchant]를 대상으로 한 번 발행하고, 전송에 실려 나간 **서명 헤더 값**만 모아 돌려준다.
+ * 서명을 확인하는 테스트 셋이 같은 배선을 반복하지 않게 한다.
+ */
+private fun signaturesFromPublishing(merchant: Merchant): List<String> {
+	val outboxEventRepository = mockk<OutboxEventRepository>(relaxed = true)
+	val webhookDeliveryRepository = mockk<WebhookDeliveryRepository>(relaxed = true)
+	val paymentRepository = mockk<PaymentRepository>()
+	val merchantRepository = mockk<MerchantRepository>()
+	val webhookSender = mockk<WebhookSender>()
+	every { outboxEventRepository.findById(EVENT_ID) } returns newOutboxEvent()
+	every { paymentRepository.findById(PAYMENT_ID) } returns newPayment()
+	every { merchantRepository.findById(MERCHANT_ID) } returns merchant
+	every { webhookDeliveryRepository.findByEventIdAndMerchantId(EVENT_ID, MERCHANT_ID) } returns null
+	val signatures = mutableListOf<String>()
+	every { webhookSender.send(WEBHOOK_URL, any(), capture(signatures)) } returns WebhookSendResult.Responded(200)
+
+	newUseCase(outboxEventRepository, webhookDeliveryRepository, paymentRepository, merchantRepository, webhookSender)
+		.execute(PublishOutboxEventCommand(EVENT_ID))
+
+	return signatures
 }
 
 private fun newUseCase(
@@ -179,26 +208,38 @@ class PublishOutboxEventUseCaseTest :
 		 * 수 있다. 그래서 "전송에 서명이 실려 나간다"를 회귀로 고정한다.
 		 */
 		test("the outgoing webhook carries a signature derived from the merchant's secret version") {
-			val outboxEventRepository = mockk<OutboxEventRepository>(relaxed = true)
-			val webhookDeliveryRepository = mockk<WebhookDeliveryRepository>(relaxed = true)
-			val paymentRepository = mockk<PaymentRepository>()
-			val merchantRepository = mockk<MerchantRepository>()
-			val webhookSender = mockk<WebhookSender>()
-			val rotatedMerchant =
-				newMerchant(webhookUrl = WEBHOOK_URL).apply { rotateWebhookSecret(NOW) }
-			every { outboxEventRepository.findById(EVENT_ID) } returns newOutboxEvent()
-			every { paymentRepository.findById(PAYMENT_ID) } returns newPayment()
-			every { merchantRepository.findById(MERCHANT_ID) } returns rotatedMerchant
-			every { webhookDeliveryRepository.findByEventIdAndMerchantId(EVENT_ID, MERCHANT_ID) } returns null
-			val signatures = mutableListOf<String>()
-			every { webhookSender.send(WEBHOOK_URL, any(), capture(signatures)) } returns WebhookSendResult.Responded(200)
+			val signatures = signaturesFromPublishing(newMerchant(webhookUrl = WEBHOOK_URL))
 
-			newUseCase(outboxEventRepository, webhookDeliveryRepository, paymentRepository, merchantRepository, webhookSender)
-				.execute(PublishOutboxEventCommand(EVENT_ID))
+			signatures.single() shouldBe "t=${NOW.epochSecond},v1=${MERCHANT_ID.value}:1:${PAYLOAD_LENGTH}"
+		}
 
-			// 교체된 세대(2)가 서명에 반영돼야 한다 — 반영되지 않으면 교체가 아무것도
-			// 무효화하지 못한다.
-			signatures.single() shouldBe "t=${NOW.epochSecond},v1=${MERCHANT_ID.value}:2:${newOutboxEvent().payload.length}"
+		/**
+		 * **겹침 기간의 목적이 이 테스트다.** 교체 직후에는 새 비밀과 직전 비밀로 각각
+		 * 서명해 둘 다 실어야, 가맹점이 새 비밀을 자기 서버에 반영하는 동안에도 Webhook을
+		 * 놓치지 않는다. 하나만 실리면 그 사이의 이벤트가 전부 거부된다.
+		 */
+		test("a webhook sent right after rotation carries both the new and the previous signature") {
+			val rotated = newMerchant(webhookUrl = WEBHOOK_URL).apply { rotateWebhookSecret(NOW) }
+
+			val signatures = signaturesFromPublishing(rotated)
+
+			signatures.single() shouldBe
+				"t=${NOW.epochSecond}," +
+				"v1=${MERCHANT_ID.value}:2:$PAYLOAD_LENGTH," +
+				"v1=${MERCHANT_ID.value}:1:$PAYLOAD_LENGTH"
+		}
+
+		/**
+		 * 겹침이 지나면 **직전 서명이 빠진다** — 그러지 않으면 노출됐을지 모르는 옛 비밀이
+		 * 영원히 유효해서 교체가 아무것도 회수하지 못한다.
+		 */
+		test("once the overlap has passed only the current signature is carried") {
+			// 발행 시각(NOW)보다 훨씬 앞서 교체된 가맹점 — 겹침이 이미 끝났다.
+			val longAgo = newMerchant(webhookUrl = WEBHOOK_URL).apply { rotateWebhookSecret(NOW.minus(Duration.ofDays(7))) }
+
+			val signatures = signaturesFromPublishing(longAgo)
+
+			signatures.single() shouldBe "t=${NOW.epochSecond},v1=${MERCHANT_ID.value}:2:$PAYLOAD_LENGTH"
 		}
 
 		test("a non-2xx webhook response below the attempt limit schedules a retry on both aggregates") {

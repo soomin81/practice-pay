@@ -1,5 +1,6 @@
 package paytech.practice.pay.application.outbox
 
+import paytech.practice.pay.application.merchant.WebhookSignaturePolicy
 import paytech.practice.pay.application.port.outbound.IdGenerator
 import paytech.practice.pay.application.port.outbound.MerchantRepository
 import paytech.practice.pay.application.port.outbound.OutboxEventRepository
@@ -108,10 +109,13 @@ class PublishOutboxEventUseCase(
 		// 서명은 전송 직전에 만든다 — 헤더에 실리는 `t`가 "이 요청을 보낸 시각"이어야
 		// 가맹점이 재전송 여부를 판단할 수 있다. 재시도할 때마다 새 서명이 나가는 것도
 		// 같은 이유로 의도한 동작이다(옛 `t`를 재사용하면 재시도가 오래된 요청으로 보인다).
+		//
+		// 비밀을 방금 교체했다면 세대가 둘 나오고, 서명도 둘 실린다 — 가맹점이 새 비밀을
+		// 자기 서버에 반영하는 동안 Webhook을 놓치지 않게 하려는 것이다.
 		val signatureHeaderValue =
 			webhookSigner.signatureHeaderValue(
 				merchantId = merchant.id,
-				secretVersion = merchant.webhookSecretVersion,
+				secretVersions = merchant.activeWebhookSecretVersions(now, WebhookSignaturePolicy.SECRET_OVERLAP),
 				payload = outboxEvent.payload,
 				signedAt = now,
 			)

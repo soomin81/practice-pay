@@ -62,5 +62,7 @@ class MerchantWebhookController(
 			webhookUrl = webhookUrl,
 			signingSecret = signingSecret,
 			secretVersion = secretVersion,
+			previousSecret = previousSecret,
+			previousSecretValidUntil = previousSecretValidUntil,
 		)
 }

@@ -32,7 +32,7 @@ import java.time.Instant
  * ## 서명 형식
  *
  * ```
- * X-PracticePay-Signature: t=1754092800,v1=9f86d081884c7d65...
+ * X-PracticePay-Signature: t=1754092800,v1=9f86d081884c7d65...,v1=3ba3edfd7a7b12b2...
  * ```
  *
  * 서명 대상은 본문만이 아니라 **`"{t}.{본문}"`**이다. 타임스탬프를 서명 안에 넣지
@@ -40,8 +40,14 @@ import java.time.Instant
  * 본문만 서명하면 그 서명은 영원히 유효하기 때문이다. `t`를 함께 서명해 두면
  * 가맹점은 "서명이 맞고 **동시에** `t`가 충분히 최근인가"로 판단할 수 있다.
  *
- * `v1=`은 형식 버전이다. 나중에 알고리즘을 바꿔야 할 때 `v2`를 **함께** 실어 보내
- * 가맹점이 옮겨갈 시간을 벌기 위한 자리다(지금은 `v1` 하나만 보낸다).
+ * **`v1`이 여러 개일 수 있다.** 비밀을 교체하면 겹침 기간 동안 새 비밀과 직전 비밀로
+ * 각각 서명해 둘 다 싣는다 — 가맹점은 **하나라도 맞으면** 받아들이면 된다. 그래야
+ * 새 비밀을 자기 서버에 반영하는 동안에도 Webhook을 놓치지 않는다. 그러니 파싱할 때
+ * `v1`을 **하나로 가정하지 않는다.**
+ *
+ * `v1=`은 형식 버전이기도 하다. 나중에 알고리즘을 바꿔야 할 때 `v2`를 **함께** 실어
+ * 보내 가맹점이 옮겨갈 시간을 벌 수 있다(지금은 `v1`만 쓴다) — 그때도 **모르는 항목은
+ * 무시**하면 된다.
  *
  * 전체 계약과 가맹점 측 검증 방법은 `docs/architecture/webhook-api.md`에 있다.
  */
@@ -60,7 +66,11 @@ interface WebhookSigner {
 
 	/**
 	 * [payload]에 대한 `X-PracticePay-Signature` **헤더 값 전체**를 만든다
-	 * (`t=...,v1=...`).
+	 * (`t=...,v1=...[,v1=...]`).
+	 *
+	 * [secretVersions]에 담긴 **세대마다 서명을 하나씩** 만들어 순서대로 싣는다 —
+	 * 겹침 기간에는 `[현재, 직전]` 두 개가 온다(`Merchant.activeWebhookSecretVersions`).
+	 * 비어 있으면 서명할 비밀이 없다는 뜻이라 호출 자체가 잘못이다.
 	 *
 	 * 헤더 이름이 아니라 값을 돌려주는 이유는, 헤더 이름이 전송 수단이 아니라
 	 * **가맹점과의 계약**이라 애플리케이션 계층([WEBHOOK_SIGNATURE_HEADER])에
@@ -68,7 +78,7 @@ interface WebhookSigner {
 	 */
 	fun signatureHeaderValue(
 		merchantId: MerchantId,
-		secretVersion: Int,
+		secretVersions: List<Int>,
 		payload: String,
 		signedAt: Instant,
 	): String
