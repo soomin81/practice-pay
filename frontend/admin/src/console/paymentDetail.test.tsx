@@ -55,6 +55,7 @@ function detail(overrides: Record<string, unknown> = {}): PaymentDetailResponse 
 			expiresAt: '2026-08-01T04:30:00Z',
 		},
 		blockchainTransaction: {
+			blockchainTransactionId: 'btx_001',
 			transactionHash: '0x40a0473b2bbd7c9b63b0e11fca3141b9b0ab046b749dba71d413ece12f208e90',
 			status: 'CONFIRMED',
 			blockNumber: 44910246,
@@ -268,3 +269,101 @@ function failedDelivery() {
 		createdAt: '2026-08-01T04:00:01Z',
 	}
 }
+
+describe('확정 이후 체인 재구성 표시', () => {
+	/**
+	 * **확정 전에는 사람이 끼어들 이유가 없다** — 자동 폴링이 유예를 두고 판단한다.
+	 * 버튼을 그리면 서버가 409로 거절할 동작을 누르게 만든다.
+	 */
+	it('확정되지 않은 거래에는 버튼을 그리지 않는다', async () => {
+		stubFetch(detail({ blockchainTransaction: { ...detail().blockchainTransaction, status: 'CONFIRMING' } }))
+		renderDetail()
+
+		expect(await screen.findByText('확인 중')).toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: '체인 재구성으로 표시' })).not.toBeInTheDocument()
+	})
+
+	it('확정된 거래에는 버튼을 그린다', async () => {
+		stubFetch(detail())
+		renderDetail()
+
+		expect(await screen.findByRole('button', { name: '체인 재구성으로 표시' })).toBeInTheDocument()
+	})
+
+	/**
+	 * **되돌릴 수 없고 가맹점에게 지급될 돈을 막는 동작이다.** 확인 절차 없이 실행되면 안 되고,
+	 * 확인 문구가 "결제와 환전은 바꾸지 않는다"는 사실을 알려야 한다.
+	 */
+	it('확인 절차 없이는 표시하지 않고, 무엇이 바뀌는지 알려준다', async () => {
+		const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => detail() })
+		vi.stubGlobal('fetch', fetchMock)
+		renderDetail()
+
+		await userEvent.click(await screen.findByRole('button', { name: '체인 재구성으로 표시' }))
+
+		expect(screen.getByText('되돌릴 수 없습니다')).toBeInTheDocument()
+		expect(screen.getByText(/결제와 환전 상태는 바꾸지 않습니다/)).toBeInTheDocument()
+		expect(fetchMock.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === 'POST')).toBe(false)
+	})
+
+	it('확인하면 거래 식별자로 요청한다', async () => {
+		const fetchMock = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+			if (init?.method === 'POST') {
+				return Promise.resolve({
+					ok: true,
+					status: 200,
+					json: async () => ({ blockchainTransactionId: 'btx_001', paymentId: 'pay_001', settlementHeld: true }),
+				})
+			}
+			return Promise.resolve({ ok: true, status: 200, json: async () => detail() })
+		})
+		vi.stubGlobal('fetch', fetchMock)
+		renderDetail()
+
+		await userEvent.click(await screen.findByRole('button', { name: '체인 재구성으로 표시' }))
+		await userEvent.click(screen.getByRole('button', { name: '표시합니다' }))
+
+		await vi.waitFor(() => {
+			const posted = fetchMock.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === 'POST')
+			expect(String(posted?.[0])).toContain('/admin/blockchain-transactions/btx_001/mark-reorged')
+		})
+	})
+
+	/**
+	 * **막지 못한 쪽이 오히려 위험하다** — 채권이 아직 없다는 뜻이고, 매도 Worker가 이 결제를
+	 * 집어 채권을 만들 수 있다. 조용히 넘어가면 지급이 그대로 나간다.
+	 */
+	it('막을 정산 채권이 없었으면 경고한다', async () => {
+		const fetchMock = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+			if (init?.method === 'POST') {
+				return Promise.resolve({
+					ok: true,
+					status: 200,
+					json: async () => ({ blockchainTransactionId: 'btx_001', paymentId: 'pay_001', settlementHeld: false }),
+				})
+			}
+			return Promise.resolve({ ok: true, status: 200, json: async () => detail() })
+		})
+		vi.stubGlobal('fetch', fetchMock)
+		renderDetail()
+
+		await userEvent.click(await screen.findByRole('button', { name: '체인 재구성으로 표시' }))
+		await userEvent.click(screen.getByRole('button', { name: '표시합니다' }))
+
+		expect(await screen.findByText(/막을 정산 채권이 아직 없습니다/)).toBeInTheDocument()
+	})
+
+	/**
+	 * 표시된 뒤에는 **결제가 여전히 "결제 완료"라는 사실**이 오해를 부른다 — 화면이 그 뜻을
+	 * 직접 적어야 한다.
+	 */
+	it('이미 표시된 거래에는 무슨 뜻인지 적는다', async () => {
+		stubFetch(detail({ blockchainTransaction: { ...detail().blockchainTransaction, status: 'REORGED' } }))
+		renderDetail()
+
+		expect(await screen.findByText('이 입금은 체인에서 사라졌습니다')).toBeInTheDocument()
+		// 결제는 그대로 "결제 완료"다 — 의도된 동작이라 함께 확인한다.
+		expect(screen.getByText('결제 완료')).toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: '체인 재구성으로 표시' })).not.toBeInTheDocument()
+	})
+})

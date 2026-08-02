@@ -1,8 +1,9 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { AdminApiError } from '@/api/client'
-import { usePaymentDetail, useRedeliverWebhook } from '@/console/usePaymentDetail'
+import { useMarkTransactionReorged, usePaymentDetail, useRedeliverWebhook } from '@/console/usePaymentDetail'
 import { formatDateTime, formatKrw, formatTokenAmount } from '@/console/format'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/console/PageHeader'
 import { Panel } from '@/components/console/Panel'
@@ -23,6 +24,7 @@ export function PaymentDetailPage() {
 	const { paymentId = '' } = useParams()
 	const detail = usePaymentDetail(paymentId)
 	const redeliver = useRedeliverWebhook(paymentId)
+	const markReorged = useMarkTransactionReorged(paymentId)
 
 	if (detail.isPending) return <p className="text-sm text-muted-foreground">불러오는 중…</p>
 
@@ -116,6 +118,29 @@ export function PaymentDetailPage() {
 						<Field label="받은 주소" mono>
 							{blockchainTransaction.toAddress ?? '—'}
 						</Field>
+
+						{/* **확정된 거래에만 나온다.** 확정 전이면 자동 폴링이 유예를 두고 판단하므로
+						    사람이 끼어들 이유가 없다(서버도 409로 거절한다). */}
+						{blockchainTransaction.status === 'CONFIRMED' ? (
+							<div className="sm:col-span-2">
+								<ReorgAction
+									blockchainTransactionId={blockchainTransaction.blockchainTransactionId}
+									markReorged={markReorged}
+								/>
+							</div>
+						) : null}
+
+						{/* 이미 표시된 뒤에는 **무슨 뜻인지**를 적는다 — 결제가 여전히 "결제 완료"라
+						    목록만 보면 정상으로 보이기 때문이다. */}
+						{blockchainTransaction.status === 'REORGED' ? (
+							<Alert variant="destructive" className="sm:col-span-2">
+								<AlertTitle>이 입금은 체인에서 사라졌습니다</AlertTitle>
+								<AlertDescription>
+									결제와 환전은 <strong>그때 실제로 일어난 일이라 그대로 둡니다.</strong> 실제 손실은 아래 정산이{' '}
+									<strong>보류</strong> 상태인지로 막힙니다 — 보류가 아니라면 지급이 나갈 수 있으니 확인하세요.
+								</AlertDescription>
+							</Alert>
+						) : null}
 					</>
 				) : (
 					<NotYet>고객이 아직 거래 Hash를 제출하지 않았습니다.</NotYet>
@@ -263,4 +288,70 @@ function errorMessage(error: unknown): string {
  */
 function redeliverErrorMessage(error: unknown): string {
 	return error instanceof AdminApiError ? error.message : '재전송을 예약하지 못했습니다.'
+}
+
+/**
+ * 확정 이후 체인 재구성 표시. **되돌릴 수 없고 가맹점에게 지급될 돈을 막는 동작**이라
+ * 확인 절차 뒤에 둔다(`SUPER_ADMIN`이 아니면 서버가 403으로 막는다).
+ */
+function ReorgAction({
+	blockchainTransactionId,
+	markReorged,
+}: {
+	blockchainTransactionId: string
+	markReorged: ReturnType<typeof useMarkTransactionReorged>
+}) {
+	const [confirming, setConfirming] = useState(false)
+
+	if (!confirming) {
+		return (
+			<div className="flex flex-col gap-2">
+				<Button size="sm" variant="outline" onClick={() => setConfirming(true)}>
+					체인 재구성으로 표시
+				</Button>
+				{markReorged.error ? (
+					<p className="text-sm text-destructive">{reorgErrorMessage(markReorged.error)}</p>
+				) : null}
+				{/* **막지 못한 쪽이 오히려 위험하다** — 채권이 아직 없다는 뜻이고, 매도 Worker가
+				    이 결제를 집어 채권을 만들 수 있다. */}
+				{markReorged.data?.settlementHeld === false ? (
+					<p className="text-sm text-destructive">
+						표시했지만 <strong>막을 정산 채권이 아직 없습니다.</strong> 곧 만들어질 수 있으니 정산 화면에서 확인하고
+						직접 보류하세요.
+					</p>
+				) : null}
+			</div>
+		)
+	}
+
+	return (
+		<Alert variant="destructive" className="flex flex-col gap-3">
+			<AlertTitle>되돌릴 수 없습니다</AlertTitle>
+			<AlertDescription>
+				이 거래를 <strong>체인 재구성</strong>으로 표시하고 딸린 정산 채권을 <strong>보류</strong>합니다 — 가맹점에게
+				지급이 나가지 않습니다. <strong>결제와 환전 상태는 바꾸지 않습니다</strong>(그때 실제로 일어난 일이라
+				기록으로 남깁니다). 탐색기에서 이 거래가 정말 사라졌는지 먼저 확인하세요.
+			</AlertDescription>
+			<div className="flex items-center gap-2">
+				<Button
+					size="sm"
+					variant="destructive"
+					disabled={markReorged.isPending}
+					onClick={() => {
+						markReorged.mutate(blockchainTransactionId, { onSuccess: () => setConfirming(false) })
+					}}
+				>
+					{markReorged.isPending ? '표시 중…' : '표시합니다'}
+				</Button>
+				<Button size="sm" variant="outline" onClick={() => setConfirming(false)}>
+					취소
+				</Button>
+			</div>
+		</Alert>
+	)
+}
+
+/** `409`는 "왜 안 되는지"를 담고 있다 — 그대로 보여주지 않으면 같은 버튼을 계속 누른다. */
+function reorgErrorMessage(error: unknown): string {
+	return error instanceof AdminApiError ? error.message : '체인 재구성으로 표시하지 못했습니다.'
 }

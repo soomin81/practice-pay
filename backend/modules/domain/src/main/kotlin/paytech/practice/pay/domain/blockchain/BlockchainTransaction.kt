@@ -150,11 +150,8 @@ class BlockchainTransaction private constructor(
 	 * 체인 재구성(reorg)으로 사라졌다.
 	 *
 	 * **`SUBMITTED`에서는 전이할 수 없다** — 아직 한 번도 블록에서 본 적이 없으므로
-	 * "사라졌다"가 성립하지 않는다(그냥 미채굴이다). **`CONFIRMED`에서도 전이할 수
-	 * 없다** — 그 시점에는 `Payment`가 이미 `SUCCEEDED`이고 환전·정산채권까지 만들어져
-	 * 있어서, 되돌리려면 이 애그리게이트 하나가 아니라 그 뒤의 개념들을 함께 뒤집는
-	 * 보상 흐름이 필요하다. 그 설계는 MVP 범위 밖이다
-	 * (`docs/decisions/ADR-007-onchain-irreversibility.md`).
+	 * "사라졌다"가 성립하지 않는다(그냥 미채굴이다). **`CONFIRMED`에서도 이 메서드로는
+	 * 전이할 수 없다** — 확정 이후는 사람이 판단하는 별도의 길이다([markReorgedAfterConfirmation]).
 	 */
 	fun markReorged(reorgedAt: Instant) {
 		checkTransition(
@@ -162,6 +159,29 @@ class BlockchainTransaction private constructor(
 				status == BlockchainTransactionStatus.CONFIRMING,
 			BlockchainTransactionStatus.REORGED,
 		)
+		status = BlockchainTransactionStatus.REORGED
+		updatedAt = reorgedAt
+	}
+
+	/**
+	 * `CONFIRMED` → `REORGED`. **내부 운영자가 명시적으로 실행할 때만** 호출한다.
+	 *
+	 * [markReorged]와 메서드를 나눈 이유는 **자동 경로가 이 전이에 절대 닿지 않게** 하기
+	 * 위해서다. 확정된 거래가 조회에서 잠깐 사라지는 일은 노드가 뒤처졌을 때도 생기는데,
+	 * Confirm 폴링이 그걸 reorg로 판정해 버리면 멀쩡한 결제의 정산이 막힌다. 확정 이후의
+	 * 판단은 사람이 탐색기로 확인한 뒤에만 내려야 한다.
+	 *
+	 * **이 전이만으로는 아무 돈도 막지 못한다** — 그 시점에는 이미 `Payment = SUCCEEDED`,
+	 * `ExchangeOrder = COMPLETED`, `SettlementReceivable = READY`다. 실제 손실을 막는 것은
+	 * 딸린 정산 채권을 `HELD`로 돌리는 쪽이고, 둘은 **반드시 함께** 일어나야 한다
+	 * (`MarkTransactionReorgedUseCase`).
+	 *
+	 * **`Payment`와 `ExchangeOrder`는 되돌리지 않는다** — 그때 실제로 일어난 일이기 때문이다.
+	 * 근거와 그 대가는 `docs/decisions/ADR-007-onchain-irreversibility.md`의 "확정 이후의
+	 * `REORGED`" 절에 있다.
+	 */
+	fun markReorgedAfterConfirmation(reorgedAt: Instant) {
+		checkTransition(status == BlockchainTransactionStatus.CONFIRMED, BlockchainTransactionStatus.REORGED)
 		status = BlockchainTransactionStatus.REORGED
 		updatedAt = reorgedAt
 	}

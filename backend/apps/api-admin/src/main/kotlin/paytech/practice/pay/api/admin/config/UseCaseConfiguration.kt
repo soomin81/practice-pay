@@ -18,7 +18,9 @@ import paytech.practice.pay.application.merchant.ListMerchantsUseCase
 import paytech.practice.pay.application.payment.ExportPaymentsUseCase
 import paytech.practice.pay.application.payment.GetPaymentDetailUseCase
 import paytech.practice.pay.application.payment.ListPaymentsUseCase
+import paytech.practice.pay.application.payment.MarkTransactionReorgedUseCase
 import paytech.practice.pay.application.port.outbound.AccountInvitationRepository
+import paytech.practice.pay.application.port.outbound.BlockchainTransactionRepository
 import paytech.practice.pay.application.port.outbound.IdGenerator
 import paytech.practice.pay.application.port.outbound.InternalLoginAuditProjection
 import paytech.practice.pay.application.port.outbound.InternalLoginAuditRepository
@@ -37,6 +39,7 @@ import paytech.practice.pay.application.port.outbound.PaymentExportWriter
 import paytech.practice.pay.application.port.outbound.PaymentListProjection
 import paytech.practice.pay.application.port.outbound.SettlementExportWriter
 import paytech.practice.pay.application.port.outbound.SettlementReceivableListProjection
+import paytech.practice.pay.application.port.outbound.SettlementReceivableRepository
 import paytech.practice.pay.application.port.outbound.TransactionManager
 import paytech.practice.pay.application.port.outbound.WebhookDeliveryRepository
 import paytech.practice.pay.application.settlement.ExportSettlementReceivablesUseCase
@@ -195,6 +198,20 @@ class UseCaseConfiguration {
 		settlementReceivableListProjection: SettlementReceivableListProjection,
 		settlementExportWriter: SettlementExportWriter,
 	): ExportSettlementReceivablesUseCase = ExportSettlementReceivablesUseCase(settlementReceivableListProjection, settlementExportWriter)
+
+	@Bean
+	fun markTransactionReorgedUseCase(
+		blockchainTransactionRepository: BlockchainTransactionRepository,
+		settlementReceivableRepository: SettlementReceivableRepository,
+		transactionManager: TransactionManager,
+		clock: Clock,
+	): MarkTransactionReorgedUseCase =
+		MarkTransactionReorgedUseCase(
+			blockchainTransactionRepository = blockchainTransactionRepository,
+			settlementReceivableRepository = settlementReceivableRepository,
+			transactionManager = transactionManager,
+			clock = clock,
+		)
 
 	@Bean
 	fun redeliverWebhookUseCase(

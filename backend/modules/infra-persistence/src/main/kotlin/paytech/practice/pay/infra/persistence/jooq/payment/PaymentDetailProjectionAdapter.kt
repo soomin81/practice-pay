@@ -157,6 +157,7 @@ class PaymentDetailProjectionAdapter(
 	private fun toBlockchainTransaction(record: Record): PaymentDetailBlockchainTransaction? {
 		val hash = record.get(BLOCKCHAIN_TRANSACTION.TRANSACTION_HASH) ?: return null
 		return PaymentDetailBlockchainTransaction(
+			blockchainTransactionId = record.get(BLOCKCHAIN_TRANSACTION.BLOCKCHAIN_TRANSACTION_ID)!!,
 			transactionHash = TransactionHash(hash),
 			status = BlockchainTransactionStatus.valueOf(record.get(BLOCKCHAIN_TRANSACTION.TRANSACTION_STATUS)!!),
 			blockNumber = record.get(BLOCKCHAIN_TRANSACTION.BLOCK_NUMBER),

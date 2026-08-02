@@ -60,6 +60,8 @@ import paytech.practice.pay.application.payment.ExportPaymentsUseCase
 import paytech.practice.pay.application.payment.GetPaymentDetailUseCase
 import paytech.practice.pay.application.payment.ListPaymentsResult
 import paytech.practice.pay.application.payment.ListPaymentsUseCase
+import paytech.practice.pay.application.payment.MarkTransactionReorgedResult
+import paytech.practice.pay.application.payment.MarkTransactionReorgedUseCase
 import paytech.practice.pay.application.port.outbound.InternalLoginAuditEntry
 import paytech.practice.pay.application.port.outbound.InternalUserSummary
 import paytech.practice.pay.application.port.outbound.MerchantLoginAuditEntry
@@ -72,6 +74,7 @@ import paytech.practice.pay.application.settlement.ListSettlementReceivablesResu
 import paytech.practice.pay.application.settlement.ListSettlementReceivablesUseCase
 import paytech.practice.pay.application.webhook.RedeliverWebhookResult
 import paytech.practice.pay.application.webhook.RedeliverWebhookUseCase
+import paytech.practice.pay.domain.blockchain.BlockchainTransactionId
 import paytech.practice.pay.domain.blockchain.TransactionHash
 import paytech.practice.pay.domain.identity.AccountStatus
 import paytech.practice.pay.domain.identity.Email
@@ -169,6 +172,7 @@ private fun adminResource(
 		AdminPaymentController::class,
 		AdminSettlementReceivableController::class,
 		WebhookDeliveryController::class,
+		BlockchainTransactionController::class,
 		AcceptAccountInvitationController::class,
 	],
 )
@@ -237,6 +241,9 @@ class AdminApiDocumentationTest : FunSpec() {
 
 	@MockkBean
 	lateinit var exportSettlementReceivablesUseCase: ExportSettlementReceivablesUseCase
+
+	@MockkBean
+	lateinit var markTransactionReorgedUseCase: MarkTransactionReorgedUseCase
 
 	init {
 		extensions(SpringExtension)
@@ -1032,6 +1039,44 @@ class AdminApiDocumentationTest : FunSpec() {
 				.perform(get("/admin/settlement-receivables").with(authenticatedAs(VIEWER)))
 				.andExpect(status().isOk)
 				.andDo(document("admin-settlement-receivables", snippet))
+		}
+
+		test("POST /admin/blockchain-transactions/{id}/mark-reorged is documented") {
+			every { markTransactionReorgedUseCase.execute(any()) } returns
+				MarkTransactionReorgedResult(
+					blockchainTransactionId = BlockchainTransactionId("btx_001"),
+					paymentId = PaymentId("pay_001"),
+					settlementHeld = true,
+				)
+
+			mockMvc
+				.perform(
+					RestDocumentationRequestBuilders
+						.post("/admin/blockchain-transactions/{blockchainTransactionId}/mark-reorged", "btx_001")
+						.with(authenticatedAs(SUPER_ADMIN))
+						.with(csrf()),
+				).andExpect(status().isOk)
+				.andDo(
+					document(
+						"admin-mark-transaction-reorged",
+						adminResource(
+							pathParameters = listOf(parameterWithName("blockchainTransactionId").description("확정된 온체인 거래 식별자")),
+							summary = "확정 이후 체인 재구성 표시",
+							description =
+								"**SUPER_ADMIN만** 실행할 수 있다. 거래를 REORGED로, 딸린 정산 채권을 HELD로 바꾼다 — " +
+									"**Payment와 ExchangeOrder는 되돌리지 않는다**(그때 실제로 일어난 일이다). " +
+									"확정되지 않은 거래는 409, 없는 거래는 404.",
+							responseSchema = "MarkTransactionReorgedResponse",
+							responseFields =
+								listOf(
+									fieldWithPath("blockchainTransactionId").description("REORGED로 표시한 거래 식별자"),
+									fieldWithPath("paymentId").description("그 거래가 속한 결제 식별자"),
+									fieldWithPath("settlementHeld")
+										.description("정산 채권을 실제로 막았는지. **false면 아직 채권이 없다는 뜻이고 더 위험하다** — 매도 Worker가 이 결제를 집어 채권을 만들 수 있다."),
+								),
+						),
+					),
+				)
 		}
 
 		test("POST /admin/webhook-deliveries/{id}/redeliver is documented") {

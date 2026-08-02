@@ -64,6 +64,12 @@ data class PaymentDetailCheckoutSessionResponse(
 
 /** 온체인에서 실제로 무슨 일이 있었는지. **결제가 실패해도 이 값은 남는다**(ADR-007). */
 data class PaymentDetailBlockchainTransactionResponse(
+	/**
+	 * 확정 이후 체인 재구성 표시(`POST /admin/blockchain-transactions/{id}/mark-reorged`)에
+	 * 쓰는 식별자다. 사람이 읽을 값은 [transactionHash]이지만 그건 온체인 값이지 우리
+	 * 애그리게이트의 식별자가 아니다.
+	 */
+	val blockchainTransactionId: String,
 	val transactionHash: String,
 	val status: String,
 	val blockNumber: Long?,

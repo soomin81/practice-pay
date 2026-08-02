@@ -108,6 +108,9 @@ class SecurityConfig {
 				// Webhook 재전송은 **상태를 바꾸는 운영 행위**다 — 조회 전용 역할이 누를
 				// 일이 아니다. 이 경로에는 POST만 있어서 메서드로 좁힐 필요가 없다.
 				authorize("/admin/webhook-deliveries/**", hasAnyRole("SUPER_ADMIN", "OPERATOR"))
+				// **여기만 SUPER_ADMIN 전용이다.** 되돌릴 수 없고 가맹점에게 지급될 돈을
+				// 직접 막는 동작이라, 다른 운영 동작보다 한 단계 좁힌다.
+				authorize("/admin/blockchain-transactions/**", hasRole("SUPER_ADMIN"))
 				authorize(anyRequest, authenticated)
 			}
 		}

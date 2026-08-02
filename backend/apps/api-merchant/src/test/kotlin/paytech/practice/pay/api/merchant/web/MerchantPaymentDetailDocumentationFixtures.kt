@@ -75,6 +75,7 @@ internal fun merchantPaymentDetailFixture() =
 			),
 		blockchainTransaction =
 			PaymentDetailBlockchainTransaction(
+				blockchainTransactionId = "btx_001",
 				transactionHash = TransactionHash("0x" + "7f3a".repeat(16)),
 				status = BlockchainTransactionStatus.CONFIRMED,
 				blockNumber = 44_910_246,

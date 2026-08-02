@@ -103,6 +103,7 @@ class FixedClockConfiguration {
 private fun detailView(
 	blockchainTransaction: PaymentDetailBlockchainTransaction? =
 		PaymentDetailBlockchainTransaction(
+			blockchainTransactionId = "btx_001",
 			transactionHash = TransactionHash("0x" + "d".repeat(64)),
 			status = BlockchainTransactionStatus.CONFIRMED,
 			blockNumber = 44_910_246,

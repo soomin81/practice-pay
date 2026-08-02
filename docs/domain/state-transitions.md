@@ -67,6 +67,7 @@ DETECTED 또는 CONFIRMING → REORGED
 |---|---|---|
 | `SUBMITTED` | 아직 채굴되지 않음(정상 대기) | 상태를 바꾸지 않는다 |
 | `DETECTED`, `CONFIRMING` | **블록에서 이미 본 거래가 사라짐** — 체인 재구성(reorg)이나 거래 교체 | 유예 후 `REORGED`, `Payment`는 `TRANSACTION_REORGED`로 `FAILED` |
+| `CONFIRMED` | 확정된 입금이 사라짐(사실상 일어나지 않는다) | **자동으로 판단하지 않는다** — 내부 운영자가 실행하면 `REORGED` + 정산 채권 `HELD`(아래) |
 
 - **즉시 전이하지 않고 유예를 둔다**(MVP 10분). 뒤처진 RPC 노드도 "없음"을 돌려줄 수
   있고 reorg된 거래가 다음 블록에 곧바로 다시 들어가는 것이 오히려 흔한데, `Payment`의
@@ -74,11 +75,27 @@ DETECTED 또는 CONFIRMING → REORGED
 - **`TRANSACTION_REORGED`만은 "돈이 오지 않았다"가 실제로 맞다** — 전송 자체가 체인에서
   없어졌으므로 수취 지갑에 남은 것이 없다([ADR-007](../decisions/ADR-007-onchain-irreversibility.md)의
   자금 위치 분류에서 "고객 지갑" 쪽이다).
-- **`CONFIRMED` 이후의 reorg는 다루지 않는다.** 그 시점에는 `Payment = SUCCEEDED`이고
-  `ExchangeOrder`·`SettlementReceivable`까지 만들어져 있어서, 되돌리려면 애그리게이트
-  하나가 아니라 그 뒤의 개념들을 함께 뒤집는 보상 흐름이 필요하다 — ADR-007이 "확정
-  이후에 사실이 바뀌는 상황"으로 함께 묶어 둔 후속 범위다. 필요 Confirm 수 12가 이
-  구간의 유일한 완화책이다.
+#### `CONFIRMED` 이후의 reorg — 되돌리지 않고 정산을 막는다
+
+```text
+CONFIRMED → REORGED   (내부 운영자가 명시적으로 실행할 때만)
+```
+
+그 시점에는 `Payment = SUCCEEDED`이고 `ExchangeOrder`·`SettlementReceivable`까지 만들어져
+있다. **그것들을 되돌리지 않는다** — 대신 딸린 정산 채권을 `READY → HELD`로 막는다.
+
+- **되돌리지 않는 이유**: 그때 12 Confirm을 확인하고 승인했고, 그 승인에 근거해 매도했다.
+  상태를 뒤늦게 `FAILED`로 바꾸면 그 이력이 사라져 매도가 왜 일어났는지 설명할 수 없게 된다.
+  목적은 "성공을 지우는 것"이 아니라 **돈이 나가지 않게 하는 것**이고, 그건 `HELD`로 달성된다
+  (MVP의 종착점이 `SettlementReceivable = READY`이므로 그 앞을 막으면 손실 경로가 닫힌다).
+- **대가**: 결제 목록에는 여전히 "결제 완료"로 남는다. 진실은 결제 상세가 말한다(온체인 거래
+  `REORGED` + 정산 `HELD`). 자세한 근거와 완화책은
+  [ADR-007](../decisions/ADR-007-onchain-irreversibility.md)의 같은 절에 있다.
+- **자동으로 판단하지 않는다.** 확정된 거래를 계속 재조회하면 RPC 비용만 쌓인다 — 12 Confirm
+  이후의 reorg는 사실상 일어나지 않고(그것이 12를 요구하는 이유다), 드물게 벌어지면 사람이
+  탐색기·알림으로 알게 된다.
+- `Payment`/`ExchangeOrder`의 종료 상태는 **재사용하지 않는다** — 그 예외는 Webhook 재전송
+  하나로 좁게 정해 두었다(아래 "수동 재전송").
 
 ## ExchangeOrder
 
@@ -100,6 +117,7 @@ MVP:
 
 ```text
 PENDING → READY
+(PENDING | READY) → HELD → CANCELLED
 ```
 
 향후:
@@ -107,6 +125,11 @@ PENDING → READY
 ```text
 READY → ASSIGNED → SETTLED
 ```
+
+**`HELD`는 "지급을 막는다"는 뜻이고 `hold_reason_code`에 사유를 남긴다.** MVP에서 실제로
+쓰이는 사유는 확정 이후 reorg다(위 `BlockchainTransaction` 절) — 결제는 성공으로 남지만
+그 돈이 실제로는 없으므로 정산을 막는다. `HELD`는 되돌릴 수 있고(사람이 판단해 다시 풀거나
+`CANCELLED`로 끝낸다) `CANCELLED`가 종료 상태다.
 
 ## WebhookDelivery
 

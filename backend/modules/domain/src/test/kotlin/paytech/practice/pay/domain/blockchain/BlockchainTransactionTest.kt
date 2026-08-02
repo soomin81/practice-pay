@@ -17,6 +17,14 @@ private val RECEIVING_WALLET = WalletAddress("0x" + "b".repeat(40))
 private val CONTRACT = ContractAddress("0x" + "c".repeat(40))
 private val HASH = TransactionHash("0x" + "d".repeat(64))
 
+/** 확정까지 진행된 거래 — 확정 이후 reorg 테스트의 출발점이다. */
+private fun confirmedTransaction(): BlockchainTransaction =
+	newTransaction().apply {
+		detect(1_000L, SUBMITTED_AT.plusSeconds(10))
+		startConfirming(SUBMITTED_AT.plusSeconds(20))
+		confirm(SUBMITTED_AT.plusSeconds(30))
+	}
+
 private fun newTransaction(): BlockchainTransaction =
 	BlockchainTransaction.create(
 		id = BlockchainTransactionId("btx_test_001"),
@@ -200,14 +208,38 @@ class BlockchainTransactionTest :
 			shouldThrow<IllegalStateException> { tx.markReorged(SUBMITTED_AT.plusSeconds(10)) }
 		}
 
-		// CONFIRMED 이후의 reorg는 환전·정산까지 되돌려야 해서 MVP 범위 밖이다(ADR-007).
-		test("markReorged fails once CONFIRMED") {
-			val tx = newTransaction()
-			tx.detect(1_000L, SUBMITTED_AT.plusSeconds(10))
-			tx.startConfirming(SUBMITTED_AT.plusSeconds(20))
-			tx.confirm(SUBMITTED_AT.plusSeconds(30))
+		/**
+		 * **자동 경로가 확정된 거래에 닿으면 안 된다.** 확정된 거래가 조회에서 잠깐
+		 * 사라지는 일은 노드가 뒤처졌을 때도 생기는데, Confirm 폴링이 그걸 reorg로
+		 * 판정하면 멀쩡한 결제의 정산이 막힌다 — 그래서 메서드 자체를 나눴다.
+		 */
+		test("markReorged fails once CONFIRMED so the polling worker can never reach it") {
+			shouldThrow<IllegalStateException> { confirmedTransaction().markReorged(SUBMITTED_AT.plusSeconds(40)) }
+		}
 
-			shouldThrow<IllegalStateException> { tx.markReorged(SUBMITTED_AT.plusSeconds(40)) }
+		/**
+		 * 확정 이후의 reorg는 **사람이 판단해서** 실행하는 별도의 길이다
+		 * (`docs/decisions/ADR-007-onchain-irreversibility.md`의 "확정 이후의 REORGED").
+		 */
+		test("markReorgedAfterConfirmation moves CONFIRMED to REORGED") {
+			val tx = confirmedTransaction()
+			val reorgedAt = SUBMITTED_AT.plusSeconds(40)
+
+			tx.markReorgedAfterConfirmation(reorgedAt)
+
+			tx.status shouldBe BlockchainTransactionStatus.REORGED
+			tx.updatedAt shouldBe reorgedAt
+			// 확정 사실 자체는 지우지 않는다 — 그때 실제로 확정됐었다는 기록이다.
+			tx.confirmedAt shouldBe SUBMITTED_AT.plusSeconds(30)
+		}
+
+		/** 확정 전에는 이 길을 쓸 수 없다 — 그쪽은 자동 경로([markReorged])가 맡는다. */
+		test("markReorgedAfterConfirmation refuses anything that is not CONFIRMED") {
+			val detected = newTransaction()
+			detected.detect(1_000L, SUBMITTED_AT.plusSeconds(10))
+
+			shouldThrow<IllegalStateException> { detected.markReorgedAfterConfirmation(SUBMITTED_AT.plusSeconds(20)) }
+			shouldThrow<IllegalStateException> { newTransaction().markReorgedAfterConfirmation(SUBMITTED_AT.plusSeconds(20)) }
 		}
 
 		test("reconstitute rejects CONFIRMED without confirmedAt") {

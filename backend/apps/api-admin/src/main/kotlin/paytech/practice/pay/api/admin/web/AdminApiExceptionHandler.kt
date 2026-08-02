@@ -17,7 +17,9 @@ import paytech.practice.pay.application.identity.InvalidMerchantUserTransitionEx
 import paytech.practice.pay.application.identity.LastActiveOwnerException
 import paytech.practice.pay.application.identity.LastActiveSuperAdminException
 import paytech.practice.pay.application.identity.MerchantUserNotFoundException
+import paytech.practice.pay.application.payment.BlockchainTransactionNotFoundException
 import paytech.practice.pay.application.payment.PaymentNotFoundException
+import paytech.practice.pay.application.payment.TransactionNotReorgeableException
 import paytech.practice.pay.application.webhook.WebhookDeliveryNotFoundException
 import paytech.practice.pay.application.webhook.WebhookDeliveryNotRedeliverableException
 
@@ -56,6 +58,16 @@ class AdminApiExceptionHandler {
 	@ExceptionHandler(PaymentNotFoundException::class)
 	@ResponseStatus(HttpStatus.NOT_FOUND)
 	fun handlePaymentNotFound(ex: PaymentNotFoundException): ErrorResponse = ErrorResponse(ex.message ?: "결제를 찾을 수 없습니다.")
+
+	@ExceptionHandler(TransactionNotReorgeableException::class)
+	@ResponseStatus(HttpStatus.CONFLICT)
+	fun handleTransactionNotReorgeable(ex: TransactionNotReorgeableException): ErrorResponse =
+		ErrorResponse(ex.message ?: "확정된 거래만 체인 재구성으로 표시할 수 있습니다.")
+
+	@ExceptionHandler(BlockchainTransactionNotFoundException::class)
+	@ResponseStatus(HttpStatus.NOT_FOUND)
+	fun handleBlockchainTransactionNotFound(ex: BlockchainTransactionNotFoundException): ErrorResponse =
+		ErrorResponse(ex.message ?: "온체인 거래를 찾을 수 없습니다.")
 
 	@ExceptionHandler(WebhookDeliveryNotFoundException::class)
 	@ResponseStatus(HttpStatus.NOT_FOUND)

@@ -60,6 +60,7 @@ PG 내부 운영자용 콘솔(브라우저 SPA, `frontend/admin`)이 호출하�
 | `GET /admin/settlement-receivables` | **내부 운영자 전원**(VIEWER 포함) | — | 200 정산 채권(전 가맹점, 정산 예정일 최신순) | 400 잘못된 status, 401 |
 | `GET /admin/settlement-receivables/export` | **내부 운영자 전원**(VIEWER 포함) | — | 200 `.xlsx` 첨부 | 400 잘못된 status, 401 |
 | `POST /admin/webhook-deliveries/{id}/redeliver` | SUPER_ADMIN/OPERATOR | 필요 | 200 되돌린 상태(**PENDING**) | 401, 403(VIEWER), 404 없는 전송, **409 FAILED가 아님** |
+| `POST /admin/blockchain-transactions/{id}/mark-reorged` | **SUPER_ADMIN만** | 필요 | 200 표시 결과(정산 보류 여부 포함) | 401, 403, 404 없는 거래, **409 CONFIRMED가 아님** |
 | `GET /admin/merchants/{merchantId}/users` | **내부 운영자 전원**(VIEWER 포함) | — | 200 명부 | 401 |
 | `POST /admin/merchants/{merchantId}/users/{id}/suspend` | SUPER_ADMIN/OPERATOR | 필요 | 200 상태(SUSPENDED) | 401, 403, 404, 409(마지막 OWNER·잘못된 전이) |
 | `POST /admin/merchants/{merchantId}/users/{id}/reactivate` | SUPER_ADMIN/OPERATOR | 필요 | 200 상태(ACTIVE) | 401, 403, 404, 409(잘못된 전이) |
@@ -246,6 +247,26 @@ PG 내부 운영자용 콘솔(브라우저 SPA, `frontend/admin`)이 호출하�
 
 종료 상태를 되돌리는 이 전이가 왜 예외로 허용됐는지는
 [state-transitions.md](../domain/state-transitions.md)의 "수동 재전송" 절에 있다.
+
+### 4.5 확정 이후 체인 재구성 표시 — 되돌리지 않고 정산을 막는다
+
+`POST /admin/blockchain-transactions/{blockchainTransactionId}/mark-reorged`. 결제 상세(4.1.1)의
+온체인 거래 패널에서 **`CONFIRMED` 행에만** 버튼이 나온다. 식별자는 상세 응답의
+`blockchainTransaction.blockchainTransactionId`다(사람이 읽는 `transactionHash`가 아니다 —
+그건 온체인 값이지 우리 애그리게이트의 식별자가 아니다).
+
+- **바뀌는 것은 둘뿐이다**: 거래 `CONFIRMED → REORGED`, 정산 채권 `(PENDING | READY) → HELD`.
+  **`Payment`와 `ExchangeOrder`는 건드리지 않는다** — 결제는 그대로 `SUCCEEDED`로 남고 화면에도
+  "결제 완료"로 보인다. 그 대가와 완화책, 되돌리지 않기로 한 이유는
+  [ADR-007](../decisions/ADR-007-onchain-irreversibility.md)에 있다.
+- **응답의 `settlementHeld`가 `false`면 경고한다** — 막을 채권이 아직 없었다는 뜻이고, 매도
+  Worker가 이 결제를 집어 채권을 새로 만들 수 있다. 조용히 넘어가면 지급이 그대로 나간다.
+- **`CONFIRMED`가 아니면 `409`**이고 응답 문구에 현재 상태가 담긴다. 확정 전의 reorg는 감지
+  폴링이 알아서 처리하므로 사람이 끼어들 자리가 아니다.
+- **자동 감지는 하지 않는다** — 확정 이후 뒤집히는 일은 극히 드물고, 오탐이 곧 가맹점 지급
+  중단이라 사람의 판단을 거치게 했다.
+- **`SUPER_ADMIN` 전용이다**(재전송이 OPERATOR까지 열린 것과 다르다) — 돈의 흐름을 막는
+  행위라 가장 좁게 잡았다. **가맹점 콘솔에는 없다.**
 
 ## 5. 초대 링크가 **두 종류**다 — 가리키는 콘솔이 다르다
 

@@ -232,6 +232,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/blockchain-transactions/{blockchainTransactionId}/mark-reorged": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 확정 이후 체인 재구성 표시
+         * @description **SUPER_ADMIN만** 실행할 수 있다. 거래를 REORGED로, 딸린 정산 채권을 HELD로 바꾼다 — **Payment와 ExchangeOrder는 되돌리지 않는다**(그때 실제로 일어난 일이다). 확정되지 않은 거래는 409, 없는 거래는 404.
+         */
+        post: operations["admin-mark-transaction-reorged"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/internal-users/iu_002/role": {
         parameters: {
             query?: never;
@@ -433,6 +453,60 @@ export interface components {
             /** @description 활성화 시각(UTC) */
             activatedAt: string;
         };
+        /** ChangeMerchantUserRoleResponse */
+        ChangeMerchantUserRoleResponse: {
+            /** @description 변경된 역할 */
+            role: string;
+            /** @description 변경 시각(UTC) */
+            changedAt: string;
+            /** @description 대상 가맹점 사용자 식별자 */
+            merchantUserId: string;
+        };
+        /** RegisterMerchantResponse */
+        RegisterMerchantResponse: {
+            /** @description 가맹점 코드 */
+            merchantCode: string;
+            /** @description 생성된 가맹점 식별자 */
+            merchantId: string;
+            /** @description 초대 만료 시각(UTC) */
+            invitationExpiresAt: string;
+            /** @description 생성된 OWNER 계정 식별자 */
+            ownerMerchantUserId: string;
+            /** @description OWNER 로그인 아이디 */
+            ownerLoginId: string;
+            /** @description OWNER 초대 Token 원문. 최초 1회만 노출된다. */
+            invitationToken: string;
+            /** @description OWNER 이메일 */
+            ownerEmail: string;
+            /** @description 가맹점 이름 */
+            merchantName: string;
+        };
+        /** MarkTransactionReorgedResponse */
+        MarkTransactionReorgedResponse: {
+            /** @description 정산 채권을 실제로 막았는지. **false면 아직 채권이 없다는 뜻이고 더 위험하다** — 매도 Worker가 이 결제를 집어 채권을 만들 수 있다. */
+            settlementHeld: boolean;
+            /** @description 그 거래가 속한 결제 식별자 */
+            paymentId: string;
+            /** @description REORGED로 표시한 거래 식별자 */
+            blockchainTransactionId: string;
+        };
+        /** IssueInternalUserResponse */
+        IssueInternalUserResponse: {
+            /** @description 부여된 역할 */
+            role: string;
+            /** @description 로그인 아이디 */
+            loginId: string;
+            /** @description 초대 만료 시각(UTC) */
+            invitationExpiresAt: string;
+            /** @description 초대 Token 원문. 최초 1회만 노출된다. */
+            invitationToken: string;
+            /** @description 사용자 이름 */
+            userName: string;
+            /** @description 이메일 */
+            email: string;
+            /** @description 생성된 내부 운영자 식별자 */
+            internalUserId: string;
+        };
         /** PaymentDetailResponse */
         PaymentDetailResponse: {
             /** @description Webhook 전송 이력(오래된 순). 가맹점이 설정하지 않았으면 빈 배열. */
@@ -540,6 +614,8 @@ export interface components {
                 submittedAt: string;
                 /** @description BlockchainTransactionStatus 값 */
                 status: string;
+                /** @description 확정 이후 체인 재구성 표시에 쓰는 식별자(POST /admin/blockchain-transactions/{id}/mark-reorged) */
+                blockchainTransactionId: string;
             };
             /** @description 환전 주문. 매도 전에는 null. */
             exchangeOrder?: {
@@ -592,51 +668,6 @@ export interface components {
                 /** @description CheckoutSessionStatus 값 */
                 status: string;
             };
-        };
-        /** ChangeMerchantUserRoleResponse */
-        ChangeMerchantUserRoleResponse: {
-            /** @description 변경된 역할 */
-            role: string;
-            /** @description 변경 시각(UTC) */
-            changedAt: string;
-            /** @description 대상 가맹점 사용자 식별자 */
-            merchantUserId: string;
-        };
-        /** RegisterMerchantResponse */
-        RegisterMerchantResponse: {
-            /** @description 가맹점 코드 */
-            merchantCode: string;
-            /** @description 생성된 가맹점 식별자 */
-            merchantId: string;
-            /** @description 초대 만료 시각(UTC) */
-            invitationExpiresAt: string;
-            /** @description 생성된 OWNER 계정 식별자 */
-            ownerMerchantUserId: string;
-            /** @description OWNER 로그인 아이디 */
-            ownerLoginId: string;
-            /** @description OWNER 초대 Token 원문. 최초 1회만 노출된다. */
-            invitationToken: string;
-            /** @description OWNER 이메일 */
-            ownerEmail: string;
-            /** @description 가맹점 이름 */
-            merchantName: string;
-        };
-        /** IssueInternalUserResponse */
-        IssueInternalUserResponse: {
-            /** @description 부여된 역할 */
-            role: string;
-            /** @description 로그인 아이디 */
-            loginId: string;
-            /** @description 초대 만료 시각(UTC) */
-            invitationExpiresAt: string;
-            /** @description 초대 Token 원문. 최초 1회만 노출된다. */
-            invitationToken: string;
-            /** @description 사용자 이름 */
-            userName: string;
-            /** @description 이메일 */
-            email: string;
-            /** @description 생성된 내부 운영자 식별자 */
-            internalUserId: string;
         };
         /** ListMerchantLoginAuditResponse */
         ListMerchantLoginAuditResponse: {
@@ -1158,6 +1189,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaymentDetailResponse"];
+                };
+            };
+        };
+    };
+    "admin-mark-transaction-reorged": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 확정된 온체인 거래 식별자 */
+                blockchainTransactionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/x-www-form-urlencoded": components["schemas"]["admin-webhook-deliveries-webhookDeliveryId-redeliver-33084672"];
+            };
+        };
+        responses: {
+            /** @description 200 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarkTransactionReorgedResponse"];
                 };
             };
         };

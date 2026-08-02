@@ -166,3 +166,9 @@ export type PaymentDetailResponse = JsonResponse<'admin-payment-detail', 200>
  * 화면은 이 응답을 "성공"이 아니라 "예약됨"으로 읽어야 한다.
  */
 export type RedeliverWebhookResponse = JsonResponse<'admin-redeliver-webhook', 200>
+
+/**
+ * 확정 이후 체인 재구성 표시 결과. **`settlementHeld`가 `false`면 아직 정산 채권이 없다는
+ * 뜻이고 더 위험하다** — 매도 Worker가 이 결제를 집어 채권을 만들 수 있다.
+ */
+export type MarkTransactionReorgedResponse = JsonResponse<'admin-mark-transaction-reorged', 200>

@@ -53,10 +53,49 @@
 - **금액 불일치를 1급 개념으로 승격**(예: `payment_discrepancy` — 결제와 실제 수령액의 차이를
   채권·채무로 기록). 지금은 `blockchain_transaction`을 사람이 조회해서 판단한다.
 - 자동 환불(ADR-001의 환불 범위와 함께).
-- **`CONFIRMED` 이후의 `REORGED`** — 확정된 입금이 체인 재구성으로 사라지는 경우. 되돌리려면
-  `Payment = SUCCEEDED`와 그 뒤의 `ExchangeOrder`·`SettlementReceivable`까지 뒤집는 보상
-  흐름이 필요해서 여전히 후속 범위다(필요 Confirm 수 12가 유일한 완화책이다).
-  **확정 *이전*의 reorg는 이제 다룬다** — `DETECTED`/`CONFIRMING`에서 거래가 사라지면 유예 후
-  `REORGED` + `Payment.FAILED(TRANSACTION_REORGED)`로 끝낸다(`state-transitions.md` 참고).
-  이 경우는 아직 뒤따르는 개념이 없어서 이 ADR이 말하는 "확정 이후에 사실이 바뀌는 상황"에
-  해당하지 않는다.
+- 자동 반환(위 3번)과 자동 환불은 여전히 후속이다.
+
+## 확정 이후의 `REORGED` — 되돌리지 않고 정산을 막는다
+
+확정된 입금이 체인 재구성으로 사라지는 경우다. **이 ADR의 1번 원칙이 그대로 적용된다** —
+결제 상태와 자금 보유는 별개이고, 사실은 보존한다.
+
+### 결정
+
+내부 운영자가 실행하면 **두 가지만** 바뀐다:
+
+1. `BlockchainTransaction`: `CONFIRMED → REORGED` — 그 입금이 체인에 없다는 사실.
+2. `SettlementReceivable`: `READY → HELD` — **가맹점에게 지급되지 않게 막는다.**
+
+`Payment`는 `SUCCEEDED`로, `ExchangeOrder`는 `COMPLETED`로 **그대로 둔다.**
+
+### 왜 되돌리지 않나
+
+- **그 시점에 실제로 일어난 일이기 때문이다.** 12 Confirm을 확인하고 결제를 승인했고,
+  그 승인에 근거해 USDC를 매도했다. 뒤늦게 상태를 `FAILED`로 바꾸면 "그때 성공으로 판단해
+  후속 처리를 했다"는 이력이 사라지고, 왜 매도가 일어났는지 설명할 수 없게 된다.
+- **목적은 "성공을 지우는 것"이 아니라 "돈이 나가지 않게 하는 것"이다.** 그 목적은 `HELD`로
+  달성된다 — MVP의 종착점이 `SettlementReceivable = READY`이므로(ADR-005), 그 앞을 막으면
+  실제 손실 경로가 닫힌다.
+- 되돌리려면 `Payment`와 `ExchangeOrder`의 **종료 상태를 재사용**해야 하는데, 그 예외는
+  Webhook 재전송 하나로 이미 좁게 정해 두었다(`state-transitions.md`의 "수동 재전송").
+
+### 대가 — 명시적으로 감수한다
+
+**결제 목록에는 여전히 "결제 완료"로 남는다.** 실제로는 받지 못한 돈인데 성공으로 보인다는
+뜻이고, 이것이 이 결정의 비용이다. 완화책은 셋이다:
+
+- **결제 상세가 진실을 말한다** — 온체인 거래가 `REORGED`, 정산이 `HELD`로 나온다. 이 화면은
+  애초에 "돈이 어디 있나"에 답하려고 만든 것이다.
+- 정산 채권 목록에서 `HELD`는 정산 대상이 아니다 — **금액 합계에서 실제로 빠진다.**
+- 후속의 `payment_discrepancy`(아래)가 생기면 목록에서도 표시할 근거가 생긴다.
+
+### 왜 자동 감지가 아닌가
+
+확정된 거래를 계속 다시 조회하면 RPC 비용만 쌓인다 — **12 Confirm 이후의 reorg는 사실상
+일어나지 않기 때문이다**(그것이 12를 요구하는 이유다). 드물게 벌어졌을 때 사람이 탐색기나
+알림으로 알게 되므로, 이 ADR의 4번("운영 절차로 처리한다")과 같은 방식으로 수동 실행한다.
+
+**확정 *이전*의 reorg는 자동으로 다룬다** — `DETECTED`/`CONFIRMING`에서 거래가 사라지면 유예
+후 `REORGED` + `Payment.FAILED(TRANSACTION_REORGED)`로 끝낸다(`state-transitions.md` 참고).
+그쪽은 아직 뒤따르는 개념(매도·정산)이 없어서 보상할 것이 없다.

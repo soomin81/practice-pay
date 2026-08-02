@@ -16,6 +16,7 @@ import type {
 	ListMerchantsResponse,
 	ListPaymentsResponse,
 	PaymentDetailResponse,
+	MarkTransactionReorgedResponse,
 	RedeliverWebhookResponse,
 	ListSettlementReceivablesResponse,
 	SettlementFilters,
@@ -163,6 +164,19 @@ export const adminApi = {
 	/** 어느 가맹점의 사용자 명부를 조회한다(VIEWER 포함 인증된 내부 사용자 전원). */
 	listMerchantUsers: (merchantId: string) =>
 		request<ListMerchantUsersResponse>(`/admin/merchants/${encodeURIComponent(merchantId)}/users`),
+
+	/**
+	 * 확정된 입금이 체인 재구성으로 사라졌다고 표시한다 — 거래를 `REORGED`로, 딸린 정산
+	 * 채권을 `HELD`로 바꾼다. **`SUPER_ADMIN`만 실행할 수 있고 되돌릴 수 없다.**
+	 *
+	 * `Payment`와 `ExchangeOrder`는 되돌리지 않는다(그때 실제로 일어난 일이다) —
+	 * `docs/decisions/ADR-007-onchain-irreversibility.md`.
+	 */
+	markTransactionReorged: (blockchainTransactionId: string) =>
+		request<MarkTransactionReorgedResponse>(
+			`/admin/blockchain-transactions/${encodeURIComponent(blockchainTransactionId)}/mark-reorged`,
+			{ method: 'POST' },
+		),
 
 	/**
 	 * 실패한 Webhook 전송을 다시 보내도록 **예약한다** — 이 요청이 발송하는 것이 아니라,

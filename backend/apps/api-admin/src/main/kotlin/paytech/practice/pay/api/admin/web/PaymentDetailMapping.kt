@@ -50,6 +50,7 @@ fun toResponse(view: PaymentDetailView): PaymentDetailResponse =
 		blockchainTransaction =
 			view.blockchainTransaction?.let {
 				PaymentDetailBlockchainTransactionResponse(
+					blockchainTransactionId = it.blockchainTransactionId,
 					transactionHash = it.transactionHash.value,
 					status = it.status.name,
 					blockNumber = it.blockNumber,

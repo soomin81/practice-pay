@@ -77,6 +77,7 @@ internal fun paymentDetailFixture() =
 			),
 		blockchainTransaction =
 			PaymentDetailBlockchainTransaction(
+				blockchainTransactionId = "btx_001",
 				transactionHash = TransactionHash("0x" + "7f3a".repeat(16)),
 				status = BlockchainTransactionStatus.CONFIRMED,
 				blockNumber = 44_910_246,
@@ -192,6 +193,8 @@ private fun blockchainFields() =
 			.type(JsonFieldType.OBJECT)
 			.description("온체인 거래. 고객이 Hash를 제출하기 전에는 null.")
 			.optional(),
+		fieldWithPath("blockchainTransaction.blockchainTransactionId")
+			.description("확정 이후 체인 재구성 표시에 쓰는 식별자(POST /admin/blockchain-transactions/{id}/mark-reorged)"),
 		fieldWithPath("blockchainTransaction.transactionHash").description("거래 Hash"),
 		fieldWithPath("blockchainTransaction.status").description("BlockchainTransactionStatus 값"),
 		fieldWithPath("blockchainTransaction.blockNumber")

@@ -88,8 +88,13 @@ data class PaymentDetailCheckoutSession(
 /**
  * **`Payment`가 실패해도 이 행은 지우지 않는다**(ADR-007) — 자금이 실제로 어디까지 갔는지는
  * 여기에만 남는다. 상세 화면의 존재 이유이기도 하다.
+ *
+ * @property blockchainTransactionId 내부 운영자가 **확정 이후 체인 재구성을 표시할 때** 쓰는
+ * 식별자다(`POST /admin/blockchain-transactions/{id}/mark-reorged`). 사람이 읽을 값은
+ * [transactionHash]이지만, 그건 우리 애그리게이트의 식별자가 아니라 온체인 값이다.
  */
 data class PaymentDetailBlockchainTransaction(
+	val blockchainTransactionId: String,
 	val transactionHash: TransactionHash,
 	val status: BlockchainTransactionStatus,
 	val blockNumber: Long?,
