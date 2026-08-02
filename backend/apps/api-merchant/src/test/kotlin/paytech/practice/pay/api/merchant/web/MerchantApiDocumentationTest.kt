@@ -865,6 +865,8 @@ class MerchantApiDocumentationTest : FunSpec() {
 						),
 					totalCount = 1L,
 					totalNetAmount = 19_700L,
+					heldCount = 0L,
+					heldNetAmount = 0L,
 					page = 0,
 					size = 50,
 				)
@@ -907,7 +909,10 @@ class MerchantApiDocumentationTest : FunSpec() {
 								.optional(),
 							fieldWithPath("settlementReceivables[].createdAt").description("생성 시각(UTC)"),
 							fieldWithPath("totalCount").description("필터 전체에 걸린 건수"),
-							fieldWithPath("totalNetAmount").description("필터 전체의 정산 예정 금액 합계"),
+							fieldWithPath("totalNetAmount")
+								.description("필터 전체의 정산 예정 금액 합계. **지급 경로에 살아 있는 것만**(PENDING/READY) 더한다"),
+							fieldWithPath("heldCount").description("그중 보류(HELD)된 건수. 합계에서 빠진 몫이다"),
+							fieldWithPath("heldNetAmount").description("보류된 금액 합계. 0이 아니면 화면이 눈에 띄게 그린다"),
 							fieldWithPath("page").description("조회한 페이지 번호(0부터)"),
 							fieldWithPath("size").description("실제로 적용된 페이지 크기"),
 						),

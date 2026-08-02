@@ -45,11 +45,22 @@ data class SettlementReceivableListQuery(
  *
  * [totalNetAmount]를 함께 주는 것이 이 화면의 핵심이다 — 정산 화면에서 사람이 가장 먼저
  * 묻는 것은 "그래서 얼마를 받나"이고, 현재 페이지의 합만 보여주면 그 질문에 답할 수 없다.
+ *
+ * @property totalCount 필터에 걸린 **전체** 건수(상태를 가리지 않는다).
+ * @property totalNetAmount **지급 경로에 살아 있는 것만** 더한 합계다
+ * (`PENDING`/`READY`). `HELD`는 지급을 막아 둔 돈이고 `CANCELLED`는 정산하지 않기로 끝낸
+ * 돈이라, 더하면 이 숫자가 실제로 나갈 금액보다 커진다 — "그래서 얼마를 받나"에 틀린 답을
+ * 하게 된다(ADR-007).
+ * @property heldCount / @property heldNetAmount 그렇게 **빠진 돈**이다. 합계에서 빼기만 하고
+ * 어디로 갔는지 말해주지 않으면 숫자가 달라진 이유를 찾을 수 없다 — 목록을 뒤져야 보이는
+ * 사실은 없는 것과 같다.
  */
 data class SettlementReceivableListPage(
 	val entries: List<SettlementReceivableListEntry>,
 	val totalCount: Long,
 	val totalNetAmount: Long,
+	val heldCount: Long,
+	val heldNetAmount: Long,
 )
 
 /**

@@ -46,6 +46,7 @@ export function SettlementPage({ me }: { me: MeResponse }) {
 
 	const page = filters.page ?? 0
 	const totalCount = settlements.data?.totalCount ?? 0
+	const heldCount = settlements.data?.heldCount ?? 0
 	const lastPage = Math.max(0, Math.ceil(totalCount / PAGE_SIZE) - 1)
 
 	return (
@@ -55,9 +56,13 @@ export function SettlementPage({ me }: { me: MeResponse }) {
 				description="전 가맹점의 정산 예정 금액입니다. 기간은 정산 예정일 기준입니다."
 				action={<LiveStamp at={new Date()} />}
 			/>
-		{/* **여기 두 값은 목록 API가 실제로 내려주는 것뿐이다**(`totalCount`,
-		    `totalNetAmount`). 참고 디자인처럼 네 칸을 채우려면 서버가 합계를 더 줘야
-		    하는데, 없는 값을 그럴듯하게 만들면 그 숫자를 아무도 설명할 수 없게 된다. */}
+		{/* **여기 값은 목록 API가 실제로 내려주는 것뿐이다**(`totalCount`, `totalNetAmount`,
+		    `heldCount`/`heldNetAmount`). 없는 값을 그럴듯하게 만들면 그 숫자를 아무도
+		    설명할 수 없게 된다.
+
+		    보류 금액을 **합계 옆에 나란히** 두는 이유: 합계는 지급 경로에 살아 있는 것만
+		    더하므로(ADR-007), 막힌 돈이 있으면 합계가 그만큼 작아진다. 그 차이를 설명하는
+		    값이 같은 줄에 없으면 "어제보다 왜 줄었나"에 답할 수 없다. */}
 		<div className="pb-6">
 			<StatStrip
 				stats={[
@@ -65,6 +70,26 @@ export function SettlementPage({ me }: { me: MeResponse }) {
 					{
 						label: '정산 예정 금액 합계',
 						value: settlements.data ? formatKrw(settlements.data.totalNetAmount) : '—',
+					},
+					{
+						label: '보류 중',
+						// 막힌 돈이 없을 때는 눈에 띄면 안 된다 — 언제나 빨갛게 두면 경고가 배경이 된다.
+						tone: heldCount > 0 ? 'bad' : 'default',
+						value: !settlements.data ? (
+							'—'
+						) : heldCount === 0 ? (
+							formatKrw(0)
+						) : (
+							/* 목록을 뒤져야 보이는 사실은 없는 것과 같다 — 눌러서 바로 좁힌다. */
+							<button
+								type="button"
+								className="underline underline-offset-4"
+								onClick={() => updateFilter({ status: 'HELD' })}
+							>
+								{formatKrw(settlements.data.heldNetAmount)}
+								<span className="ml-1 text-xs font-normal">({heldCount.toLocaleString('ko-KR')}건)</span>
+							</button>
+						),
 					},
 				]}
 			/>

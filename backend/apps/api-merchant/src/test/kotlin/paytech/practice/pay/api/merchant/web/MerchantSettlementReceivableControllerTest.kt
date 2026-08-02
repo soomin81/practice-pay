@@ -84,7 +84,15 @@ class MerchantSettlementReceivableControllerTest : FunSpec() {
 
 		test("returns receivables with the total net amount") {
 			every { listMerchantSettlementReceivablesUseCase.execute(any(), any()) } returns
-				ListSettlementReceivablesResult(listOf(entry()), totalCount = 1L, totalNetAmount = 19_700L, page = 0, size = 50)
+				ListSettlementReceivablesResult(
+					listOf(entry()),
+					totalCount = 1L,
+					totalNetAmount = 19_700L,
+					heldCount = 0L,
+					heldNetAmount = 0L,
+					page = 0,
+					size = 50,
+				)
 
 			mockMvc
 				.perform(get("/merchant/settlement-receivables").with(authenticatedAs(OWNER)))
@@ -98,7 +106,15 @@ class MerchantSettlementReceivableControllerTest : FunSpec() {
 		// 이 콘솔은 언제나 자기 가맹점 하나만 보므로 가맹점 열을 응답에 담지 않는다.
 		test("does not expose merchant columns") {
 			every { listMerchantSettlementReceivablesUseCase.execute(any(), any()) } returns
-				ListSettlementReceivablesResult(listOf(entry()), totalCount = 1L, totalNetAmount = 19_700L, page = 0, size = 50)
+				ListSettlementReceivablesResult(
+					listOf(entry()),
+					totalCount = 1L,
+					totalNetAmount = 19_700L,
+					heldCount = 0L,
+					heldNetAmount = 0L,
+					page = 0,
+					size = 50,
+				)
 
 			mockMvc
 				.perform(get("/merchant/settlement-receivables").with(authenticatedAs(OWNER)))
@@ -114,7 +130,15 @@ class MerchantSettlementReceivableControllerTest : FunSpec() {
 		test("scopes to the authenticated merchant, not to a merchantId in the query string") {
 			val merchantSlot = slot<MerchantId>()
 			every { listMerchantSettlementReceivablesUseCase.execute(capture(merchantSlot), any()) } returns
-				ListSettlementReceivablesResult(emptyList(), totalCount = 0L, totalNetAmount = 0L, page = 0, size = 50)
+				ListSettlementReceivablesResult(
+					emptyList(),
+					totalCount = 0L,
+					totalNetAmount = 0L,
+					heldCount = 0L,
+					heldNetAmount = 0L,
+					page = 0,
+					size = 50,
+				)
 
 			mockMvc
 				.perform(
@@ -128,7 +152,15 @@ class MerchantSettlementReceivableControllerTest : FunSpec() {
 
 		test("allows VIEWER") {
 			every { listMerchantSettlementReceivablesUseCase.execute(any(), any()) } returns
-				ListSettlementReceivablesResult(emptyList(), totalCount = 0L, totalNetAmount = 0L, page = 0, size = 50)
+				ListSettlementReceivablesResult(
+					emptyList(),
+					totalCount = 0L,
+					totalNetAmount = 0L,
+					heldCount = 0L,
+					heldNetAmount = 0L,
+					page = 0,
+					size = 50,
+				)
 
 			mockMvc
 				.perform(get("/merchant/settlement-receivables").with(authenticatedAs(VIEWER)))
@@ -143,7 +175,15 @@ class MerchantSettlementReceivableControllerTest : FunSpec() {
 		test("passes the status and eligible-date filters through") {
 			val commandSlot = slot<ListSettlementReceivablesCommand>()
 			every { listMerchantSettlementReceivablesUseCase.execute(any(), capture(commandSlot)) } returns
-				ListSettlementReceivablesResult(emptyList(), totalCount = 0L, totalNetAmount = 0L, page = 0, size = 50)
+				ListSettlementReceivablesResult(
+					emptyList(),
+					totalCount = 0L,
+					totalNetAmount = 0L,
+					heldCount = 0L,
+					heldNetAmount = 0L,
+					page = 0,
+					size = 50,
+				)
 
 			mockMvc
 				.perform(

@@ -9,12 +9,18 @@ import java.time.LocalDate
  * (`docs/architecture/merchant-console-api.md`).
  *
  * @property totalNetAmount 필터 전체의 정산 예정 금액 합계. 현재 페이지 합이 아니다 —
- * 이 화면의 핵심 숫자라 목록과 함께 준다.
+ * 이 화면의 핵심 숫자라 목록과 함께 준다. **지급 경로에 살아 있는 것만 더한다**
+ * (`PENDING`/`READY`) — 막아 두거나(`HELD`) 끝낸(`CANCELLED`) 돈까지 더하면 실제로 나갈
+ * 금액보다 큰 답이 된다.
+ * @property heldCount / @property heldNetAmount 그렇게 빠진 돈이다. 합계에서 빼기만 하고
+ * 어디로 갔는지 말해주지 않으면 숫자가 달라진 이유를 찾을 수 없다.
  */
 data class ListSettlementReceivablesResponse(
 	val settlementReceivables: List<SettlementReceivableSummaryResponse>,
 	val totalCount: Long,
 	val totalNetAmount: Long,
+	val heldCount: Long,
+	val heldNetAmount: Long,
 	val page: Int,
 	val size: Int,
 )

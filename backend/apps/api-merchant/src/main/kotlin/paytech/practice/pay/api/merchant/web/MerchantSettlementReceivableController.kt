@@ -107,6 +107,8 @@ class MerchantSettlementReceivableController(
 				},
 			totalCount = result.totalCount,
 			totalNetAmount = result.totalNetAmount,
+			heldCount = result.heldCount,
+			heldNetAmount = result.heldNetAmount,
 			page = result.page,
 			size = result.size,
 		)

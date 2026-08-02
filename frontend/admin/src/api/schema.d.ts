@@ -490,7 +490,7 @@ export interface components {
             /** @description 왜 취소했는지. **필수** — 감사 이력에 남는다 */
             note: string;
         };
-        "admin-internal-users-iu_002-suspend-33084672": Record<string, never>;
+        "admin-logout-33084672": Record<string, never>;
         /** ListLoginAuditResponse */
         ListLoginAuditResponse: {
             /** @description 로그인 감사 기록 배열(최신순) */
@@ -787,52 +787,6 @@ export interface components {
             /** @description 변경할 역할(ADMIN | VIEWER) */
             role: string;
         };
-        /** ListSettlementReceivablesResponse */
-        ListSettlementReceivablesResponse: {
-            /** @description 실제로 적용된 페이지 크기 */
-            size: number;
-            /** @description 필터 전체의 정산 예정 금액 합계 */
-            totalNetAmount: number;
-            /** @description 조회한 페이지 번호(0부터) */
-            page: number;
-            /** @description 정산 채권 배열(정산 예정일 최신순) */
-            settlementReceivables: {
-                /** @description 정산 예정 금액 = gross - fee + adjustment */
-                netAmount: number;
-                /** @description 확보액과 정산 기준 금액의 차이(PG 마진). 음수 가능, READY 전에는 null. */
-                exchangeProfitLossAmount?: number | null;
-                /** @description 정산 기준 금액 */
-                grossAmount: number;
-                /** @description 가맹점이 부여한 주문 식별자 */
-                merchantOrderId: string;
-                /** @description 적용 수수료율 */
-                feeRate: number;
-                /** @description 가맹점 이름 */
-                merchantName: string;
-                /** @description 생성 시각(UTC) */
-                createdAt: string;
-                /** @description 수수료 */
-                feeAmount: number;
-                /** @description 정산 통화(KRW) */
-                settlementCurrency: string;
-                /** @description 가맹점 식별자 */
-                merchantId: string;
-                /** @description 이 채권을 만든 결제 */
-                paymentId: string;
-                /** @description 정산 예정일(YYYY-MM-DD) */
-                eligibleDate: string;
-                /** @description 환전으로 확보한 KRW. READY 전에는 null. */
-                exchangeReceivedAmount?: number | null;
-                /** @description 조정 금액(음수 가능) */
-                adjustmentAmount: number;
-                /** @description 정산 채권 식별자 */
-                settlementReceivableId: string;
-                /** @description SettlementReceivableStatus 값(MVP 종착은 READY) */
-                status: string;
-            }[];
-            /** @description 필터 전체에 걸린 건수 */
-            totalCount: number;
-        };
         /** RegisterMerchantRequest */
         RegisterMerchantRequest: {
             /** @description 가맹점 코드(전 시스템에서 유일, 가맹점 사용자 로그인에 쓰인다) */
@@ -986,6 +940,56 @@ export interface components {
                 merchantName: string;
             }[];
         };
+        /** ListSettlementReceivablesResponse */
+        ListSettlementReceivablesResponse: {
+            /** @description 실제로 적용된 페이지 크기 */
+            size: number;
+            /** @description 필터 전체의 정산 예정 금액 합계. **지급 경로에 살아 있는 것만**(PENDING/READY) 더한다 */
+            totalNetAmount: number;
+            /** @description 그중 보류(HELD)된 건수. 합계에서 빠진 몫이다 */
+            heldCount: number;
+            /** @description 조회한 페이지 번호(0부터) */
+            page: number;
+            /** @description 정산 채권 배열(정산 예정일 최신순) */
+            settlementReceivables: {
+                /** @description 정산 예정 금액 = gross - fee + adjustment */
+                netAmount: number;
+                /** @description 확보액과 정산 기준 금액의 차이(PG 마진). 음수 가능, READY 전에는 null. */
+                exchangeProfitLossAmount?: number | null;
+                /** @description 정산 기준 금액 */
+                grossAmount: number;
+                /** @description 가맹점이 부여한 주문 식별자 */
+                merchantOrderId: string;
+                /** @description 적용 수수료율 */
+                feeRate: number;
+                /** @description 가맹점 이름 */
+                merchantName: string;
+                /** @description 생성 시각(UTC) */
+                createdAt: string;
+                /** @description 수수료 */
+                feeAmount: number;
+                /** @description 정산 통화(KRW) */
+                settlementCurrency: string;
+                /** @description 가맹점 식별자 */
+                merchantId: string;
+                /** @description 이 채권을 만든 결제 */
+                paymentId: string;
+                /** @description 정산 예정일(YYYY-MM-DD) */
+                eligibleDate: string;
+                /** @description 환전으로 확보한 KRW. READY 전에는 null. */
+                exchangeReceivedAmount?: number | null;
+                /** @description 조정 금액(음수 가능) */
+                adjustmentAmount: number;
+                /** @description 정산 채권 식별자 */
+                settlementReceivableId: string;
+                /** @description SettlementReceivableStatus 값(MVP 종착은 READY) */
+                status: string;
+            }[];
+            /** @description 필터 전체에 걸린 건수 */
+            totalCount: number;
+            /** @description 보류된 금액 합계. 0이 아니면 화면이 눈에 띄게 그린다 */
+            heldNetAmount: number;
+        };
         /** AdminLoginRequest */
         AdminLoginRequest: {
             /** @description 비밀번호 */
@@ -1099,7 +1103,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["admin-internal-users-iu_002-suspend-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["admin-logout-33084672"];
             };
         };
         responses: {
@@ -1294,7 +1298,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["admin-internal-users-iu_002-suspend-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["admin-logout-33084672"];
             };
         };
         responses: {
@@ -1342,7 +1346,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["admin-internal-users-iu_002-suspend-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["admin-logout-33084672"];
             };
         };
         responses: {
@@ -1466,7 +1470,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["admin-internal-users-iu_002-suspend-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["admin-logout-33084672"];
             };
         };
         responses: {
@@ -1514,7 +1518,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["admin-internal-users-iu_002-suspend-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["admin-logout-33084672"];
             };
         };
         responses: {

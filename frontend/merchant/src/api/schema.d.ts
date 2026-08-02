@@ -438,48 +438,7 @@ export interface components {
             /** @description http:// 또는 https:// 로 시작하는 수신 URL. null이나 빈 문자열이면 해제. */
             webhookUrl?: string | null;
         };
-        /** ListSettlementReceivablesResponse */
-        ListSettlementReceivablesResponse: {
-            /** @description 실제로 적용된 페이지 크기 */
-            size: number;
-            /** @description 필터 전체의 정산 예정 금액 합계 */
-            totalNetAmount: number;
-            /** @description 조회한 페이지 번호(0부터) */
-            page: number;
-            /** @description 정산 채권 배열(정산 예정일 최신순) */
-            settlementReceivables: {
-                /** @description 정산 예정 금액 = gross - fee + adjustment */
-                netAmount: number;
-                /** @description 확보액과 정산 기준 금액의 차이. 음수 가능, READY 전에는 null. */
-                exchangeProfitLossAmount?: number | null;
-                /** @description 정산 기준 금액 */
-                grossAmount: number;
-                /** @description 가맹점이 부여한 주문 식별자 */
-                merchantOrderId: string;
-                /** @description 적용 수수료율 */
-                feeRate: number;
-                /** @description 생성 시각(UTC) */
-                createdAt: string;
-                /** @description 수수료 */
-                feeAmount: number;
-                /** @description 정산 통화(KRW) */
-                settlementCurrency: string;
-                /** @description 이 채권을 만든 결제 */
-                paymentId: string;
-                /** @description 정산 예정일(YYYY-MM-DD) */
-                eligibleDate: string;
-                /** @description 환전으로 확보한 KRW. READY 전에는 null. */
-                exchangeReceivedAmount?: number | null;
-                /** @description 조정 금액(음수 가능) */
-                adjustmentAmount: number;
-                /** @description 정산 채권 식별자 */
-                settlementReceivableId: string;
-                /** @description SettlementReceivableStatus 값(MVP 종착은 READY) */
-                status: string;
-            }[];
-            /** @description 필터 전체에 걸린 건수 */
-            totalCount: number;
-        };
+        "merchant-merchant-users-merchantUserId-reactivate-33084672": Record<string, never>;
         /** ListPaymentsResponse */
         ListPaymentsResponse: {
             /** @description 실제로 적용된 페이지 크기. 상한에 걸리면 요청값과 다르다. */
@@ -522,7 +481,6 @@ export interface components {
             /** @description 필터 전체에 걸린 건수(현재 페이지 건수가 아니다) */
             totalCount: number;
         };
-        "merchant-webhook-rotate-secret-33084672": Record<string, never>;
         /** MerchantMeResponse */
         MerchantMeResponse: {
             /** @description OWNER | ADMIN | VIEWER */
@@ -805,6 +763,15 @@ export interface components {
             /** @description 폐기 시각(UTC) */
             revokedAt: string;
         };
+        /** MerchantLoginRequest */
+        MerchantLoginRequest: {
+            /** @description 비밀번호 */
+            password: string;
+            /** @description 가맹점 식별 코드 */
+            merchantCode: string;
+            /** @description 가맹점 내 로그인 아이디 */
+            loginId: string;
+        };
         /** MerchantWebhookSettingsResponse */
         MerchantWebhookSettingsResponse: {
             /** @description 겹침 기간 동안만 값이 있는 **직전 비밀**. 그동안은 두 비밀 모두 통한다. 겹침이 끝나면 null. */
@@ -818,19 +785,56 @@ export interface components {
             /** @description Webhook 수신 URL. 설정하지 않았으면 null. */
             webhookUrl?: string | null;
         };
-        /** MerchantLoginRequest */
-        MerchantLoginRequest: {
-            /** @description 비밀번호 */
-            password: string;
-            /** @description 가맹점 식별 코드 */
-            merchantCode: string;
-            /** @description 가맹점 내 로그인 아이디 */
-            loginId: string;
-        };
         /** ChangeMerchantUserRoleRequest */
         ChangeMerchantUserRoleRequest: {
             /** @description 변경할 역할. ADMIN | VIEWER (OWNER 불가) */
             role: string;
+        };
+        /** ListSettlementReceivablesResponse */
+        ListSettlementReceivablesResponse: {
+            /** @description 실제로 적용된 페이지 크기 */
+            size: number;
+            /** @description 필터 전체의 정산 예정 금액 합계. **지급 경로에 살아 있는 것만**(PENDING/READY) 더한다 */
+            totalNetAmount: number;
+            /** @description 그중 보류(HELD)된 건수. 합계에서 빠진 몫이다 */
+            heldCount: number;
+            /** @description 조회한 페이지 번호(0부터) */
+            page: number;
+            /** @description 정산 채권 배열(정산 예정일 최신순) */
+            settlementReceivables: {
+                /** @description 정산 예정 금액 = gross - fee + adjustment */
+                netAmount: number;
+                /** @description 확보액과 정산 기준 금액의 차이. 음수 가능, READY 전에는 null. */
+                exchangeProfitLossAmount?: number | null;
+                /** @description 정산 기준 금액 */
+                grossAmount: number;
+                /** @description 가맹점이 부여한 주문 식별자 */
+                merchantOrderId: string;
+                /** @description 적용 수수료율 */
+                feeRate: number;
+                /** @description 생성 시각(UTC) */
+                createdAt: string;
+                /** @description 수수료 */
+                feeAmount: number;
+                /** @description 정산 통화(KRW) */
+                settlementCurrency: string;
+                /** @description 이 채권을 만든 결제 */
+                paymentId: string;
+                /** @description 정산 예정일(YYYY-MM-DD) */
+                eligibleDate: string;
+                /** @description 환전으로 확보한 KRW. READY 전에는 null. */
+                exchangeReceivedAmount?: number | null;
+                /** @description 조정 금액(음수 가능) */
+                adjustmentAmount: number;
+                /** @description 정산 채권 식별자 */
+                settlementReceivableId: string;
+                /** @description SettlementReceivableStatus 값(MVP 종착은 READY) */
+                status: string;
+            }[];
+            /** @description 필터 전체에 걸린 건수 */
+            totalCount: number;
+            /** @description 보류된 금액 합계. 0이 아니면 화면이 눈에 띄게 그린다 */
+            heldNetAmount: number;
         };
     };
     responses: never;
@@ -918,7 +922,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-webhook-rotate-secret-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-reactivate-33084672"];
             };
         };
         responses: {
@@ -1115,7 +1119,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-webhook-rotate-secret-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-reactivate-33084672"];
             };
         };
         responses: {
@@ -1161,7 +1165,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-webhook-rotate-secret-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-reactivate-33084672"];
             };
         };
         responses: {
@@ -1188,7 +1192,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-webhook-rotate-secret-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-reactivate-33084672"];
             };
         };
         responses: {
@@ -1242,7 +1246,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-webhook-rotate-secret-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-reactivate-33084672"];
             };
         };
         responses: {
@@ -1269,7 +1273,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-webhook-rotate-secret-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-reactivate-33084672"];
             };
         };
         responses: {
@@ -1296,7 +1300,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-webhook-rotate-secret-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-reactivate-33084672"];
             };
         };
         responses: {
@@ -1323,7 +1327,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["merchant-webhook-rotate-secret-33084672"];
+                "application/x-www-form-urlencoded": components["schemas"]["merchant-merchant-users-merchantUserId-reactivate-33084672"];
             };
         };
         responses: {

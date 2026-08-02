@@ -168,4 +168,50 @@ class SettlementReceivableListProjectionAdapterTest :
 			entry.exchangeProfitLossAmount shouldBe null
 			entry.feeRate.compareTo(BigDecimal("0.015")) shouldBe 0
 		}
+
+		/**
+		 * **이 테스트가 이 집계의 존재 이유다.** 한동안 합계가 상태를 가리지 않고 전부 더해서,
+		 * 막아 둔 돈(`HELD`)과 끝낸 돈(`CANCELLED`)까지 "정산 예정 금액"에 들어가 있었다 —
+		 * ADR-007은 그 반대라고 적고 있었는데 코드가 따라오지 않은 것이다. 화면의 머리 숫자가
+		 * **실제로 나갈 금액보다 커지는** 종류의 어긋남이라 회귀로 고정한다.
+		 */
+		test("the total counts only what is still on the payout path") {
+			val merchantId = insertTestMerchant()
+			insertReceivable(merchantId, insertTestPayment(merchantId), status = "PENDING")
+			insertReceivable(merchantId, insertTestPayment(merchantId), status = "READY")
+			insertReceivable(merchantId, insertTestPayment(merchantId), status = "HELD")
+			insertReceivable(merchantId, insertTestPayment(merchantId), status = "CANCELLED")
+
+			val page = projection.find(query(merchantId = MerchantId(merchantId)))
+
+			// 목록에는 네 건이 다 나온다 — 합계에서 빠지는 것과 감추는 것은 다르다.
+			page.totalCount shouldBe 4L
+			page.totalNetAmount shouldBe 2 * 19_700L
+		}
+
+		/** 빼기만 하고 어디로 갔는지 말해주지 않으면 숫자가 달라진 이유를 찾을 수 없다. */
+		test("reports how much was held so the total's shortfall is explainable") {
+			val merchantId = insertTestMerchant()
+			insertReceivable(merchantId, insertTestPayment(merchantId), status = "READY")
+			insertReceivable(merchantId, insertTestPayment(merchantId), status = "HELD")
+			insertReceivable(merchantId, insertTestPayment(merchantId), status = "HELD")
+
+			val page = projection.find(query(merchantId = MerchantId(merchantId)))
+
+			page.heldCount shouldBe 2L
+			page.heldNetAmount shouldBe 2 * 19_700L
+			page.totalNetAmount shouldBe 19_700L
+		}
+
+		/** 보류 집계도 **같은 필터를 받는다** — 필터가 곧 질문의 범위다. */
+		test("the held figures respect the same filter as everything else") {
+			val merchantId = insertTestMerchant()
+			insertReceivable(merchantId, insertTestPayment(merchantId), status = "HELD")
+
+			val readyOnly =
+				projection.find(query(merchantId = MerchantId(merchantId), status = SettlementReceivableStatus.READY))
+
+			readyOnly.heldCount shouldBe 0L
+			readyOnly.heldNetAmount shouldBe 0L
+		}
 	})

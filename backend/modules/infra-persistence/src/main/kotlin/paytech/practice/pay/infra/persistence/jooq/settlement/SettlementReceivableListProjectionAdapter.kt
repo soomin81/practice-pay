@@ -91,10 +91,25 @@ class SettlementReceivableListProjectionAdapter(
 					)
 				}
 
+		// 지급 경로에 살아 있는 것만 합계에 넣는다 — HELD는 막아 둔 돈이고 CANCELLED는 끝난
+		// 돈이라, 더하면 "그래서 얼마를 받나"에 실제보다 큰 답을 하게 된다(ADR-007).
+		val payable =
+			SETTLEMENT_RECEIVABLE.RECEIVABLE_STATUS.`in`(
+				SettlementReceivableStatus.PENDING.name,
+				SettlementReceivableStatus.READY.name,
+			)
+		val held = SETTLEMENT_RECEIVABLE.RECEIVABLE_STATUS.eq(SettlementReceivableStatus.HELD.name)
+
+		// 네 값을 한 번에 집계한다(`PaymentListProjectionAdapter`가 승인 건수·금액을 같은
+		// 쿼리에 접은 것과 같은 방식) — 조회를 늘리지 않고 같은 조건을 두 번 쓰지 않는다.
 		val totals =
 			dsl
-				.select(DSL.count(), DSL.coalesce(DSL.sum(SETTLEMENT_RECEIVABLE.NET_AMOUNT), DSL.zero()))
-				.from(SETTLEMENT_RECEIVABLE)
+				.select(
+					DSL.count(),
+					DSL.coalesce(DSL.sum(SETTLEMENT_RECEIVABLE.NET_AMOUNT).filterWhere(payable), DSL.zero()),
+					DSL.count().filterWhere(held),
+					DSL.coalesce(DSL.sum(SETTLEMENT_RECEIVABLE.NET_AMOUNT).filterWhere(held), DSL.zero()),
+				).from(SETTLEMENT_RECEIVABLE)
 				.join(MERCHANT)
 				.on(MERCHANT.MERCHANT_SEQ.eq(SETTLEMENT_RECEIVABLE.MERCHANT_SEQ))
 				.where(conditions)
@@ -104,6 +119,8 @@ class SettlementReceivableListProjectionAdapter(
 			entries = entries,
 			totalCount = (totals?.value1() ?: 0).toLong(),
 			totalNetAmount = totals?.value2()?.toLong() ?: 0L,
+			heldCount = (totals?.value3() ?: 0).toLong(),
+			heldNetAmount = totals?.value4()?.toLong() ?: 0L,
 		)
 	}
 

@@ -341,3 +341,63 @@ describe('정산 보류 해제와 취소', () => {
 		expect(screen.getByText('탐지 오류로 확인되어 해제합니다.')).toBeInTheDocument()
 	})
 })
+
+describe('보류 중인 돈을 한 줄에서 보여준다', () => {
+	function body(overrides: Record<string, unknown> = {}) {
+		return {
+			settlementReceivables: [receivable()],
+			totalCount: 3,
+			totalNetAmount: 59100,
+			heldCount: 0,
+			heldNetAmount: 0,
+			page: 0,
+			size: 20,
+			...overrides,
+		}
+	}
+
+	/**
+	 * **합계에서 빼기만 하고 어디로 갔는지 말해주지 않으면 숫자가 달라진 이유를 찾을 수
+	 * 없다.** 합계는 지급 경로에 살아 있는 것만 더하므로(ADR-007), 막힌 돈은 같은 줄에서
+	 * 그 차이를 설명해야 한다.
+	 */
+	it('보류 금액과 건수를 합계 옆에 함께 보여준다', async () => {
+		vi.stubGlobal('fetch', routedFetch(body({ heldCount: 2, heldNetAmount: 39400 })))
+
+		renderWithRouter(<SettlementPage me={ME} />)
+
+		// 라벨은 데이터를 기다리지 않고 그려지므로 **값**이 나타나는 것을 기다린다.
+		expect(await screen.findByText(/39,400원/)).toBeInTheDocument()
+		expect(screen.getByText('보류 중')).toBeInTheDocument()
+		expect(screen.getByText(/\(2건\)/)).toBeInTheDocument()
+	})
+
+	/**
+	 * **목록을 뒤져야 보이는 사실은 없는 것과 같다** — 이 슬라이스의 목적 전체가 이 한
+	 * 동작이다. 눌러서 바로 보류만 남긴다.
+	 */
+	it('보류 금액을 누르면 보류만 남도록 필터를 좁힌다', async () => {
+		const fetchMock = routedFetch(body({ heldCount: 2, heldNetAmount: 39400 }))
+		vi.stubGlobal('fetch', fetchMock)
+
+		renderWithRouter(<SettlementPage me={ME} />)
+
+		await userEvent.click(await screen.findByRole('button', { name: /39,400원/ }))
+
+		await waitFor(() => {
+			const urls = fetchMock.mock.calls.map(([url]) => String(url))
+			expect(urls.some((url) => url.includes('status=HELD'))).toBe(true)
+		})
+	})
+
+	/** 막힌 돈이 없을 때까지 눈에 띄면 경고가 배경이 되어 정작 필요할 때 보이지 않는다. */
+	it('보류가 없으면 누를 것도 없이 0원만 적는다', async () => {
+		vi.stubGlobal('fetch', routedFetch(body()))
+
+		renderWithRouter(<SettlementPage me={ME} />)
+
+		expect(await screen.findByText('0원')).toBeInTheDocument()
+		expect(screen.getByText('보류 중')).toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: /0원/ })).not.toBeInTheDocument()
+	})
+})

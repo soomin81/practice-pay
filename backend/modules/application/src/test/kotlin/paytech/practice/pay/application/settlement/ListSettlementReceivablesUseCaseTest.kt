@@ -21,7 +21,13 @@ private fun projection(
 ): SettlementReceivableListProjection {
 	val projection = mockk<SettlementReceivableListProjection>()
 	every { projection.find(capture(querySlot)) } returns
-		SettlementReceivableListPage(entries = emptyList(), totalCount = 0L, totalNetAmount = totalNetAmount)
+		SettlementReceivableListPage(
+			entries = emptyList(),
+			totalCount = 0L,
+			totalNetAmount = totalNetAmount,
+			heldCount = 0L,
+			heldNetAmount = 0L,
+		)
 	return projection
 }
 

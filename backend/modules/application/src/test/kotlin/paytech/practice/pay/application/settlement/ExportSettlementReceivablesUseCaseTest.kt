@@ -55,6 +55,8 @@ private fun projectionReturning(
 			entries = (1..count).map(::entry),
 			totalCount = count.toLong(),
 			totalNetAmount = count * 19_700L,
+			heldCount = 0L,
+			heldNetAmount = 0L,
 		)
 	return projection
 }

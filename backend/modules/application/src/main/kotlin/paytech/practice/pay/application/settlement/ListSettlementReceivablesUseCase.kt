@@ -37,6 +37,8 @@ class ListSettlementReceivablesUseCase(
 			entries = result.entries,
 			totalCount = result.totalCount,
 			totalNetAmount = result.totalNetAmount,
+			heldCount = result.heldCount,
+			heldNetAmount = result.heldNetAmount,
 			page = page,
 			size = size,
 		)

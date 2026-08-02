@@ -88,7 +88,7 @@ describe('정산 페이지', () => {
 	it('필터 전체의 정산 예정 금액 합계를 크게 보여준다', async () => {
 		vi.stubGlobal(
 			'fetch',
-			routedFetch({ settlementReceivables: [receivable()], totalCount: 3, totalNetAmount: 59100, page: 0, size: 20 }),
+			routedFetch({ settlementReceivables: [receivable()], totalCount: 3, totalNetAmount: 59100, heldCount: 0, heldNetAmount: 0, page: 0, size: 20 }),
 		)
 
 		renderWithRouter(<SettlementPage />)
@@ -105,6 +105,8 @@ describe('정산 페이지', () => {
 			settlementReceivables: [receivable()],
 			totalCount: 100,
 			totalNetAmount: 100,
+			heldCount: 0,
+			heldNetAmount: 0,
 			page: 1,
 			size: 20,
 		})
@@ -152,6 +154,32 @@ describe('정산 페이지', () => {
 
 		expect(await screen.findByText(/최대 10,000건까지만 담았습니다/)).toBeInTheDocument()
 	})
+
+	/**
+	 * **가맹점도 자기 돈이 얼마나 막혔는지는 알아야 한다** — 다만 이 콘솔에는 푸는 수단이
+	 * 없다(보류·해제·취소는 PG 내부 운영자만 한다). 합계가 지급 경로에 살아 있는 것만
+	 * 더하므로, 이 값이 없으면 "왜 줄었나"를 가맹점이 알 길이 없어 결국 문의로 돌아온다.
+	 */
+	it('보류된 금액과 건수를 합계 옆에 보여준다', async () => {
+		vi.stubGlobal(
+			'fetch',
+			routedFetch({
+				settlementReceivables: [receivable()],
+				totalCount: 3,
+				totalNetAmount: 59100,
+				heldCount: 2,
+				heldNetAmount: 39400,
+				page: 0,
+				size: 20,
+			}),
+		)
+
+		renderWithRouter(<SettlementPage />)
+
+		// 라벨은 데이터를 기다리지 않고 그려지므로 값이 나타나는 것을 기다린다.
+		expect(await screen.findByText('39,400원 (2건)')).toBeInTheDocument()
+		expect(screen.getByText('보류 중')).toBeInTheDocument()
+	})
 })
 
 /** 목록 조회와 파일 다운로드를 구분해 응답한다 — 한 화면에서 둘 다 나간다. */
@@ -166,7 +194,7 @@ function exportAwareFetch({ truncated }: { truncated: boolean }) {
 			})
 		}
 		return Promise.resolve(
-			fakeResponse({ settlementReceivables: [], totalCount: 0, totalNetAmount: 0, page: 0, size: 20, merchants: [] }),
+			fakeResponse({ settlementReceivables: [], totalCount: 0, totalNetAmount: 0, heldCount: 0, heldNetAmount: 0, page: 0, size: 20, merchants: [] }),
 		)
 	})
 }
