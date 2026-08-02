@@ -93,10 +93,11 @@ class SettlementReceivableListProjectionAdapter(
 
 		// 지급 경로에 살아 있는 것만 합계에 넣는다 — HELD는 막아 둔 돈이고 CANCELLED는 끝난
 		// 돈이라, 더하면 "그래서 얼마를 받나"에 실제보다 큰 답을 하게 된다(ADR-007).
+		// **어느 상태가 그런지는 상태 자신이 안다** — 여기서 목록을 따로 적으면 엑셀 쪽
+		// (XlsxSettlementExportWriter)과 갈려서 화면과 파일이 다른 답을 하게 된다.
 		val payable =
 			SETTLEMENT_RECEIVABLE.RECEIVABLE_STATUS.`in`(
-				SettlementReceivableStatus.PENDING.name,
-				SettlementReceivableStatus.READY.name,
+				SettlementReceivableStatus.entries.filter { it.isOnPayoutPath }.map { it.name },
 			)
 		val held = SETTLEMENT_RECEIVABLE.RECEIVABLE_STATUS.eq(SettlementReceivableStatus.HELD.name)
 
