@@ -14,7 +14,7 @@ import paytech.practice.pay.domain.checkout.CheckoutSessionStatus
 data class SubmitCheckoutCustomerResult(
 	val checkoutSessionId: CheckoutSessionId,
 	val checkoutSessionStatus: CheckoutSessionStatus,
-	val maskedName: String,
-	val maskedEmail: String,
-	val maskedPhone: String,
+	val nameMasked: String,
+	val emailMasked: String,
+	val phoneMasked: String,
 )

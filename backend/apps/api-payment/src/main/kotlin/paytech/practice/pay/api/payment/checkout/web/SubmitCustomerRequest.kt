@@ -27,7 +27,7 @@ data class SubmitCustomerRequest(
 data class SubmitCustomerResponse(
 	val checkoutSessionId: String,
 	val checkoutSessionStatus: String,
-	val maskedName: String,
-	val maskedEmail: String,
-	val maskedPhone: String,
+	val nameMasked: String,
+	val emailMasked: String,
+	val phoneMasked: String,
 )

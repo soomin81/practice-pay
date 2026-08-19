@@ -180,8 +180,8 @@ Content-Type: application/json
             "status: " + response.body.checkoutSessionStatus);
     });
     client.test("응답에 원본이 실리지 않는다 — 마스킹된 값만 온다", () => {
-        client.assert(response.body.maskedEmail === "gi***@example.com",
-            "maskedEmail: " + response.body.maskedEmail);
+        client.assert(response.body.emailMasked === "gi***@example.com",
+            "emailMasked: " + response.body.emailMasked);
         client.assert(JSON.stringify(response.body).indexOf("gildong@example.com") === -1,
             "응답에 이메일 원본이 들어 있다");
     });

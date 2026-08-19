@@ -189,6 +189,15 @@ gradlew.bat ktlintFormat                                  # 모든 모듈 자동
 - **`app.payment.receiving-wallets.*`만 기본값이 없다** — 여기 적힌 다른 값과 달리 "로컬 개발용 기본값"을 만들 수 없는 종류다. 고객이 보낸 실제 테스트넷 USDC가 그 주소로 전송되고 되찾을 수 없어서, 저장소에 적힌 주소가 조용히 쓰이는 것보다 결제 생성이 503으로 실패하는 편이 낫다. 앱 기동 자체는 설정 없이도 정상이다(아래 항목의 "환경변수 없이 `bootRun`"을 지키면서 실패는 결제를 만들 때만 드러낸다). **가맹점이 이 값을 요청으로 지정하지 못하게 하는 것이 이 설정의 목적이다** — 근거는 `docs/architecture/mvp-scope.md`의 "수취 지갑 귀속".
 - 로컬 개발 기본값은 `compose.yaml`의 MySQL(`localhost:3306/stablecoin_payment`, `root`/`verysecret`)과 Base Sepolia 공개 RPC(`https://sepolia.base.org`)를 가리킨다 — 환경변수를 하나도 설정하지 않아도 `bootRun`이 그대로 동작해야 한다는 뜻이다.
 
+## 이름은 계층을 넘어도 그대로다
+
+**같은 개념의 정식 이름은 `docs/domain/glossary.md`의 각 항목 "코드" 줄에 있다.** 새 필드·클래스·JSON 키를 만들기 전에 거기서 이름을 먼저 찾고, 목록에 없는 개념이면 그 문서에 추가한 뒤 쓴다 — 이름을 코드에서만 정하면 같은 개념이 계층마다 다른 이름을 갖는다.
+
+- **계층을 넘을 때 단어와 어순을 바꾸지 않는다.** DB `snake_case` ↔ Kotlin·JSON `lowerCamelCase` 변환만 한다: `customer_name_masked` → `nameMasked`(`customer_` 접두어는 테이블 이름과 겹쳐서 뺀다). **`maskedName`처럼 어순을 뒤집지 않는다** — 실제로 한 커밋 안에서 Port는 `nameMasked`, 응답은 `maskedName`으로 갈린 적이 있다.
+- **접두어는 겹칠 때만 뺀다.** DB 컬럼은 테이블 안에서 묶으려고 `customer_*`/`payment_*` 접두어를 갖는데, 그 접두어가 클래스 이름이나 JSON 중첩 경로와 겹치면 뺀다(`payment.payment_amount_minor` → JSON `payment.amount`). **빼기만 하고 순서는 건드리지 않는다.**
+- **다른 이름을 쓰려면 개념이 실제로 달라야 한다.** `CheckoutSession.connectedWallet`이 `Payment.customerWallet`과 이름이 다른 것은 귀속 시점이 다른 별개 필드라서다 — 그런 경우는 용어사전에 둘을 나란히 적어 "왜 다른지"를 남긴다.
+- 상태 컬럼만 예외적으로 규칙이 다르다: 도메인은 `status`, DB는 `<개념>_status`(`checkout_status`, `receivable_status`, `delivery_status`)다. 테이블마다 이름이 겹치지 않게 하려는 기존 스키마 규칙이라 그대로 따른다.
+
 ## 로깅(`kotlin-logging`)
 
 `io.github.oshai:kotlin-logging-jvm`을 쓴다. 파일 맨 위에 `private val logger = KotlinLogging.logger {}`를 두고 메시지는 한글 람다로 적는다(`apps:batch`의 Tasklet들이 원래 형태다).

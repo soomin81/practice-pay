@@ -101,9 +101,9 @@ class SubmitCheckoutCustomerUseCase(
 			SubmitCheckoutCustomerResult(
 				checkoutSessionId = checkoutSession.id,
 				checkoutSessionStatus = checkoutSession.status,
-				maskedName = customer.name.masked,
-				maskedEmail = customer.email.masked,
-				maskedPhone = customer.phone.masked,
+				nameMasked = customer.name.masked,
+				emailMasked = customer.email.masked,
+				phoneMasked = customer.phone.masked,
 			)
 		}
 }

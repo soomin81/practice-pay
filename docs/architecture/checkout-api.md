@@ -191,9 +191,9 @@
 {
   "checkoutSessionId": "cs_9f2c1a...",
   "checkoutSessionStatus": "OPEN",
-  "maskedName": "홍*동",
-  "maskedEmail": "gi***@example.com",
-  "maskedPhone": "010-****-5678"
+  "nameMasked": "홍*동",
+  "emailMasked": "gi***@example.com",
+  "phoneMasked": "010-****-5678"
 }
 ```
 

@@ -179,9 +179,9 @@ class CheckoutControllerTest : FunSpec() {
 				SubmitCheckoutCustomerResult(
 					checkoutSessionId = SESSION_ID,
 					checkoutSessionStatus = CheckoutSessionStatus.OPEN,
-					maskedName = "홍*동",
-					maskedEmail = "gi***@example.com",
-					maskedPhone = "010-****-5678",
+					nameMasked = "홍*동",
+					emailMasked = "gi***@example.com",
+					phoneMasked = "010-****-5678",
 				)
 
 			mockMvc
@@ -195,7 +195,7 @@ class CheckoutControllerTest : FunSpec() {
 						),
 				).andExpect(status().isOk)
 				.andExpect(jsonPath("$.checkoutSessionStatus").value("OPEN"))
-				.andExpect(jsonPath("$.maskedEmail").value("gi***@example.com"))
+				.andExpect(jsonPath("$.emailMasked").value("gi***@example.com"))
 		}
 
 		/** 형식 검증은 도메인 VO가 한다 — 컨트롤러는 그 예외를 400으로 흘려보낸다. */

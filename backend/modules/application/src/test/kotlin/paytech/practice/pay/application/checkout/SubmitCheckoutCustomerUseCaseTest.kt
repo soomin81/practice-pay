@@ -182,9 +182,9 @@ class SubmitCheckoutCustomerUseCaseTest :
 
 			val result = newUseCase(checkoutSessionRepository, paymentCustomerRepository).execute(command())
 
-			result.maskedName shouldBe "홍*동"
-			result.maskedEmail shouldNotContain "gildong"
-			result.maskedPhone shouldNotContain "1234"
+			result.nameMasked shouldBe "홍*동"
+			result.emailMasked shouldNotContain "gildong"
+			result.phoneMasked shouldNotContain "1234"
 		}
 
 		test("customer info is still accepted after the wallet is connected") {

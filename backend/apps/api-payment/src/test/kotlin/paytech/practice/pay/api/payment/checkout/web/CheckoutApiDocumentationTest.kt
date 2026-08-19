@@ -296,9 +296,9 @@ class CheckoutApiDocumentationTest : FunSpec() {
 				SubmitCheckoutCustomerResult(
 					checkoutSessionId = SESSION_ID,
 					checkoutSessionStatus = CheckoutSessionStatus.OPEN,
-					maskedName = "홍*동",
-					maskedEmail = "gi***@example.com",
-					maskedPhone = "010-****-5678",
+					nameMasked = "홍*동",
+					emailMasked = "gi***@example.com",
+					phoneMasked = "010-****-5678",
 				)
 
 			val snippet =
@@ -320,9 +320,9 @@ class CheckoutApiDocumentationTest : FunSpec() {
 						listOf(
 							fieldWithPath("checkoutSessionId").description("체크아웃 세션 식별자"),
 							fieldWithPath("checkoutSessionStatus").description("CREATED였다면 이 호출로 OPEN이 된다"),
-							fieldWithPath("maskedName").description("마스킹된 이름. 응답에는 원본이 실리지 않는다"),
-							fieldWithPath("maskedEmail").description("마스킹된 이메일"),
-							fieldWithPath("maskedPhone").description("마스킹된 휴대전화 번호"),
+							fieldWithPath("nameMasked").description("마스킹된 이름. 응답에는 원본이 실리지 않는다"),
+							fieldWithPath("emailMasked").description("마스킹된 이메일"),
+							fieldWithPath("phoneMasked").description("마스킹된 휴대전화 번호"),
 						),
 				)
 

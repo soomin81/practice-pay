@@ -98,9 +98,9 @@ class CheckoutController(
 		return SubmitCustomerResponse(
 			checkoutSessionId = result.checkoutSessionId.value,
 			checkoutSessionStatus = result.checkoutSessionStatus.name,
-			maskedName = result.maskedName,
-			maskedEmail = result.maskedEmail,
-			maskedPhone = result.maskedPhone,
+			nameMasked = result.nameMasked,
+			emailMasked = result.emailMasked,
+			phoneMasked = result.phoneMasked,
 		)
 	}
 
