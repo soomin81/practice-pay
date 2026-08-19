@@ -741,7 +741,7 @@ gap은 **환경변수로 들어온 실제 키로 암호화한 값이 진짜 MySQ
 - **원본 열람(`api-admin`)과 Blind Index 검색이 아직 없다.** 도메인
   `CustomerPiiAccessAudit`과 두 Repository 어댑터까지는 있고, 그것을 부르는 Use Case가 없다 —
   `CustomerPiiAccessAuditRepositoryAdapter`는 지금 호출부가 없는 상태다.
-- **체크아웃 화면(`frontend/payment`)에 입력 단계가 아직 없다.** 백엔드만 받을 준비가 됐다.
+- ~~체크아웃 화면에 입력 단계가 없다~~ — `frontend/payment`의 `CustomerForm`이 채웠다(지갑 단계보다 앞에 두고, 순서는 `PayScreen`이 강제한다).
 - **`GET /checkout/sessions/{id}`가 입력 여부를 알려주지 않는다** — 새로고침한 고객은 입력
   화면을 다시 만난다(다시 제출하면 덮어쓰므로 결과는 같다). 판단 근거는
   `docs/architecture/checkout-api.md`의 8절에 적었다.

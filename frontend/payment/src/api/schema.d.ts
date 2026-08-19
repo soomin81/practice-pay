@@ -44,6 +44,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/checkout/sessions/{checkoutSessionId}/customer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 구매자 정보 입력
+         * @description 고객이 이름·이메일·휴대전화를 직접 입력한다. 지갑 연결보다 앞선 단계다 — 서명 이후에 입력을 요구하면 돈은 나갔는데 결제가 미완인 창이 생긴다. 다시 호출하면 덮어쓰고, 결제 전송을 제출한 뒤에는 409다.
+         */
+        post: operations["checkout-submit-customer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/checkout/sessions/{checkoutSessionId}/status": {
         parameters: {
             query?: never;
@@ -122,6 +142,19 @@ export interface components {
             /** @description 취소에 성공하면 CANCELLED */
             checkoutSessionStatus: string;
         };
+        /** SubmitCustomerResponse */
+        SubmitCustomerResponse: {
+            /** @description 마스킹된 휴대전화 번호 */
+            phoneMasked: string;
+            /** @description 마스킹된 이름. 응답에는 원본이 실리지 않는다 */
+            nameMasked: string;
+            /** @description 체크아웃 세션 식별자 */
+            checkoutSessionId: string;
+            /** @description 마스킹된 이메일 */
+            emailMasked: string;
+            /** @description CREATED였다면 이 호출로 OPEN이 된다 */
+            checkoutSessionStatus: string;
+        };
         /** SubmitTransactionResponse */
         SubmitTransactionResponse: {
             /** @description 결제 식별자 */
@@ -156,6 +189,15 @@ export interface components {
         SubmitTransactionRequest: {
             /** @description 브로드캐스트된 전송의 Transaction Hash */
             transactionHash: string;
+        };
+        /** SubmitCustomerRequest */
+        SubmitCustomerRequest: {
+            /** @description 국내 휴대전화 번호(01X-XXXX-XXXX, 하이픈은 있어도 없어도 된다) */
+            phone: string;
+            /** @description 구매자 이름(100자 이내) */
+            name: string;
+            /** @description 구매자 이메일. 결제에 문제가 생겼을 때의 주 연락 수단이다 */
+            email: string;
         };
         /** ConnectWalletResponse */
         ConnectWalletResponse: {
@@ -273,6 +315,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CancelCheckoutSessionResponse"];
+                };
+            };
+        };
+    };
+    "checkout-submit-customer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 체크아웃 세션 식별자. 결제 생성 응답의 checkoutSessionId를 그대로 쓴다. */
+                checkoutSessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json;charset=UTF-8": components["schemas"]["SubmitCustomerRequest"];
+            };
+        };
+        responses: {
+            /** @description 200 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubmitCustomerResponse"];
                 };
             };
         };

@@ -11,6 +11,7 @@ type Json200<T extends keyof operations> = operations[T]['responses'][200]['cont
 
 export type CheckoutSession = Json200<'checkout-get-session'>
 export type CheckoutStatus = Json200<'checkout-get-status'>
+export type SubmitCustomerResponse = Json200<'checkout-submit-customer'>
 export type ConnectWalletResponse = Json200<'checkout-connect-wallet'>
 export type SubmitTransactionResponse = Json200<'checkout-submit-transaction'>
 export type CancelResponse = Json200<'checkout-cancel'>

@@ -82,7 +82,8 @@ src/index.css                 Tailwind import + shadcn 테마 변수
 |---|---|
 | `CheckoutShell` | 페이지 바깥 틀. 모든 상태 화면이 같은 폭·여백을 쓰게 해서 상태가 바뀔 때 카드가 튀지 않게 한다 |
 | `StatusScreen` | 완료·만료·취소·실패·로딩을 한 컴포넌트로. **tone은 호출부가 정한다** — 이 컴포넌트가 상태를 해석하지 않는다 |
-| `PayScreen` | 결제 진행 본 화면. 취소 버튼이 여기에만 있다(`PAYMENT_SUBMITTED` 이후 고객 취소 불가) |
+| `PayScreen` | 결제 진행 본 화면. 취소 버튼이 여기에만 있다(`PAYMENT_SUBMITTED` 이후 고객 취소 불가). **구매자 정보를 받기 전에는 `WalletPanel`을 렌더링하지 않는다** — 순서를 강제하는 유일한 자리다 |
+| `CustomerForm` | 구매자 이름·이메일·휴대전화 입력(ADR-008). **형식 검증은 서버가 한다** — 비어 있는지만 막고 서버 메시지를 그대로 보여준다 |
 | `PaymentSummary` | 주문 금액(KRW)과 보낼 토큰 금액 |
 | `PaymentDetails` | 네트워크·수취 지갑·Contract·환율·남은 시간 |
 | `ConfirmationProgress` | Confirmation 진행률 |
@@ -92,7 +93,9 @@ src/index.css                 Tailwind import + shadcn 테마 변수
 
 ## 지갑 — wagmi + viem
 
-`src/wallet/`에 있다. 흐름은 계약 문서 7절 그대로다: 지갑 연결 → `POST /wallet` → ERC-20 `transfer` 서명·브로드캐스트 → `POST /transaction` → 이후는 상태 폴링이 이어받는다.
+`src/wallet/`에 있다. 흐름은 계약 문서 7절 그대로다: **구매자 정보 입력(`POST /customer`)** → 지갑 연결 → `POST /wallet` → ERC-20 `transfer` 서명·브로드캐스트 → `POST /transaction` → 이후는 상태 폴링이 이어받는다.
+
+**구매자 정보가 지갑보다 앞이다**(ADR-008). 서명 이후에 입력을 요구하면 돈은 나갔는데 결제가 미완인 창이 생긴다. 서버는 어느 쪽이 먼저 와도 받으므로 이 순서를 지키는 것은 `PayScreen`뿐이고, 서버가 "이미 입력했는지"를 알려주지 않아(계약 8절의 gap) **로컬 상태로 판단한다** — 새로고침하면 다시 묻고, 다시 제출하면 덮어쓴다. 세션이 이미 `WALLET_CONNECTED`여도 건너뛰지 않는다: 정보를 받는 것이 이 단계의 존재 이유다.
 
 | 파일 | 역할 |
 |---|---|
@@ -240,11 +243,11 @@ npm run gen:api        # api-merchant의 openapi3.yaml → src/api/schema.d.ts
 
 ## 현재 상태와 다음
 
-- **된 것**: 스캐폴딩, 타입 생성, API 클라이언트, 상태별 화면, 3초 폴링, DEV 결제 생성 버튼. UI는 Tailwind v4 + shadcn/ui이고 화면 컴포넌트는 `checkout/components/`에 있다. 지갑 연결과 ERC-20 `transfer`는 wagmi + viem으로 **코드가 들어갔다**.
+- **된 것**: 스캐폴딩, 타입 생성, API 클라이언트, 상태별 화면, 3초 폴링, DEV 결제 생성 버튼, 구매자 정보 입력 단계(ADR-008). UI는 Tailwind v4 + shadcn/ui이고 화면 컴포넌트는 `checkout/components/`에 있다. 지갑 연결과 ERC-20 `transfer`는 wagmi + viem으로 **코드가 들어갔다**.
 - **상태 관리 라이브러리(Zustand 등)는 넣지 않았다.** 서버 상태는 react-query가, 지갑 상태는 wagmi 훅이 갖고, 나머지는 한 컴포넌트 안의 `useState`로 끝난다 — 지금 컴포넌트 사이에서 공유해야 할 클라이언트 상태가 없다. 생기면 그때 넣는다.
 - **아직 실물로 확인 못 한 것 둘**:
   - **지갑 흐름 전체.** MetaMask 확장과 Base Sepolia 테스트넷 USDC가 있어야 한다. 타입 검사·가드 테스트·번들까지는 확인했지만 **연결·서명·전송을 실제로 돌려본 적이 없다.** 백엔드와 같은 규율로 실물 수동 검증이 최종 확인이다.
-  - **Tailwind 전환 후의 화면.** 빌드·테스트·클래스 생성까지는 확인했지만 브라우저에서 렌더된 모습은 보지 못했다(작업 당시 브라우저 자동화 확장 미연결). `npm run dev`로 각 상태 화면을 한 번 훑는 것이 좋다.
+  - **Tailwind 전환 후의 화면.** 빌드·테스트·클래스 생성까지는 확인했지만 브라우저에서 렌더된 모습은 보지 못했다(작업 당시 브라우저 자동화 확장 미연결). `npm run dev`로 각 상태 화면을 한 번 훑는 것이 좋다. 구매자 정보 입력 단계는 사람이 직접 열어 확인했다.
 - 명령어는 위 "실행" 절 참고. 프로젝트가 더 생기면 이 문서에 앱별 절을 나눈다.
 
 ## 앱: admin (내부 운영자 콘솔) — merchant와 다른 점만

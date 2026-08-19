@@ -3,6 +3,7 @@ import type {
 	CheckoutSession,
 	CheckoutStatus,
 	ConnectWalletResponse,
+	SubmitCustomerResponse,
 	SubmitTransactionResponse,
 } from './types'
 
@@ -81,6 +82,18 @@ export const checkoutApi = {
 
 	getStatus: (sessionId: string) =>
 		request<CheckoutStatus>(`/checkout/sessions/${encodeURIComponent(sessionId)}/status`),
+
+	/**
+	 * 구매자 정보(이름·이메일·휴대전화)를 보낸다 — 지갑 연결보다 앞선 단계다(계약 4.3).
+	 *
+	 * **응답에는 마스킹된 값만 온다.** 방금 입력한 본인에게 돌려주는 값이지만 서버가 원문을
+	 * 싣지 않기로 했으므로, 확인 표시에는 그 마스킹 값을 그대로 쓴다.
+	 */
+	submitCustomer: (sessionId: string, customer: { name: string; email: string; phone: string }) =>
+		request<SubmitCustomerResponse>(`/checkout/sessions/${encodeURIComponent(sessionId)}/customer`, {
+			method: 'POST',
+			body: JSON.stringify(customer),
+		}),
 
 	connectWallet: (sessionId: string, walletAddress: string) =>
 		request<ConnectWalletResponse>(`/checkout/sessions/${encodeURIComponent(sessionId)}/wallet`, {
