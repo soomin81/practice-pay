@@ -21,6 +21,12 @@ import { Label } from '@/components/ui/label'
  *
  * 다시 보려면 다시 열람해야 하고, **그때 기록이 한 번 더 남는다.** 그게 맞다: 두 번 봤으면
  * 두 번 남아야 한다.
+ *
+ * ## 폭을 고정한다(`w-56`)
+ *
+ * 표의 한 칸 안에서 열리므로, 폭을 두지 않으면 입력 길이에 따라 그 열이 계속 넓어져 다른
+ * 열들이 밀린다. **표 자체의 가로 스크롤은 결함이 아니다** — `DataTable`이 `overflow-x-auto`로
+ * 설계돼 있고 정산 표는 9열이라 평소에도 스크롤된다.
  */
 export function RevealCustomerAction({ paymentId }: { paymentId: string }) {
 	const [asking, setAsking] = useState(false)
@@ -52,7 +58,7 @@ export function RevealCustomerAction({ paymentId }: { paymentId: string }) {
 
 	if (revealed) {
 		return (
-			<div className="flex flex-col gap-1 rounded-lg border border-destructive/40 bg-destructive/5 p-2">
+			<div className="flex w-56 flex-col gap-1 rounded-lg border border-destructive/40 bg-destructive/5 p-2">
 				<span className="text-xs font-medium text-destructive">열람 기록이 남았습니다</span>
 				<span className="text-sm">{revealed.name}</span>
 				<span className="text-sm">{revealed.email}</span>
@@ -66,7 +72,7 @@ export function RevealCustomerAction({ paymentId }: { paymentId: string }) {
 
 	if (asking) {
 		return (
-			<form className="flex flex-col gap-1.5" onSubmit={reveal}>
+			<form className="flex w-56 flex-col gap-1.5" onSubmit={reveal}>
 				<Label htmlFor={`reveal-reason-${paymentId}`} className="text-xs">
 					열람 사유(기록에 남습니다)
 				</Label>
