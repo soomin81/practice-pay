@@ -88,3 +88,25 @@ MVP는 SUPER_ADMIN Bootstrap, 내부 사용자 발급/로그인, 최초 OWNER를
 이 저장소는 다른 코딩 에이전트(예: Codex)도 같은 `docs/`를 기준으로 함께 사용한다 — 에이전트가 따르는 컨벤션은 서로 충돌하는 로컬 규칙을 새로 만들지 말고 문서화된 내용과 일관되게 유지한다. Codex 쪽 진입점은 `AGENTS.md`이고 루트·`backend/`·`frontend/` 세 곳에 있다. **셋 다 같은 자리의 `CLAUDE.md`를 가리키는 포인터일 뿐이고 규칙 본문은 `CLAUDE.md`에만 둔다** — 규칙을 양쪽에 적으면 한쪽만 갱신돼 조용히 어긋난다. 디렉토리마다 파일을 둔 이유는 에이전트가 **작업 중인 디렉토리의 지침을 읽기** 때문이다: 루트에서 두 단계를 따라 내려와야만 닿는 규칙은 지켜지지 않을 수 있다.
 
 Git 커밋 메시지(제목과 본문)는 한글로 작성한다 — 이 프로젝트가 학습용 프로젝트라 코드의 KDoc과 검증 메시지도 한글로 쓰는 것과 같은 맥락이다(`backend/CLAUDE.md` 참고). 커밋 메시지 안의 코드 식별자, 파일 경로, 기술 용어는 평소대로 영문을 유지하고, 문장만 한글로 쓴다.
+
+### 에이전트가 만든 커밋은 자신을 밝힌다
+
+**모든 에이전트 커밋은 어느 에이전트가 만들었는지 알 수 있는 `Co-Authored-By:` trailer를 단다.** 이 규칙을 세우기 전에는 저장소의 커밋이 하나도 빠짐없이 Claude trailer를 달고 있어서 **저장소만으로는 Codex 기여를 구분할 수 없었다** — 컨벤션이 어긋났을 때 어디서 온 것인지 되짚을 방법이 없다는 뜻이다.
+
+| 에이전트 | trailer |
+|---|---|
+| Claude Code | `Co-Authored-By: Claude <noreply@anthropic.com>` (모델 이름이 붙기도 한다 — 아래 참고) |
+| Codex | `Co-Authored-By: Codex <noreply@openai.com>` |
+
+- **Claude 쪽은 harness가 자동으로 붙이므로 사람이 손대지 않는다.** 모델 이름 부분은 그때그때 다르고(`Claude`/`Claude Opus 4.8`/`Claude Sonnet 5`/`Claude Opus 5`가 이미 섞여 있다) **통일하려 애쓰지 않는다** — 식별에 쓰는 것은 이름 앞부분과 도메인이다. `Claude-Session:` 줄도 harness가 붙이는 그대로 둔다.
+- **Codex는 자동으로 붙지 않으므로 커밋 메시지 끝에 직접 적는다.** 빠뜨리면 그 커밋은 사람이 직접 쓴 것과 구분되지 않는다.
+- 사람이 직접 만든 커밋에는 **아무 trailer도 달지 않는다** — 그게 사람 커밋의 표식이다.
+- 한 커밋을 두 에이전트가 함께 만들었다면 두 줄을 다 적는다(`Co-Authored-By:`는 원래 여러 줄이 가능하다).
+
+되짚을 때:
+
+```bash
+git log --grep='Co-Authored-By: Codex'                    # Codex가 만든 커밋
+git log --invert-grep --grep='Co-Authored-By'             # 사람이 직접 만든 커밋
+git log --format='%H %s' --grep='Co-Authored-By: Claude'  # Claude가 만든 커밋
+```
