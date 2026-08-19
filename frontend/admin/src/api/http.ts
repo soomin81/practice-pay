@@ -58,6 +58,11 @@ export class ConsoleApiError extends Error {
 	get isConflict(): boolean {
 		return this.status === 409
 	}
+
+	/** 대상이 없다. **없는 것과 볼 수 없는 것을 서버가 구분해 주지 않는 경우도 여기로 온다.** */
+	get isNotFound(): boolean {
+		return this.status === 404
+	}
 }
 
 /** [createRequest]가 앱마다 다르게 받는 설정이다. */

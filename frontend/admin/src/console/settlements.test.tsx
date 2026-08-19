@@ -246,7 +246,7 @@ describe('정산 보류 해제와 취소', () => {
 	})
 
 	it('해제는 사유와 함께 그 채권 경로로 보낸다', async () => {
-		const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+		const fetchMock = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
 			if (init?.method === 'POST') {
 				return Promise.resolve(fakeResponse({ settlementReceivableId: 'str_001', status: 'READY' }))
 			}
@@ -283,7 +283,7 @@ describe('정산 보류 해제와 취소', () => {
 
 	/** `409`는 "왜 안 되는지"를 담고 있다 — 감추면 같은 버튼을 계속 누른다. */
 	it('서버가 거절하면 그 이유를 그대로 보여준다', async () => {
-		const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+		const fetchMock = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
 			if (init?.method === 'POST') {
 				return Promise.resolve({
 					ok: false,

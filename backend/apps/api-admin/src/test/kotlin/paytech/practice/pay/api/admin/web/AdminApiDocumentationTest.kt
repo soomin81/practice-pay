@@ -30,6 +30,10 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import paytech.practice.pay.api.admin.config.SecurityConfig
 import paytech.practice.pay.api.admin.security.InternalUserPrincipal
+import paytech.practice.pay.application.customer.RevealPaymentCustomerResult
+import paytech.practice.pay.application.customer.RevealPaymentCustomerUseCase
+import paytech.practice.pay.application.customer.SearchPaymentCustomersResult
+import paytech.practice.pay.application.customer.SearchPaymentCustomersUseCase
 import paytech.practice.pay.application.identity.AcceptAccountInvitationResult
 import paytech.practice.pay.application.identity.AcceptAccountInvitationUseCase
 import paytech.practice.pay.application.identity.AdminChangeMerchantUserRoleUseCase
@@ -67,6 +71,7 @@ import paytech.practice.pay.application.port.outbound.InternalUserSummary
 import paytech.practice.pay.application.port.outbound.MerchantLoginAuditEntry
 import paytech.practice.pay.application.port.outbound.MerchantSummary
 import paytech.practice.pay.application.port.outbound.MerchantUserSummary
+import paytech.practice.pay.application.port.outbound.PaymentCustomerSearchEntry
 import paytech.practice.pay.application.port.outbound.PaymentListEntry
 import paytech.practice.pay.application.port.outbound.SettlementHoldAuditEntry
 import paytech.practice.pay.application.port.outbound.SettlementReceivableListEntry
@@ -83,6 +88,9 @@ import paytech.practice.pay.application.webhook.RedeliverWebhookResult
 import paytech.practice.pay.application.webhook.RedeliverWebhookUseCase
 import paytech.practice.pay.domain.blockchain.BlockchainTransactionId
 import paytech.practice.pay.domain.blockchain.TransactionHash
+import paytech.practice.pay.domain.customer.CustomerEmail
+import paytech.practice.pay.domain.customer.CustomerName
+import paytech.practice.pay.domain.customer.CustomerPhone
 import paytech.practice.pay.domain.identity.AccountStatus
 import paytech.practice.pay.domain.identity.Email
 import paytech.practice.pay.domain.identity.InternalLoginAuditId
@@ -180,6 +188,7 @@ private fun adminResource(
 		MerchantLoginAuditController::class,
 		AdminPaymentController::class,
 		AdminSettlementReceivableController::class,
+		AdminPaymentCustomerController::class,
 		WebhookDeliveryController::class,
 		BlockchainTransactionController::class,
 		AcceptAccountInvitationController::class,
@@ -262,6 +271,12 @@ class AdminApiDocumentationTest : FunSpec() {
 
 	@MockkBean
 	lateinit var listSettlementHoldHistoryUseCase: ListSettlementHoldHistoryUseCase
+
+	@MockkBean
+	lateinit var searchPaymentCustomersUseCase: SearchPaymentCustomersUseCase
+
+	@MockkBean
+	lateinit var revealPaymentCustomerUseCase: RevealPaymentCustomerUseCase
 
 	init {
 		extensions(SpringExtension)
@@ -1050,6 +1065,9 @@ class AdminApiDocumentationTest : FunSpec() {
 							fieldWithPath("settlementReceivables[].eligibleDate").description("정산 예정일(YYYY-MM-DD)"),
 							fieldWithPath("settlementReceivables[].holdReasonCode")
 								.description("지금 왜 막혀 있나. HELD가 아니면 null(막혔던 이력은 hold-history에 있다)")
+								// 예시 값이 null이면 REST Docs가 타입을 추론하지 못해 **필드가 스펙에서 통째로 빠진다**
+								// (프론트는 그 사실을 컴파일 오류로만 알게 된다 — frontend/CLAUDE.md의 경고).
+								.type(JsonFieldType.STRING)
 								.optional(),
 							fieldWithPath("settlementReceivables[].createdAt").description("생성 시각(UTC)"),
 							fieldWithPath("totalCount").description("필터 전체에 걸린 건수"),
@@ -1219,11 +1237,17 @@ class AdminApiDocumentationTest : FunSpec() {
 							responseSchema = "ListSettlementHoldHistoryResponse",
 							responseFields =
 								listOf(
+									// **부모 서술자를 빠뜨리면 배열 자체가 optional로 나간다** — 프론트에서는
+									// `history.data.history`가 undefined일 수 있는 값이 되어 컴파일이 깨진다.
+									fieldWithPath("history").description("보류·해제·취소 이력 배열(최신순)"),
 									fieldWithPath("history[].auditId").description("이력 식별자"),
 									fieldWithPath("history[].internalUserId").description("실행한 내부 운영자 식별자"),
 									fieldWithPath("history[].internalUserName").description("실행한 내부 운영자 이름"),
 									fieldWithPath("history[].action").description("HELD / RELEASED / CANCELLED. **채권 상태와 다른 축이다** — RELEASED에 대응하는 상태는 없다"),
-									fieldWithPath("history[].reasonCode").description("HELD일 때의 사유 코드. 해제·취소에는 null").optional(),
+									fieldWithPath("history[].reasonCode")
+										.description("HELD일 때의 사유 코드. 해제·취소에는 null")
+										.type(JsonFieldType.STRING)
+										.optional(),
 									fieldWithPath("history[].note").description("실행자가 남긴 메모. 해제·취소에는 반드시 있다").optional(),
 									fieldWithPath("history[].occurredAt").description("실행 시각(UTC)"),
 								),
@@ -1265,6 +1289,107 @@ class AdminApiDocumentationTest : FunSpec() {
 										.description("되돌린 뒤의 상태(PENDING). **아직 보내지 않았다는 뜻**이라 '성공'으로 읽으면 안 된다."),
 									fieldWithPath("attemptCount")
 										.description("누적 시도 횟수. 재전송은 이 값을 초기화하지 않는다(재시도 예산을 새로 주지 않는다)."),
+								),
+						),
+					),
+				)
+		}
+
+		test("document GET payment customers") {
+			every { searchPaymentCustomersUseCase.execute(any()) } returns
+				SearchPaymentCustomersResult(
+					matches =
+						listOf(
+							PaymentCustomerSearchEntry(
+								paymentId = PaymentId("pay_3b81c2d4e5f6a7b8"),
+								merchantId = MerchantId("mrc_test_001"),
+								merchantName = "테스트 가맹점",
+								merchantOrderId = MerchantOrderId("order-1001"),
+								orderName = "테스트 상품",
+								orderAmount = Money(20_000),
+								status = PaymentStatus.SUCCEEDED,
+								nameMasked = "홍*동",
+								emailMasked = "gi***@example.com",
+								phoneMasked = "010-****-5678",
+								paidAt = NOW,
+								createdAt = NOW,
+							),
+						),
+				)
+
+			val snippet =
+				adminResource(
+					summary = "구매자 정보 검색(Blind Index 정확 일치)",
+					description =
+						"SUPER_ADMIN/OPERATOR가 이메일 **또는** 휴대전화로 결제를 찾는다 — 고객 문의에 답하는 입구다. " +
+							"email과 phone 중 정확히 하나만 준다(둘 다면 400). **부분 검색과 이름 검색은 되지 않는다** — " +
+							"암호문은 값마다 랜덤 IV라 정확 일치만 가능하고, 이름에는 Blind Index를 두지 않았다. " +
+							"응답은 마스킹된 값만 담는다(복호화를 타지 않는다). 못 찾으면 빈 배열과 200이다.",
+					responseSchema = "PaymentCustomerSearchResponse",
+					responseFields =
+						listOf(
+							fieldWithPath("matches").description("검색 결과 배열(최신순)"),
+							fieldWithPath("matches[].paymentId").description("결제 식별자"),
+							fieldWithPath("matches[].merchantId").description("가맹점 식별자"),
+							fieldWithPath("matches[].merchantName").description("가맹점 이름"),
+							fieldWithPath("matches[].merchantOrderId").description("가맹점이 준 주문 번호"),
+							fieldWithPath("matches[].orderName").description("주문 이름"),
+							fieldWithPath("matches[].orderAmount").description("주문 금액(KRW, 숫자)"),
+							fieldWithPath("matches[].status").description("결제 상태"),
+							fieldWithPath("matches[].nameMasked").description("마스킹된 이름. **원문은 이 응답에 없다.**"),
+							fieldWithPath("matches[].emailMasked").description("마스킹된 이메일"),
+							fieldWithPath("matches[].phoneMasked").description("마스킹된 휴대전화"),
+							fieldWithPath("matches[].paidAt").description("결제 완료 시각(UTC). 미완이면 null.").optional(),
+							fieldWithPath("matches[].createdAt").description("결제 생성 시각(UTC)"),
+						),
+				)
+
+			mockMvc
+				.perform(get("/admin/payment-customers").param("email", "gildong@example.com").with(authenticatedAs(SUPER_ADMIN)))
+				.andExpect(status().isOk)
+				.andDo(document("admin-search-payment-customers", snippet))
+		}
+
+		test("document POST reveal payment customer") {
+			every { revealPaymentCustomerUseCase.execute(any()) } returns
+				RevealPaymentCustomerResult(
+					paymentId = PaymentId("pay_3b81c2d4e5f6a7b8"),
+					name = CustomerName("홍길동"),
+					email = CustomerEmail("gildong@example.com"),
+					phone = CustomerPhone("010-1234-5678"),
+					revealedAt = NOW,
+				)
+
+			mockMvc
+				.perform(
+					RestDocumentationRequestBuilders
+						.post("/admin/payment-customers/{paymentId}/reveal", "pay_3b81c2d4e5f6a7b8")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""{"reason":"결제 실패 문의 대응 — 고객에게 연락 필요"}""")
+						.with(authenticatedAs(SUPER_ADMIN))
+						.with(csrf()),
+				).andExpect(status().isOk)
+				.andDo(
+					document(
+						"admin-reveal-payment-customer",
+						adminResource(
+							pathParameters = listOf(parameterWithName("paymentId").description("원본을 열람할 결제 식별자")),
+							summary = "구매자 원본 열람(감사 기록이 함께 남는다)",
+							description =
+								"**SUPER_ADMIN 전용이고, 이 API의 유일한 평문 응답이다.** 읽기처럼 보이지만 감사 기록을 남기는 " +
+									"쓰기라 POST다 — GET이면 프리페치·캐시가 사람의 의도 없이 열람을 일으킬 수 있다. " +
+									"reason이 비면 400이고, 기록에 실패하면 열람도 실패한다(같은 트랜잭션). " +
+									"없는 결제와 구매자 정보가 없는 결제를 구분하지 않고 둘 다 404다.",
+							requestSchema = "RevealPaymentCustomerRequest",
+							requestFields = listOf(fieldWithPath("reason").description("왜 보는지. 공백이면 400 — 감사 기록에 그대로 남는다.")),
+							responseSchema = "RevealPaymentCustomerResponse",
+							responseFields =
+								listOf(
+									fieldWithPath("paymentId").description("결제 식별자"),
+									fieldWithPath("name").description("**구매자 이름 원문**"),
+									fieldWithPath("email").description("**구매자 이메일 원문**"),
+									fieldWithPath("phone").description("**구매자 휴대전화 원문**"),
+									fieldWithPath("revealedAt").description("열람 시각(UTC). 감사 기록에 남은 것과 같은 값이다."),
 								),
 						),
 					),

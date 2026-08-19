@@ -28,8 +28,11 @@ import type {
 	LoginRequest,
 	LoginResponse,
 	MeResponse,
+	PaymentCustomerSearchField,
+	PaymentCustomerSearchResponse,
 	RegisterMerchantRequest,
 	RegisterMerchantResponse,
+	RevealPaymentCustomerResponse,
 } from './types'
 
 import { ConsoleApiError, createDownload, createRequest } from './http'
@@ -132,6 +135,28 @@ export const adminApi = {
 
 	/** 로그인 감사 로그(최근 시도, 최신순). SUPER_ADMIN 전용 — 서버도 403으로 막는다. */
 	listLoginAudit: () => request<ListLoginAuditResponse>('/admin/login-audit'),
+
+	/**
+	 * 이메일 **또는** 휴대전화로 구매자를 찾는다(계약 4.7). 응답은 마스킹된 값만 담는다.
+	 *
+	 * 둘 중 하나만 보낸다 — 둘 다 보내면 서버가 400을 낸다(AND 조합 탐색을 막는다).
+	 */
+	searchPaymentCustomers: (field: PaymentCustomerSearchField, value: string) =>
+		request<PaymentCustomerSearchResponse>(
+			`/admin/payment-customers?${field}=${encodeURIComponent(value)}`,
+		),
+
+	/**
+	 * 마스킹되지 않은 원본을 가져온다(계약 4.8). **SUPER_ADMIN 전용이고 감사 기록이 남는다.**
+	 *
+	 * 응답을 캐시에 넣지 않는다 — 원문을 react-query 캐시에 두면 화면을 떠난 뒤에도 메모리에
+	 * 남고, 다른 화면이 같은 키로 무심코 다시 읽을 수 있다.
+	 */
+	revealPaymentCustomer: (paymentId: string, reason: string) =>
+		request<RevealPaymentCustomerResponse>(
+			`/admin/payment-customers/${encodeURIComponent(paymentId)}/reveal`,
+			{ method: 'POST', body: JSON.stringify({ reason }) },
+		),
 
 	/** 가맹점 로그인 감사 로그(전 가맹점, 최신순). SUPER_ADMIN/OPERATOR 전용 — 서버도 403으로 막는다. */
 	listMerchantLoginAudit: () => request<ListMerchantLoginAuditResponse>('/admin/merchant-login-audit'),

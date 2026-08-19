@@ -111,6 +111,33 @@ export function canManageSettlementHold(role: string): boolean {
 	return role === 'SUPER_ADMIN'
 }
 
+/**
+ * 구매자 정보 검색·원본 열람이 가능한 역할(계약 4.7).
+ *
+ * **`canRevealPaymentCustomer`와 다르다** — 검색은 마스킹된 값만 돌려주므로 CS 대응을 하는
+ * OPERATOR까지 열려 있고, 원문은 SUPER_ADMIN만 본다(ADR-008의 6). VIEWER는 검색도 막는다:
+ * 개인정보를 키로 삼는 조회는 결제 목록을 훑는 것과 성격이 다르다.
+ */
+export function canSearchPaymentCustomers(role: string): boolean {
+	return role === 'SUPER_ADMIN' || role === 'OPERATOR'
+}
+
+/**
+ * 마스킹되지 않은 원본을 볼 수 있는 역할. **SUPER_ADMIN 전용이다**(ADR-008의 6) — 서버도
+ * 403으로 막지만, 누를 수 있게 두고 거부하는 것보다 버튼을 감추는 편이 낫다
+ * (`canManageSettlementHold`와 같은 판단).
+ */
+export function canRevealPaymentCustomer(role: string): boolean {
+	return role === 'SUPER_ADMIN'
+}
+
+export type PaymentCustomerSearchResponse = JsonResponse<'admin-search-payment-customers', 200>
+export type PaymentCustomerMatch = PaymentCustomerSearchResponse['matches'][number]
+export type RevealPaymentCustomerResponse = JsonResponse<'admin-reveal-payment-customer', 200>
+
+/** 검색 조건은 이메일 **또는** 휴대전화 하나다 — 서버가 둘 다면 400을 낸다. */
+export type PaymentCustomerSearchField = 'email' | 'phone'
+
 export type ListPaymentsResponse = JsonResponse<'admin-payments', 200>
 export type PaymentSummary = ListPaymentsResponse['payments'][number]
 

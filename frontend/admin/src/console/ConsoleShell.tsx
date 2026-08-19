@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
-import { Building2, CreditCard, ScrollText, ShieldCheck, UserCog, Wallet } from 'lucide-react'
+import { Building2, CreditCard, ScrollText, ShieldCheck, UserCog, UserSearch, Wallet } from 'lucide-react'
 import { useLogout } from '@/auth/useAuth'
-import { canManageInternalUsers, canManageMerchantAccounts, type MeResponse } from '@/api/types'
+import { canManageInternalUsers, canManageMerchantAccounts, canSearchPaymentCustomers, type MeResponse } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { Sidebar, type NavGroup } from '@/components/console/Sidebar'
 
@@ -19,6 +19,10 @@ export function ConsoleShell({ me, children }: { me: MeResponse; children: React
 			items: [
 				{ to: '/', label: '가맹점', icon: <Building2 className="size-4" /> },
 				{ to: '/payments', label: '결제 내역', icon: <CreditCard className="size-4" /> },
+				// 구매자 조회는 SUPER_ADMIN/OPERATOR다 — VIEWER에게는 메뉴 자체를 감춘다(서버도 403).
+				...(canSearchPaymentCustomers(role)
+					? [{ to: '/payment-customers', label: '구매자 조회', icon: <UserSearch className="size-4" /> }]
+					: []),
 			],
 		},
 		{

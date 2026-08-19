@@ -133,7 +133,9 @@ src/index.css                 Tailwind import + shadcn 테마 변수
 
 ## 테스트
 
-**`test`/`describe` 이름은 한글로 쓴다** — 화면과 흐름을 설명하는 문장이라 그대로 읽히는 편이 낫다. `backend/`는 정반대로 영문이 규칙이니(그쪽 `CLAUDE.md`의 "테스트" 절) 두 트리를 오갈 때 습관을 그대로 옮기지 않는다.
+**`it`/`test` 이름은 한글로 쓴다** — 화면과 흐름을 설명하는 문장이라 그대로 읽히는 편이 낫다. `backend/`는 정반대로 영문이 규칙이니(그쪽 `CLAUDE.md`의 "테스트" 절) 두 트리를 오갈 때 습관을 그대로 옮기지 않는다.
+
+**`describe`는 다르다**: 묶는 대상이 컴포넌트·함수면 **그 이름을 영문 그대로** 쓰고(`LoginAuditTable`, `merchantInvitationUrlFor`), 상황을 묶는 것이면 한글로 쓴다(`정산 보류 해제와 취소`, `라우팅`). 식별자는 번역하지 않는다는 이 저장소의 일반 원칙과 같다 — 처음에 이 절이 "`test`/`describe` 둘 다 한글"이라고 적었는데 실제 코드와 어긋나 바로잡았다.
 
 Vitest + Testing Library. `npm test`(1회 실행) / `npm run test:watch`.
 
@@ -288,6 +290,7 @@ npm run gen:api        # api-admin의 openapi3.yaml → src/api/schema.d.ts
 | `/accept-invitation?token=…` | **비인증(공개)** | 내부 직원 초대 수락 |
 | `/` | 필요 | 가맹점 목록·등록 |
 | `/internal-users` | 필요(**SUPER_ADMIN**) | 내부 직원 명부·발급 |
+| `/payment-customers` | 필요(**SUPER_ADMIN/OPERATOR**) | 구매자 조회(검색은 마스킹, 원본 열람은 SUPER_ADMIN만) |
 
 - **`/accept-invitation`을 인증 게이트보다 먼저 매칭시킨다**(merchant와 같은 구조·같은
   이유). `routing.test.tsx`가 "미인증에서 로그인으로 튕기지 않는다"를 회귀로 지킨다.
@@ -420,3 +423,27 @@ npm run gen:api        # api-admin의 openapi3.yaml → src/api/schema.d.ts
 **admin 페이지 테스트는 `fetch` 목을 URL별로 갈라야 한다** — 그 화면은 결제 목록 말고
 가맹점 목록도 불러오기 때문에, 하나의 응답을 모든 요청에 돌려주면 가맹점 필터가 빈 데이터를
 받아 터진다(`routedFetch` 참고).
+
+### 구매자 조회 — 개인정보를 다루는 첫 화면(ADR-008)
+
+- **검색 결과를 react-query 캐시에 넣지 않는다.** 다른 목록과 달리 `useState`로 들고 있는다 —
+  검색어가 **개인정보 자체**라 캐시 키에 이메일·전화번호가 박히고, 화면을 떠난 뒤에도 그 키와
+  결과가 메모리에 남는다. 다시 보려면 다시 검색하는 편이 맞다.
+- **조건은 라디오로 하나만 고르게 한다.** 서버가 둘 다 오면 400을 내는데(AND 조합 탐색 차단),
+  두 칸을 나란히 두면 둘 다 채운 사용자가 그 400을 만난다.
+- **원본 열람은 사유를 먼저 받는다.** 서버가 빈 사유를 400으로 막기도 하지만, 진짜 이유는
+  **"봤다"가 기록으로 남는다는 사실을 누르기 전에 알리기 위해서**다 — 기록되는 줄 모르고 누른
+  사람에게 기록은 함정이 된다. 열람 결과는 컴포넌트 상태로만 갖고 "가리기"로 즉시 버린다.
+  다시 보려면 다시 열람해야 하고 **기록도 한 번 더 남는다**(두 번 봤으면 두 번 남아야 한다).
+- **열람 버튼은 SUPER_ADMIN에게만 그린다.** 서버도 403이지만, 보이면 "눌러도 되는 일"로 읽힌다.
+
+### 이 앱이 타입 검사를 통과하지 못하던 상태였다
+
+`GET /admin/settlement-receivables`의 `holdReasonCode`와 hold-history의 `reasonCode`가 **생성된
+스펙에서 통째로 빠져 있었다.** 원인은 이 문서가 이미 경고해 둔 그 함정이다 — REST Docs 예시
+값이 `null`이면 타입을 추론하지 못해 필드가 조용히 사라지고, `history`처럼 **부모 서술자를
+빠뜨린 배열은 optional로** 나온다.
+
+백엔드 문서화 테스트에 `.type(JsonFieldType.STRING)`과 부모 `fieldWithPath("history")`를
+더해 고쳤다. **증상이 프론트에서만 컴파일 오류로 드러나므로**, 스펙을 다시 생성했으면
+`npx tsc -b`를 한 번 돌려 보는 것이 이 함정을 잡는 가장 싼 방법이다.

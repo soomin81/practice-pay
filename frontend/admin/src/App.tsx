@@ -2,11 +2,12 @@ import type { ReactNode } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { useMe } from '@/auth/useAuth'
 import { AdminApiError } from '@/api/client'
-import { canManageInternalUsers, canManageMerchantAccounts } from '@/api/types'
+import { canManageInternalUsers, canManageMerchantAccounts, canSearchPaymentCustomers } from '@/api/types'
 import { LoginPage } from '@/console/LoginPage'
 import { ConsoleShell } from '@/console/ConsoleShell'
 import { MerchantsPage } from '@/console/MerchantsPage'
 import { PaymentDetailPage } from '@/console/PaymentDetailPage'
+import { PaymentCustomerSearchPage } from '@/console/PaymentCustomerSearchPage'
 import { PaymentsPage } from '@/console/PaymentsPage'
 import { SettlementPage } from '@/console/SettlementPage'
 import { MerchantDetailPage } from '@/console/MerchantDetailPage'
@@ -69,6 +70,10 @@ function ConsoleRoutes() {
 				)}
 				{canManageInternalUsers(String(me.role)) && (
 					<Route path="/login-audit" element={<LoginAuditPage />} />
+				)}
+				{/* 구매자 조회는 SUPER_ADMIN/OPERATOR — VIEWER는 서버도 403이다(ADR-008). */}
+				{canSearchPaymentCustomers(String(me.role)) && (
+					<Route path="/payment-customers" element={<PaymentCustomerSearchPage me={me} />} />
 				)}
 				{canManageMerchantAccounts(String(me.role)) && (
 					<Route path="/merchant-login-audit" element={<MerchantLoginAuditPage />} />
