@@ -74,7 +74,7 @@ class SubmitCheckoutCustomerUseCase(
 			val customer =
 				if (existing == null) {
 					PaymentCustomer.create(
-						id = PaymentCustomerId(PaymentCustomerId.PREFIX + idGenerator.newId()),
+						id = PaymentCustomerId("pcu_" + idGenerator.newId()),
 						paymentId = checkoutSession.paymentId,
 						name = command.name,
 						email = command.email,

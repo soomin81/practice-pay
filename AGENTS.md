@@ -5,8 +5,9 @@
 Codex는 작업을 시작하기 전에 반드시 다음 순서로 문서를 확인한다.
 
 1. `CLAUDE.md`
-2. 현재 작업과 관련된 `docs/` 하위 문서
-3. DB 변경 작업이면 `backend/db-core/src/main/resources/db/migration/`의 Flyway migration 파일
+2. **작업할 디렉토리의 지침** — `backend/`면 `backend/CLAUDE.md`, `frontend/`면 `frontend/CLAUDE.md`. 명령어와 구현 컨벤션은 루트가 아니라 이 문서들에 있다(각 디렉토리의 `AGENTS.md`가 같은 곳을 가리킨다).
+3. 현재 작업과 관련된 `docs/` 하위 문서
+4. DB 변경 작업이면 `backend/db-core/src/main/resources/db/migration/`의 Flyway migration 파일
 
 ## 필수 규칙
 

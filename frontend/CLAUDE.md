@@ -130,6 +130,8 @@ src/index.css                 Tailwind import + shadcn 테마 변수
 
 ## 테스트
 
+**`test`/`describe` 이름은 한글로 쓴다** — 화면과 흐름을 설명하는 문장이라 그대로 읽히는 편이 낫다. `backend/`는 정반대로 영문이 규칙이니(그쪽 `CLAUDE.md`의 "테스트" 절) 두 트리를 오갈 때 습관을 그대로 옮기지 않는다.
+
 Vitest + Testing Library. `npm test`(1회 실행) / `npm run test:watch`.
 
 **지갑 연결과 전송은 자동 테스트가 사실상 불가능하다** — MetaMask 확장이 필요하다. 그래서 단위 테스트는 상태 기계·포맷·API 클라이언트까지만 의미가 있고, 실제 전송은 백엔드와 같은 규율로 **실물 수동 검증**이 최종 확인이 된다(Base Sepolia 테스트넷 USDC 필요).
