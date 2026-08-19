@@ -28,6 +28,9 @@ import org.springframework.boot.runApplication
 		"paytech.practice.pay.infra.support.apikey",
 		// 수취 지갑 EIP-55 체크섬 검증(Web3jWalletAddressChecksum).
 		"paytech.practice.pay.infra.support.wallet",
+		// 구매자 개인정보 암호화(AesGcmPiiEncryptor)와 Blind Index(HmacPiiBlindIndexer) — ADR-008.
+		// 체크아웃이 정보를 **받아서 암호화하는** 쪽이라 여기에 필요하다.
+		"paytech.practice.pay.infra.support.pii",
 	],
 )
 class PaymentApiApplication

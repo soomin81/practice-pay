@@ -41,4 +41,9 @@ dependencies {
 	// 직접 구현할 것은 아니다. RPC 클라이언트가 딸린 web3j-core가 아니라 crypto만 받는다
 	// (modules:infra-blockchain은 RPC URL 설정을 강제해서 api-payment가 쓸 수 없다).
 	implementation(libs.web3j.crypto)
+
+	// AesGcmPiiEncryptor/HmacPiiBlindIndexer만 쓴다 — 개발용 기본 키·Pepper를 그대로
+	// 들고 뜬 것과 복호화 실패를 **운영이 알아차릴 수 있어야** 하기 때문이다(ADR-008).
+	// 파사드만 받는다: SLF4J 바인딩(logback)은 이 모듈에 의존하는 앱이 이미 갖고 있다.
+	implementation(libs.kotlinLogging.jvm)
 }

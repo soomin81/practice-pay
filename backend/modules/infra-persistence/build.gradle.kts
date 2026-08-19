@@ -15,6 +15,11 @@ dependencies {
 	// TransactionManagerAdapter wraps a Spring-managed PlatformTransactionManager.
 	implementation("org.springframework:spring-tx")
 
+	// 구매자 정보가 **덮어쓰기로 수정된 사실**만 남긴다(PaymentCustomerRepositoryAdapter) —
+	// 그 사실은 설계상 DB 어디에도 남지 않아서(ADR-008: 옛 값을 보관하면 파기가 반쪽이
+	// 된다) 로그가 유일한 흔적이다. 파사드만 받고 바인딩은 앱이 갖는다.
+	implementation(libs.kotlinLogging.jvm)
+
 	// `testImplementation`은 `implementation`을 상속하므로 위에 이미 선언한
 	// project(":modules:domain")/(":modules:application")/(":db-core")를 여기서
 	// 다시 선언하지 않는다 — 테스트 코드에서도 그대로 쓸 수 있다.

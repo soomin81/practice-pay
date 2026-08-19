@@ -32,6 +32,8 @@
 15. `internal_login_audit`
 16. `merchant_login_audit`
 17. `settlement_hold_audit`
+18. `payment_customer`
+19. `customer_pii_access_audit`
 
 ## 주요 Unique
 
@@ -53,12 +55,16 @@
 - InternalLoginAudit: `internal_login_audit_id`
 - MerchantLoginAudit: `merchant_login_audit_id`
 - SettlementHoldAudit: `settlement_hold_audit_id`
+- PaymentCustomer: `payment_seq` (결제 1건당 1건)
+- CustomerPiiAccessAudit: `customer_pii_access_audit_id`
 
 ## 주요 인덱스
 
 - 결제 만료: `payment_status + expires_at`
 - 로그인 감사 조회: `internal_login_audit.occurred_at`·`merchant_login_audit.occurred_at`(최신순 최근 목록)
 - 정산 보류 이력 조회: `settlement_hold_audit.settlement_receivable_seq + occurred_at`(채권 한 건의 이력)
+- 구매자 검색: `payment_customer.email_index`·`phone_index`(Blind Index 정확 일치 — ADR-008)
+- 개인정보 열람 감사: `customer_pii_access_audit.occurred_at`(최신순), `+ payment_seq`(결제별 열람 이력)
 - Confirm Worker: `transaction_status + updated_at`
 - 정산 배치 확장: `receivable_status + eligible_date + merchant_seq`
 - Webhook 재시도: `delivery_status + next_retry_at`
@@ -161,6 +167,43 @@ settlement_hold_audit_id (공개 ID, UNIQUE)
 `settlement_receivable.hold_reason_code`와 역할이 다르다 — 그쪽은 **"지금 왜 막혀 있나"**만
 답하는 현재 상태 필드라 해제하면 지워진다. 이력은 여기에만 남는다
 (`docs/domain/state-transitions.md`의 "보류·해제·취소는 감사 기록을 남긴다").
+
+### PaymentCustomer
+
+```text
+payment_seq (결제 1건당 1건, UNIQUE)
+```
+
+구매자의 이름·이메일·휴대전화다. **`payment`에 컬럼을 더하지 않고 별도 테이블에 둔다**
+(ADR-008): 결제 목록·정산·환전 워커가 결제를 읽을 때 개인정보를 함께 끌고 오지 않고, 보관
+기간이 지나 파기할 때 **행만 지우면 결제 기록은 그대로 남는다**(둘의 수명이 다르다).
+
+항목마다 컬럼이 셋이다:
+
+| 컬럼 | 내용 |
+|---|---|
+| `*_encrypted` | AES-256-GCM 암호문. **값마다 랜덤 IV**를 앞에 붙여 Base64로 담는다 |
+| `*_masked` | 화면·엑셀·로그가 읽는 값(`홍*동`, `ab***@example.com`, `010-****-1234`) |
+| `email_index` / `phone_index` | `HMAC(pepper, 정규화된 값)`의 Blind Index. **이름에는 없다** |
+
+- **마스킹된 값을 쓸 때 함께 저장한다** — 읽을 때 마스킹하면 호출을 빠뜨리는 실수 한 번이 곧
+  원문 노출이지만, 이 구조에서는 원문을 보려면 복호화를 명시적으로 호출해야 한다.
+- **Blind Index가 이름에 없는 이유**는 동명이인이 흔해 검색이 신뢰할 수 없고, 두면 "같은
+  이름인지"가 드러나는 대가만 남기 때문이다(ADR-008).
+- 암호문 컬럼에는 인덱스를 두지 않는다 — 랜덤 IV라 정렬·비교에 의미가 없다.
+
+### CustomerPiiAccessAudit
+
+```text
+customer_pii_access_audit_id (공개 ID, UNIQUE)
+```
+
+**마스킹되지 않은 원본을 누가 언제 어느 결제에서 봤는지**를 남기는 append-only 로그다.
+`internal_user_seq`와 `payment_seq` 둘 다 `NOT NULL`이다 — 인증된 `SUPER_ADMIN`이 특정 결제를
+지목해야만 열람이 성립하므로 주체나 대상이 없는 행이 존재할 수 없다.
+
+**읽기만 하는 동작에 감사를 붙인 유일한 자료다.** 상태를 바꾸지 않아도 "봤다"는 사실 자체가
+사건이기 때문이다(ADR-008).
 
 ## 계정 생성 트랜잭션
 

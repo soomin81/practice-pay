@@ -628,3 +628,95 @@ COMPLETED` + `SettlementReceivable READY`)를 **처음으로 실제 온체인 �
 **남은 것**: `domain`의 `WalletAddress`는 여전히 체크섬을 보지 않는다(의도적). 고객 지갑
 주소처럼 기계가 넘겨주는 값에는 EIP-55가 방어 수단이 아니고, 온체인 조회 결과를 소문자로
 받는 경로도 있어서다. 검증은 **사람이 설정하는 값**에만 건다.
+
+## 구매자 개인정보 — 암복호를 **어댑터가 아니라 Use Case 경계**에 뒀다(ADR-008)
+
+ADR-008이 정한 것(무엇을 받고, 어떻게 보관하고, 누가 읽나)은 그 문서에 있다. 여기 적는 것은
+**구현하면서 갈렸던 자리**다.
+
+### 왜 Repository 어댑터가 암호화하지 않나
+
+처음 모양은 `PaymentCustomerRepositoryAdapter(dsl, encryptor, indexer)`였다. 그러면 도메인
+`PaymentCustomer`(평문)를 그대로 주고받아 대칭이 깔끔하다. **배선이 그걸 막았다** — 네 앱이
+전부 `paytech.practice.pay.infra.persistence.jooq`를 통째로 컴포넌트 스캔하므로, 어댑터가
+`PiiEncryptor`를 주입받는 순간 **개인정보를 아예 다루지 않는 `api-merchant`와 `batch`도 AES
+키 설정 없이는 기동하지 못한다.** 키가 닿는 앱이 둘에서 넷으로 늘어나는데, 그건 ADR-008이
+"읽는 경로를 좁힌다"고 말한 것과 정반대다.
+
+그래서 Port가 도메인이 아니라 **이미 암호화된 `EncryptedPaymentCustomer`를 오간다.**
+
+- `modules:infra-persistence`는 이제 **복호화할 방법이 없다.** 옮기기만 한다.
+- 변환은 `application.customer.PaymentCustomerCrypto`가 하고, 그 Bean은 각 앱의
+  `UseCaseConfiguration`에서 조립되므로 **실제로 필요한 앱에만 존재한다.**
+- 대가는 타입이 하나 늘고 Repository 대칭이 깨지는 것이다. `@ConditionalOnBean`으로 어댑터를
+  조건부 등록하는 길도 있었지만, 컴포넌트 스캔에서의 조건부 Bean은 순서에 좌우돼 **"어떤 앱은
+  조용히 저장이 안 되는"** 실패로 이어질 수 있어 택하지 않았다.
+
+### 수정 경로가 복호화를 타지 않는다
+
+고객이 오타를 고치면(같은 세션에서 다시 제출) 세 항목을 전부 새 값으로 덮어쓰므로 **옛 평문이
+필요 없다.** 그래서 기존 행을 복호화하지 않고 `reconstitute` + `change`로 넘긴다 —
+`PaymentCustomerCrypto.decrypt`를 부르는 곳은 앞으로도 **원본 열람 Use Case 하나**여야 하고,
+그 호출은 감사 기록과 같은 트랜잭션 안에 있어야 한다.
+
+### 입력 단계가 `open()`을 하게 됐다
+
+`CheckoutSession.open()`을 부르던 곳은 `ConnectCheckoutWalletUseCase` 하나였다("고객이 처음
+행동한 순간 = 지갑 연결"). 구매자 정보 입력이 그보다 앞서므로 **두 Use Case가 모두** `CREATED
+→ OPEN`을 처리한다. 한쪽으로 몰지 않은 이유는 API가 순서를 강제하지 않기 때문이다 — 순서를
+지키는 것은 프론트이고, 백엔드는 어느 쪽이 먼저 와도 받는다.
+
+### 입력을 받을 수 있는 경계는 `PAYMENT_SUBMITTED`다(취소와 같은 자리)
+
+`CheckoutSession`에는 구매자 정보 입력에 해당하는 **상태 전이가 없다** — 즉 도메인의
+`checkTransition`이 뒤에서 받쳐 주지 않아서, Use Case의 확인이 유일한 방어선이다. 전송이
+브로드캐스트된 뒤에 연락처가 바뀌면 그 결제에 문제가 생겼을 때 **연락할 상대가 소리 없이
+달라진다**(ADR-007의 "돈은 나갔는데 결제는 실패"가 정확히 그 상황이다).
+
+### 응답에 마스킹만 싣는다
+
+방금 입력한 본인에게 돌려주는 값이라 평문을 실어도 새로 새는 정보는 없다. 그래도 마스킹만
+보내는 이유는 **예외를 하나 만들면 다음 응답이 그 예외를 근거로 삼기** 때문이다. "이 API의
+응답에는 구매자 원본이 없다"가 예외 없는 규칙이면 나중에 심사할 것이 없다.
+
+### 테스트
+
+- `SubmitCheckoutCustomerUseCaseTest`(단위 9개) — 되돌릴 수 있는 **가짜** 암호화를 끼워서
+  "평문이 저장 형태로 나갈 때 반드시 변환을 거치는가"를 본다(암호 자체는
+  `AesGcmPiiEncryptorTest`가 검증한다). **Blind Index가 정규화된 값으로 만들어지는지**를
+  따로 고정했다 — 여기가 틀리면 `A@b.com`을 입력한 사람이 검색에 걸리지 않는데, 그 사실은
+  검색 기능을 만들기 전까지 드러나지 않는다.
+- `PaymentCustomerAdapterTest`(Testcontainers MySQL, 5개) — 컬럼 길이·문자셋처럼 **실제
+  MySQL에 넣어야만 드러나는 것**을 본다: Base64 암호문이 `VARCHAR(512)`에서 잘리지 않는지,
+  마스킹된 한글 이름이 그대로 돌아오는지, 두 번째 저장이 새 행을 만들지 않고 같은 행의
+  version을 올리는지.
+- `CheckoutControllerTest`에 3개(200/마스킹만 응답, 잘못된 이메일 400, 제출 후 409),
+  `CheckoutApiDocumentationTest`에 OpenAPI 스니펫 1개를 더했다.
+- **실물 검증(`bootRun` + `.http`)은 아직 하지 않았다** — `requests.http`의 [체크아웃 2]에
+  요청은 넣어 뒀다.
+
+### 운영 로그는 세 자리에만 넣었다
+
+이 기능에서 **로그가 없으면 운영이 알아차릴 수 없는 것**만 골랐다(규칙은 `backend/CLAUDE.md`의
+"로깅" 절).
+
+| 자리 | 수준 | 왜 |
+|---|---|---|
+| `AesGcmPiiEncryptor` 복호화 실패 | WARN | 거의 언제나 **두 앱의 `app.pii.encryption-key` 불일치**인데, 예외만 올라가면 "인증 태그 불일치"라는 암호 라이브러리 메시지만 남아 원인이 드러나지 않는다 |
+| 두 클래스의 기동 시점 기본값 확인 | WARN | 개발용 기본 키·Pepper를 그대로 들고 떠도 **아무 증상이 없다** — 알아차릴 계기가 로그밖에 없다 |
+| `PaymentCustomerRepositoryAdapter`의 수정(UPDATE) | INFO | **수정됐다는 사실이 DB 어디에도 남지 않는다**(옛 값을 보관하면 파기가 반쪽이 되므로 이력 테이블을 두지 않았다) — 이 한 줄이 유일한 흔적이다 |
+
+- **암호문도 찍지 않는다.** 로그는 파기 대상 밖이라 더 오래 남고, 나중에 키가 새면 그 로그가
+  곧 평문이 된다. 세 로그 모두 식별자(`paymentId`)까지만 남긴다.
+- **컨트롤러에는 로그를 넣지 않았다** — 이 저장소의 API 앱에는 요청 로그가 하나도 없고, 한
+  엔드포인트만 예외로 두면 그게 새 관행이 된다.
+
+### 남긴 것
+
+- **원본 열람(`api-admin`)과 Blind Index 검색이 아직 없다.** 도메인
+  `CustomerPiiAccessAudit`과 두 Repository 어댑터까지는 있고, 그것을 부르는 Use Case가 없다 —
+  `CustomerPiiAccessAuditRepositoryAdapter`는 지금 호출부가 없는 상태다.
+- **체크아웃 화면(`frontend/payment`)에 입력 단계가 아직 없다.** 백엔드만 받을 준비가 됐다.
+- **`GET /checkout/sessions/{id}`가 입력 여부를 알려주지 않는다** — 새로고침한 고객은 입력
+  화면을 다시 만난다(다시 제출하면 덮어쓰므로 결과는 같다). 판단 근거는
+  `docs/architecture/checkout-api.md`의 8절에 적었다.

@@ -91,6 +91,7 @@
 |---|---|---|
 | `GET` | `/checkout/sessions/{checkoutSessionId}` | 체크아웃 화면 렌더용 전체 정보 |
 | `GET` | `/checkout/sessions/{checkoutSessionId}/status` | 상태 폴링(경량) |
+| `POST` | `/checkout/sessions/{checkoutSessionId}/customer` | 구매자 정보 입력(이름·이메일·휴대전화) |
 | `POST` | `/checkout/sessions/{checkoutSessionId}/wallet` | 고객 지갑 연결 |
 | `POST` | `/checkout/sessions/{checkoutSessionId}/transaction` | 전송한 Transaction Hash 제출 |
 | `POST` | `/checkout/sessions/{checkoutSessionId}/cancel` | 고객 취소 |
@@ -144,7 +145,7 @@
   `PaymentNetworkConfig`다.
 - **`receivingWallet`은 PG가 수탁하는 지갑이지 가맹점 지갑이 아니다**(`mvp-scope.md`의
   "수취 지갑 귀속" 절). MVP는 네트워크당 하나를 공용으로 쓰므로 **주소만으로는 어느 결제의
-  입금인지 구분되지 않는다** — 귀속은 전적으로 4.4에서 제출하는 Transaction Hash가 결정한다.
+  입금인지 구분되지 않는다** — 귀속은 전적으로 4.5에서 제출하는 Transaction Hash가 결정한다.
 - **이 `GET`은 상태를 바꾸지 않는다.** `CheckoutSession.open()`(`CREATED → OPEN`)은
   호출하지 않는다 — 조회는 `GET`으로 남기고, 고객이 실제로 처음 행동하는 순간(지갑
   연결)에 `open()`을 함께 처리한다는 기존 판단을 따른다
@@ -175,7 +176,42 @@
   노출하지 말고 프론트가 안내 문구로 번역한다.
 - 권장 폴링 주기 **3초**, 최대 5분. 그 뒤로는 폴링을 멈추고 새로고침을 안내한다.
 
-### 4.3 `POST /checkout/sessions/{checkoutSessionId}/wallet`
+### 4.3 `POST /checkout/sessions/{checkoutSessionId}/customer`
+
+`SubmitCheckoutCustomerUseCase`를 노출한다. 고객이 **자기 이름·이메일·휴대전화를 직접**
+입력하는 자리다(ADR-008).
+
+```json
+{ "name": "홍길동", "email": "gildong@example.com", "phone": "010-1234-5678" }
+```
+
+응답:
+
+```json
+{
+  "checkoutSessionId": "cs_9f2c1a...",
+  "checkoutSessionStatus": "OPEN",
+  "maskedName": "홍*동",
+  "maskedEmail": "gi***@example.com",
+  "maskedPhone": "010-****-5678"
+}
+```
+
+- **지갑 연결(4.4)보다 앞이다.** 서명 이후에 입력을 요구하면 **돈은 나갔는데 결제가 미완인
+  창**이 생긴다. `CREATED` 상태면 이 호출이 `open()`을 수행한다(4.4도 같은 처리를 갖는다 —
+  순서를 강제하는 것은 프론트이고, API는 어느 쪽이 먼저 와도 받는다).
+- **가맹점 서버가 대신 보내지 않는다.** 개인정보가 가맹점 서버를 한 번 거쳐 오면 PG가
+  통제할 수 없는 유출 경로가 하나 늘기 때문이다(ADR-008의 2) — 수취 지갑을 가맹점이
+  지정하지 못하게 한 것과 같은 결이다.
+- **다시 호출하면 덮어쓴다.** 고객이 오타를 냈을 때 결제를 처음부터 다시 만들게 하는 것은
+  과하다. 결제 1건당 1건이 스키마로 보장된다(`payment_customer.payment_seq`가 `UNIQUE`).
+- **`PAYMENT_SUBMITTED` 이후에는 `409`다**(취소와 같은 경계). 전송이 브로드캐스트된 뒤에
+  연락처가 바뀌면 그 결제에 문제가 생겼을 때 **연락할 상대가 소리 없이 달라진다.**
+- **응답에 원본이 실리지 않는다.** 방금 입력한 본인에게 돌려주는 값이지만 마스킹된 것만
+  준다 — "이 API의 응답에는 구매자 원본이 없다"를 예외 없는 규칙으로 두려는 것이다.
+- 형식 검증(이메일 모양, 국내 휴대전화 번호)은 도메인 Value Object가 한다 → 어긋나면 `400`.
+
+### 4.4 `POST /checkout/sessions/{checkoutSessionId}/wallet`
 
 `ConnectCheckoutWalletUseCase`를 노출한다.
 
@@ -197,7 +233,7 @@
 - **지갑 재연결은 지원하지 않는다** — 이미 `WALLET_CONNECTED`면 `409`. 도메인에 재연결
   메서드가 없다(알려진 gap).
 
-### 4.4 `POST /checkout/sessions/{checkoutSessionId}/transaction`
+### 4.5 `POST /checkout/sessions/{checkoutSessionId}/transaction`
 
 `SubmitPaymentTransactionUseCase`를 노출한다. 고객 지갑이 USDC 전송을 브로드캐스트한
 뒤 그 Hash를 제출하는 자리다.
@@ -224,7 +260,7 @@
   `apps:batch`의 Confirm Worker가 처리하므로, 프론트는 여기서 곧바로 4.2 폴링으로
   넘어간다.
 
-### 4.5 `POST /checkout/sessions/{checkoutSessionId}/cancel`
+### 4.6 `POST /checkout/sessions/{checkoutSessionId}/cancel`
 
 본문 없음. 응답은 `checkoutSessionStatus: "CANCELLED"`와 `redirectUrl`(= `cancelUrl`,
 없으면 `null`).
@@ -255,6 +291,8 @@
 
 ```text
 GET  /checkout/sessions/{id}                 화면 렌더 (금액·네트워크·수취 지갑)
+  ↓ 고객이 이름·이메일·휴대전화 입력
+POST /checkout/sessions/{id}/customer        → OPEN (구매자 정보 저장)
   ↓ 고객이 지갑 연결
 POST /checkout/sessions/{id}/wallet          → WALLET_CONNECTED
   ↓ 프론트가 ERC-20 transfer 트랜잭션 구성·전송 (지갑이 서명)
@@ -279,6 +317,7 @@ successUrl로 이동
 | 인가·CORS | `api.payment.config.SecurityConfig` |
 | 조회 Use Case | `application.checkout.GetCheckoutSessionUseCase`/`GetCheckoutStatusUseCase` |
 | 취소 Use Case | `application.checkout.CancelCheckoutSessionUseCase` |
+| 구매자 정보 입력 | `application.checkout.SubmitCheckoutCustomerUseCase` + `application.customer.PaymentCustomerCrypto`(ADR-008) |
 | 지갑 연결·Hash 제출 | 기존 `ConnectCheckoutWalletUseCase`/`SubmitPaymentTransactionUseCase`(이 API가 처음 노출한다) |
 | 조회 Projection | `CheckoutViewProjection` + `CheckoutViewProjectionAdapter` |
 
@@ -296,6 +335,10 @@ successUrl로 이동
 
 - **체크아웃 페이지 URL 자체**(`https://.../checkout/{id}` 같은 사용자 대면 경로)와 그
   페이지를 누가 서빙하는지 — `frontend/`가 스캐폴딩될 때 정한다.
+- **구매자 정보를 이미 입력했는지 4.1이 알려주지 않는다.** 그래서 새로고침한 고객은 입력
+  화면을 다시 만난다(다시 제출하면 덮어쓰므로 결과는 같다). 알려주려면 마스킹된 값을 4.1
+  응답에 실어야 하는데, 그러면 `checkoutSessionId`를 가진 사람이 마스킹된 개인정보를 볼 수
+  있게 된다 — 실제로 불편이 확인되면 그때 판단한다.
 - **`PaymentQuote` 만료 시 재견적** — 견적이 만료된 세션을 되살릴지, 결제를 새로
   만들게 할지. MVP는 `410`으로 끝낸다.
 - **Webhook과의 순서 보장** — 고객이 `successUrl`에 도착하는 시점과 가맹점이 Webhook을

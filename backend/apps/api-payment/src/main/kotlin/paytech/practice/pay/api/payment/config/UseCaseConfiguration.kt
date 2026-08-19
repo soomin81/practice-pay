@@ -8,6 +8,8 @@ import paytech.practice.pay.application.checkout.CancelCheckoutSessionUseCase
 import paytech.practice.pay.application.checkout.ConnectCheckoutWalletUseCase
 import paytech.practice.pay.application.checkout.GetCheckoutSessionUseCase
 import paytech.practice.pay.application.checkout.GetCheckoutStatusUseCase
+import paytech.practice.pay.application.checkout.SubmitCheckoutCustomerUseCase
+import paytech.practice.pay.application.customer.PaymentCustomerCrypto
 import paytech.practice.pay.application.payment.CreatePaymentUseCase
 import paytech.practice.pay.application.payment.ReceivingWalletRegistry
 import paytech.practice.pay.application.payment.SubmitPaymentTransactionUseCase
@@ -20,8 +22,11 @@ import paytech.practice.pay.application.port.outbound.IdGenerator
 import paytech.practice.pay.application.port.outbound.MerchantApiKeyRepository
 import paytech.practice.pay.application.port.outbound.MerchantRepository
 import paytech.practice.pay.application.port.outbound.OutboxEventRepository
+import paytech.practice.pay.application.port.outbound.PaymentCustomerRepository
 import paytech.practice.pay.application.port.outbound.PaymentQuoteRepository
 import paytech.practice.pay.application.port.outbound.PaymentRepository
+import paytech.practice.pay.application.port.outbound.PiiBlindIndexer
+import paytech.practice.pay.application.port.outbound.PiiEncryptor
 import paytech.practice.pay.application.port.outbound.TransactionManager
 import paytech.practice.pay.application.port.outbound.WalletAddressChecksum
 import paytech.practice.pay.domain.shared.BlockchainNetwork
@@ -147,6 +152,42 @@ class UseCaseConfiguration {
 	@Bean
 	fun getCheckoutStatusUseCase(checkoutViewProjection: CheckoutViewProjection): GetCheckoutStatusUseCase =
 		GetCheckoutStatusUseCase(checkoutViewProjection = checkoutViewProjection)
+
+	/**
+	 * 구매자 개인정보의 평문 ↔ 암호문 변환을 담당한다(ADR-008).
+	 *
+	 * **Repository 어댑터가 아니라 여기서 조립하는 이유**는 네 앱이 `infra.persistence.jooq`를
+	 * 통째로 스캔하기 때문이다 — 어댑터가 `PiiEncryptor`를 주입받으면 개인정보를 다루지 않는
+	 * `api-merchant`/`batch`까지 AES 키 설정을 갖게 된다. 키가 닿는 앱을 늘리지 않는 것이
+	 * ADR-008이 말하는 "읽는 경로를 좁힌다"의 실제 모습이다.
+	 */
+	@Bean
+	fun paymentCustomerCrypto(
+		piiEncryptor: PiiEncryptor,
+		piiBlindIndexer: PiiBlindIndexer,
+	): PaymentCustomerCrypto =
+		PaymentCustomerCrypto(
+			piiEncryptor = piiEncryptor,
+			piiBlindIndexer = piiBlindIndexer,
+		)
+
+	@Bean
+	fun submitCheckoutCustomerUseCase(
+		checkoutSessionRepository: CheckoutSessionRepository,
+		paymentCustomerRepository: PaymentCustomerRepository,
+		paymentCustomerCrypto: PaymentCustomerCrypto,
+		idGenerator: IdGenerator,
+		transactionManager: TransactionManager,
+		clock: Clock,
+	): SubmitCheckoutCustomerUseCase =
+		SubmitCheckoutCustomerUseCase(
+			checkoutSessionRepository = checkoutSessionRepository,
+			paymentCustomerRepository = paymentCustomerRepository,
+			paymentCustomerCrypto = paymentCustomerCrypto,
+			idGenerator = idGenerator,
+			transactionManager = transactionManager,
+			clock = clock,
+		)
 
 	@Bean
 	fun connectCheckoutWalletUseCase(

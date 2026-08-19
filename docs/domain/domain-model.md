@@ -49,6 +49,23 @@ USDC 결제 금액, 유효 기간을 확정 시점 그대로 고정한다.
 상태도 전이 메서드도 없어서 다른 Aggregate와 달리 **공개 생성자를 가진 `data class`**다
 (`payment_quote` 테이블에도 `updated_at`/`version`이 없다).
 
+### PaymentCustomer
+`Payment`에 1:1로 붙는 **구매자 정보**(이름·이메일·휴대전화)다. 결제를 읽는 모든 경로가 개인정보를
+함께 끌고 오지 않도록, 그리고 보관 기간이 지나면 **이 행만 지워 파기**할 수 있도록 `payment`가 아닌
+별도 테이블에 둔다 — 결제 기록과 개인정보는 수명이 다르다(ADR-008).
+
+**이 Aggregate는 언제나 평문만 안다.** 암호화·복호화·Blind Index 계산은 전부 어댑터 바깥(Use Case
+경계)에서 일어난다. 다만 **마스킹은 여기가 갖는다**(각 Value Object의 `masked`) — 마스킹은 표현
+형식이 아니라 업무 규칙이라 두 콘솔이 각자 구현하면 규칙이 갈린다.
+
+상태는 없지만 `PaymentQuote`와 달리 불변이 아니다 — 고객이 오타를 냈을 때 고칠 수 있어야 해서
+`change`가 있고 `updated_at`/`version`도 갖는다.
+
+### CustomerPiiAccessAudit
+마스킹되지 않은 구매자 원본을 **누가·언제·어느 결제에서 봤는지** 남기는 append-only 기록이다.
+**읽기만 하는 동작에 감사를 붙인 유일한 자료**로, 상태를 바꾸지 않아도 "봤다"는 사실 자체가
+사건이기 때문이다(ADR-008). 열람한 값 자체는 남기지 않는다 — 남기면 파기가 반쪽이 된다.
+
 ### OutboxEvent
 결제 완료 같은 도메인 사실을 **같은 트랜잭션에서 함께 기록**해 두고, 발행 Worker가 나중에
 Webhook으로 내보내게 하는 Transactional Outbox다. 발행 상태와 재시도 일정을 관리한다.
@@ -74,6 +91,8 @@ Webhook으로 내보내게 하는 Transactional Outbox다. 발행 상태와 재�
 - `BlockchainNetwork`
 - `Asset`
 - `HttpUrl` — Webhook/Redirect URL
+- `CustomerName`/`CustomerEmail`/`CustomerPhone` — 구매자 정보. 각자 `masked`를 갖고, 이메일·휴대전화는
+  Blind Index의 기준이 되는 `normalized`도 갖는다
 
 계정 영역은 `LoginId`/`Email`/`AccountStatus`를 내부 운영자와 가맹점 사용자가 **공유**하고,
 역할(`InternalUserRole`/`MerchantUserRole`)은 값이 달라 공유하지 않는다.

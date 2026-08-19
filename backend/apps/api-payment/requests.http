@@ -160,7 +160,34 @@ GET {{apiPaymentBaseUrl}}/checkout/sessions/{{checkoutSessionId}}
     });
 %}
 
-### [체크아웃 2] 고객 지갑 연결
+### [체크아웃 2] 구매자 정보 입력 — 지갑 연결보다 앞이다(ADR-008)
+### 서명 이후에 입력을 요구하면 돈은 나갔는데 결제가 미완인 창이 생긴다.
+POST {{apiPaymentBaseUrl}}/checkout/sessions/{{checkoutSessionId}}/customer
+Content-Type: application/json
+
+{
+  "name": "홍길동",
+  "email": "gildong@example.com",
+  "phone": "010-1234-5678"
+}
+
+> {%
+    client.test("구매자 정보 입력 (200)", () => {
+        client.assert(response.status === 200, "예상: 200, 실제: " + response.status);
+    });
+    client.test("CREATED였다면 OPEN으로 전이한다", () => {
+        client.assert(response.body.checkoutSessionStatus === "OPEN",
+            "status: " + response.body.checkoutSessionStatus);
+    });
+    client.test("응답에 원본이 실리지 않는다 — 마스킹된 값만 온다", () => {
+        client.assert(response.body.maskedEmail === "gi***@example.com",
+            "maskedEmail: " + response.body.maskedEmail);
+        client.assert(JSON.stringify(response.body).indexOf("gildong@example.com") === -1,
+            "응답에 이메일 원본이 들어 있다");
+    });
+%}
+
+### [체크아웃 3] 고객 지갑 연결
 POST {{apiPaymentBaseUrl}}/checkout/sessions/{{checkoutSessionId}}/wallet
 Content-Type: application/json
 
@@ -178,7 +205,7 @@ Content-Type: application/json
     });
 %}
 
-### [체크아웃 3] 지갑 재연결 시도 — 409여야 한다(도메인에 재연결 전이가 없다)
+### [체크아웃 4] 지갑 재연결 시도 — 409여야 한다(도메인에 재연결 전이가 없다)
 POST {{apiPaymentBaseUrl}}/checkout/sessions/{{checkoutSessionId}}/wallet
 Content-Type: application/json
 
@@ -192,7 +219,7 @@ Content-Type: application/json
     });
 %}
 
-### [체크아웃 4] Transaction Hash 제출 — 실제 온체인 전송을 흉내낸 더미 Hash다.
+### [체크아웃 5] Transaction Hash 제출 — 실제 온체인 전송을 흉내낸 더미 Hash다.
 ### 성공 응답은 "결제 완료"가 아니라 "제출 접수"라는 뜻이다.
 POST {{apiPaymentBaseUrl}}/checkout/sessions/{{checkoutSessionId}}/transaction
 Content-Type: application/json
@@ -210,7 +237,7 @@ Content-Type: application/json
     });
 %}
 
-### [체크아웃 5] 상태 폴링 — 프론트가 3초 간격으로 부르는 경량 조회
+### [체크아웃 6] 상태 폴링 — 프론트가 3초 간격으로 부르는 경량 조회
 GET {{apiPaymentBaseUrl}}/checkout/sessions/{{checkoutSessionId}}/status
 
 > {%
@@ -222,7 +249,7 @@ GET {{apiPaymentBaseUrl}}/checkout/sessions/{{checkoutSessionId}}/status
     });
 %}
 
-### [체크아웃 6] 제출 후 취소 시도 — 409여야 한다(온체인 전송은 되돌릴 수 없다)
+### [체크아웃 7] 제출 후 취소 시도 — 409여야 한다(온체인 전송은 되돌릴 수 없다)
 POST {{apiPaymentBaseUrl}}/checkout/sessions/{{checkoutSessionId}}/cancel
 
 > {%
@@ -231,7 +258,7 @@ POST {{apiPaymentBaseUrl}}/checkout/sessions/{{checkoutSessionId}}/cancel
     });
 %}
 
-### [체크아웃 7] 없는 세션 — 404여야 한다(접근 불가와 구분해서 노출하지 않는다)
+### [체크아웃 8] 없는 세션 — 404여야 한다(접근 불가와 구분해서 노출하지 않는다)
 GET {{apiPaymentBaseUrl}}/checkout/sessions/cs_no_such_session
 
 > {%

@@ -5,6 +5,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestControllerAdvice
 import paytech.practice.pay.api.payment.web.ErrorResponse
+import paytech.practice.pay.application.checkout.CheckoutCustomerNotEditableException
 import paytech.practice.pay.application.checkout.CheckoutSessionExpiredException
 import paytech.practice.pay.application.checkout.CheckoutSessionNotCancellableException
 import paytech.practice.pay.application.checkout.CheckoutSessionNotFoundException
@@ -38,6 +39,11 @@ class CheckoutApiExceptionHandler {
 	@ExceptionHandler(CheckoutSessionNotCancellableException::class)
 	@ResponseStatus(HttpStatus.CONFLICT)
 	fun handleNotCancellable(ex: CheckoutSessionNotCancellableException): ErrorResponse = ErrorResponse(ex.message ?: "체크아웃 세션을 취소할 수 없습니다.")
+
+	@ExceptionHandler(CheckoutCustomerNotEditableException::class)
+	@ResponseStatus(HttpStatus.CONFLICT)
+	fun handleCustomerNotEditable(ex: CheckoutCustomerNotEditableException): ErrorResponse =
+		ErrorResponse(ex.message ?: "구매자 정보를 더 이상 입력할 수 없습니다.")
 
 	@ExceptionHandler(DuplicateTransactionHashException::class)
 	@ResponseStatus(HttpStatus.CONFLICT)

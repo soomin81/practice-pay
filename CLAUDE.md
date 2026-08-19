@@ -63,7 +63,7 @@ Payment 생성 → PaymentQuote 확정 → CheckoutSession 생성 → 고객 지
 
 `Payment → SUCCEEDED`는 추가로 다음을 요구한다: 네트워크/체인 ID 일치, 허용된 토큰 Contract, 수취 지갑 일치, 충분한 금액, Receipt 성공, 필요 Confirmation 충족, 중복 Transaction Hash 없음. 검증은 토큰 **Symbol**만으로 "이게 USDC다"라고 판단하지 않는다 — 항상 (네트워크, Contract 주소) 조합으로 검증한다.
 
-그 밖의 애그리게이트: `Merchant`, 그리고 `Payment`에 1:1로 붙는 불변 `PaymentQuote` 스냅샷(시장 환율, 적용 환율, 스프레드, 금액, 유효 기간).
+그 밖의 애그리게이트: `Merchant`, `Payment`에 1:1로 붙는 불변 `PaymentQuote` 스냅샷(시장 환율, 적용 환율, 스프레드, 금액, 유효 기간), 그리고 역시 `Payment`에 1:1로 붙는 `PaymentCustomer`(구매자 이름·이메일·휴대전화 — 상태가 없고, 파기할 수 있도록 별도 테이블에 둔다. ADR-008).
 
 모든 애그리게이트에 공통되는 규칙: 모든 전이 전에 상태를 검증하고, 컨트롤러/리포지토리의 직접 필드 대입으로 전이하지 않으며, 종료 상태는 재사용하지 않는다.
 

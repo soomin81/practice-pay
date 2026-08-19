@@ -97,7 +97,10 @@ modules/
                      매도 슬라이스 — MVP 완료 경계의 마지막 조각), Identity/API Key Use Case
                      (Authenticate*/IssueInternalUser), BlockchainClient(온체인 조회 Port, 구현체는
                      modules:infra-blockchain) + 그 outbound port들(Architecture 참고).
-                     체크아웃 슬라이스(application.checkout)의 GetCheckoutSession/
+                     구매자 개인정보 슬라이스(application.customer의 PaymentCustomerCrypto —
+                     평문↔암호문 변환. ADR-008),
+                     체크아웃 슬라이스(application.checkout)의 SubmitCheckoutCustomer/
+                     GetCheckoutSession/
                      GetCheckoutStatus/CancelCheckoutSession과 ConnectCheckoutWallet/
                      SubmitPaymentTransaction은 apps:api-payment의 고객 대면 API가
                      노출한다("Hosted Checkout API" 절 참고).
@@ -171,15 +174,29 @@ gradlew.bat ktlintFormat                                  # 모든 모듈 자동
 | `app.invitation-token.pepper` | `APP_INVITATION_TOKEN_PEPPER` | api-admin/api-merchant |
 | `app.webhook-signature.pepper` | `APP_WEBHOOK_SIGNATURE_PEPPER` | api-merchant/batch |
 | `app.blockchain.base-sepolia.rpc-url` | `APP_BLOCKCHAIN_BASE_SEPOLIA_RPC_URL` | batch |
+| `app.pii.encryption-key` | `APP_PII_ENCRYPTION_KEY` | api-payment/api-admin |
+| `app.pii.blind-index-pepper` | `APP_PII_BLIND_INDEX_PEPPER` | api-payment/api-admin |
 
 - **`${ENV:기본값}` 문법이 환경변수 덮어쓰기를 가능하게 하는 게 아니다.** Spring Boot는 환경변수를 `application.yaml`보다 우선하는 property source로 이미 읽고, `APP_INVITATION_TOKEN_PEPPER` 같은 이름을 `app.invitation-token.pepper`로 자동 매핑한다(relaxed binding) — `${...}` 없이 리터럴만 적어둬도 환경변수가 값을 덮어쓰는 것을 실제로 확인했다. 그럼에도 `${...}`로 적는 건 **환경변수 이름을 설정 파일만 보고 알 수 있게** 하고 "이 값은 주입받는 것"임을 드러내기 위해서다.
 - **`app.invitation-token.pepper`는 `api-admin`과 `api-merchant`가 반드시 같은 값이어야 한다.** 초대는 발급 시점에 `hash(원문 Token)`을 `account_invitation.token_hash`에 저장하고 수락 시점에 다시 `hash(원문 Token)`으로 조회하는데(`AcceptAccountInvitationUseCase`), 발급 앱과 수락 앱이 다르기 때문이다(가맹점 등록은 `api-admin`이 발급하고 `api-merchant`가 수락한다 — `IMPLEMENTATION-NOTES.md`의 "가맹점 등록 Use Case" 절 참고). Pepper가 어긋나면 초대를 영영 찾지 못하고, 그때 나오는 예외는 원인을 숨기도록 설계된 `InvalidInvitationException`("유효하지 않은 초대")이라 추적이 매우 어렵다 — **한쪽만 교체하지 않는다.** 실제로 `bootRun`으로 발급→수락 전체 흐름을 검증했다.
 - **`app.api-key.pepper`도 같은 이유로 `api-payment`와 `api-merchant`가 반드시 같은 값이어야 한다.** `api-merchant`가 발급(`hash(rawApiKey)`)하고 `api-payment`가 인증(`matches(rawApiKey, secretHash)`)한다(`IMPLEMENTATION-NOTES.md`의 "API Key 발급/폐기 Use Case" 절 참고) — 두 앱의 Pepper가 다르면 방금 발급한 Key로 결제 API를 호출해도 401이 난다. 이것도 `bootRun`으로 발급→결제 생성 전체 흐름을 검증했다.
 - **`app.webhook-signature.pepper`도 `batch`와 `api-merchant`가 반드시 같은 값이어야 한다.** 서명을 **만드는** 쪽은 `batch`(발행 Worker)이고, 그 비밀을 가맹점에게 **보여주는** 쪽은 `api-merchant`(Webhook 설정 화면)다 — 어긋나면 콘솔이 알려준 비밀로는 어떤 서명도 검증되지 않는데, 증상이 "가맹점 구현이 틀렸다"처럼 보여 추적이 매우 어렵다. 앞의 두 Pepper와 같은 성격의 함정이고, **이 값만 서명 비밀을 파생하는 데 쓰인다**(다른 둘은 검증용 Hash를 만든다 — `WebhookSigner`의 KDoc 참고).
 - **Pepper 교체는 기존 데이터를 무효화한다.** `app.api-key.pepper`를 바꾸면 기존 API Key의 `secret_hash`가 전부 맞지 않게 되고(원문이 없어 재계산 불가), `app.invitation-token.pepper`를 바꾸면 아직 수락되지 않은 초대가 전부 무효가 된다. 교체하려면 각각 API Key 재발급/초대 재발급이 함께 필요하다. **`app.webhook-signature.pepper`는 특히 조용히 깨진다** — 바꾸면 `webhook_secret_version`을 올리지 않았는데도 전 가맹점의 서명 비밀이 한꺼번에 달라져, 가맹점들이 영문도 모른 채 검증에 실패하기 시작한다(개별 가맹점 교체는 콘솔의 세대 증가를 쓴다).
+- **`app.pii.*` 두 값도 `api-payment`와 `api-admin`이 반드시 같아야 한다**(ADR-008). 구매자 정보를 **받아서 암호화하는** 쪽은 `api-payment`(체크아웃)이고 **복호화해 보여주고 검색하는** 쪽은 `api-admin`이다 — 어긋나면 복호화가 GCM 인증 태그 불일치로 실패하고 Blind Index 검색은 아무것도 찾지 못한다. 앞의 세 Pepper와 같은 함정이다.
+- **`app.pii.encryption-key` 교체는 다른 비밀값 교체와 성격이 다르다 — 원본이 사라진다.** Pepper를 바꾸면 API Key·초대를 재발급하면 되지만(단방향 Hash라 원문이 어차피 없다), 이쪽은 **되돌려 읽어야 하는 값**이라 키를 잃으면 복구 수단이 없다. 재암호화 절차는 아직 없다(ADR-008의 "남긴 것"). Base64로 인코딩된 32바이트가 아니면 **앱이 아예 뜨지 않는다** — 잘못된 키로 암호화가 시작되면 그 데이터를 되살릴 수 없어서, 늦게 실패하느니 기동을 거부하는 편이 낫다.
+- **암호화 키와 Blind Index Pepper를 나눈 이유**는 새어 나갔을 때의 결과가 다르기 때문이다 — 키가 새면 원문이 드러나고, Pepper가 새면 "같은 값인지"를 대조할 수 있게 된다(사전 공격으로 이메일 후보를 넣어 볼 수 있다).
 - **`app.payment.receiving-wallets.*`는 기동 시 EIP-55 체크섬을 검증하고, 어긋나면 앱이 뜨지 않는다.** 사람이 손으로 옮겨 적는 주소인데 한 글자만 틀려도 형식 검증(`0x` + 40 hex)은 통과하고, 그러면 **고객이 보낸 USDC가 아무도 통제하지 못하는 주소로 가서 되돌릴 수 없다** — EIP-55는 정확히 그 오타를 잡으려고 대소문자에 체크섬을 실은 규약이다. 소문자로만 적힌 주소도 거부한다(체크섬 정보가 없어 검증이 불가능하다) — 지갑은 언제나 체크섬 형태로 보여주므로 복사해 넣으면 통과한다. **오류 메시지에 정규 형태를 찍지 않는다**: 찍으면 운영자가 그 값을 복사해 넣는데, 오타였다면 "체크섬만 맞는 남의 주소"라 오타를 확정시킨다. 계산은 `WalletAddressChecksum` Port(구현은 `modules:infra-support`의 web3j)가 한다 — `modules:application`이 인프라 라이브러리를 쓸 수 없어서다(`PaymentExportWriter`와 같은 판단).
 - **`app.payment.receiving-wallets.*`만 기본값이 없다** — 여기 적힌 다른 값과 달리 "로컬 개발용 기본값"을 만들 수 없는 종류다. 고객이 보낸 실제 테스트넷 USDC가 그 주소로 전송되고 되찾을 수 없어서, 저장소에 적힌 주소가 조용히 쓰이는 것보다 결제 생성이 503으로 실패하는 편이 낫다. 앱 기동 자체는 설정 없이도 정상이다(아래 항목의 "환경변수 없이 `bootRun`"을 지키면서 실패는 결제를 만들 때만 드러낸다). **가맹점이 이 값을 요청으로 지정하지 못하게 하는 것이 이 설정의 목적이다** — 근거는 `docs/architecture/mvp-scope.md`의 "수취 지갑 귀속".
 - 로컬 개발 기본값은 `compose.yaml`의 MySQL(`localhost:3306/stablecoin_payment`, `root`/`verysecret`)과 Base Sepolia 공개 RPC(`https://sepolia.base.org`)를 가리킨다 — 환경변수를 하나도 설정하지 않아도 `bootRun`이 그대로 동작해야 한다는 뜻이다.
+
+## 로깅(`kotlin-logging`)
+
+`io.github.oshai:kotlin-logging-jvm`을 쓴다. 파일 맨 위에 `private val logger = KotlinLogging.logger {}`를 두고 메시지는 한글 람다로 적는다(`apps:batch`의 Tasklet들이 원래 형태다).
+
+- **`modules:domain`과 `modules:application`에는 로거가 없다** — 두 계층의 순수성 규칙(`ApplicationPurityTest`) 때문이다. 로그가 필요하면 그 판단을 부르는 Adapter 쪽(`apps/*` 또는 `modules:infra-*`)에서 남긴다.
+- **로그는 "무엇이 잘못됐는지 운영자가 알아차릴 수 있는가"에만 쓴다.** 요청마다 남기는 접근 로그는 두지 않았다(API 컨트롤러에는 로그가 하나도 없다) — 정상 흐름을 다시 적는 로그는 진짜 신호를 묻는다.
+- **개인정보는 어떤 수준으로도 로그에 남기지 않는다**(ADR-008). 평문은 물론이고 **암호문도 찍지 않는다** — 로그는 `payment_customer`와 달리 파기 대상 밖이라 더 오래 남고, 나중에 키가 새는 순간 그 로그가 곧 평문이 된다. 식별이 필요하면 `paymentId` 같은 공개 ID만 남긴다.
+- **저장소에 적힌 개발용 기본 비밀값을 그대로 들고 뜨면 기동 시점에 WARN을 남긴다**(`AesGcmPiiEncryptor`/`HmacPiiBlindIndexer`). 기동을 막지는 않는다 — 막으면 "환경변수 없이도 `bootRun`이 동작한다"는 규칙이 깨진다. 판별은 기본값 문자열 전체를 코드에 복제하지 않고 `local-dev-only` 표식으로 한다(복제하면 `application.yaml`과 조용히 어긋난다). 새 비밀값을 추가할 때 같은 방식을 따른다.
 
 ## 테스트
 
@@ -283,6 +300,7 @@ inbound adapter → application → domain ← outbound port ← outbound adapte
 | `infra.support.wallet` | `Web3jWalletAddressChecksum`(`WalletAddressChecksum`) — 수취 지갑 EIP-55 검증 | api-payment |
 | `infra.support.webhook` | `HttpWebhookSender`(`WebhookSender`) — 전송만 한다(설정값 없음) | batch |
 | `infra.support.webhooksignature` | `HmacWebhookSigner`(`WebhookSigner`) — 서명 비밀 파생·서명 생성 | api-merchant/batch |
+| `infra.support.pii` | `AesGcmPiiEncryptor`(`PiiEncryptor`) — 구매자 개인정보 양방향 암호화, `HmacPiiBlindIndexer`(`PiiBlindIndexer`) — 검색용 Blind Index | api-payment/api-admin |
 
 - **`modules:common`이 아니라 여기인 이유**: 이 클래스들은 전부 `application.port.outbound`의 Port 구현체(`@Component`)라서 `modules:application`과 Spring에 의존한다 — "의존성 없는 공용 유틸리티"라는 `modules:common`의 역할과 맞지 않는다. 헥사고날 관점에서도 outbound Adapter라 `infra-*` 자리가 맞고, `architecture-tests`의 `HexagonalLayerTest`가 정의한 Outbound Adapter 계층(`paytech.practice.pay.infra..`)에 자동으로 포함되는 실질적 이점도 있다. `modules:common`은 여전히 비어 있다.
 - Pepper 설정값(`app.api-key.pepper`/`app.invitation-token.pepper`)을 다루는 규칙은 아래 "설정과 비밀값" 절에 있다 — **특히 두 앱이 같은 Pepper를 써야 하는 제약**은 어기면 원인 추적이 어려운 방식으로 깨지므로 반드시 읽는다.
@@ -332,6 +350,7 @@ inbound adapter → application → domain ← outbound port ← outbound adapte
 - **`GET`은 종료 상태(만료·취소·완료)도 그대로 돌려준다** — 프론트가 그 화면을 그려야 한다. 상태로 막는 것은 변경 엔드포인트의 몫이다.
 - **통합 테스트가 스키마 제약 하나를 잡아줬다**: `uk_blockchain_payment_type`이 `(payment_seq, transaction_type)`을 UNIQUE로 걸어서 **결제당 `PAYMENT` 거래는 최대 한 건이다.** Projection을 처음에 "재제출로 여러 건이 생길 수 있다"고 보고 `created_at` 내림차순 1건으로 짰다가, 통합 테스트가 제약 위반으로 실패하면서 잘못된 가정임이 드러나 타입으로 정확히 집도록 고쳤다. 그 제약을 근거로 삼는다는 사실을 테스트로 남겨뒀다(제약이 사라지면 그 테스트가 먼저 깨진다).
 - **테스트**: `CancelCheckoutSessionUseCaseTest`/`GetCheckoutSessionUseCaseTest`(단위), `CheckoutViewProjectionAdapterTest`(Testcontainers MySQL 통합, 조인·Confirm 수·스키마 제약), `CheckoutControllerTest`(`@WebMvcTest` + `@Import(SecurityConfig::class)`, 13개 — **인가 회귀 2개 포함**). 여기에 더해 실제 `bootRun` + `curl`로 결제 생성(API Key) → 무인증 조회 → 지갑 연결 → 재연결 409 → Hash 제출 → 상태 폴링 → 제출 후 취소 409 → 재제출 409 → 없는 세션 404 → 취소 200과 취소 후 조회 200까지 전 흐름을 확인했고, **CORS가 체크아웃에만 걸리고 `/api/v1/payments`에는 헤더가 나오지 않는 것**과 **결제 생성이 여전히 401을 내는 것**을 직접 확인했다. 검증 데이터는 정리했다.
+- **구매자 정보 입력(`POST /checkout/sessions/{id}/customer`)이 이 API에 뒤늦게 더해졌다**(ADR-008). 지갑 연결보다 **앞선** 단계라 `CheckoutSession.open()`을 부르는 자리가 이제 둘이다 — API가 순서를 강제하지 않기 때문이고(순서는 프론트가 지킨다), 어느 쪽이 먼저 와도 받는다. 암복호가 Repository 어댑터가 아니라 Use Case 경계에 있는 이유는 `IMPLEMENTATION-NOTES.md`의 해당 절에 있다 — **`infra-persistence`에 개인정보 암호 키를 주입하지 않는다**(네 앱이 그 패키지를 통째로 스캔하므로 키가 닿는 앱이 넷으로 늘어난다).
 - **계약을 바꿀 때는 `docs/architecture/checkout-api.md`를 먼저 고친다** — 프론트엔드가 그 문서만 보고 작업하기로 돼 있어서, 구현만 바꾸면 프론트가 조용히 어긋난다.
 
 ## 기능별 구현 기록은 별도 문서에 있다

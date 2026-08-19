@@ -19,6 +19,7 @@ import paytech.practice.pay.api.payment.config.SecurityConfig
 import paytech.practice.pay.application.apikey.AuthenticateApiKeyUseCase
 import paytech.practice.pay.application.checkout.CancelCheckoutSessionResult
 import paytech.practice.pay.application.checkout.CancelCheckoutSessionUseCase
+import paytech.practice.pay.application.checkout.CheckoutCustomerNotEditableException
 import paytech.practice.pay.application.checkout.CheckoutSessionExpiredException
 import paytech.practice.pay.application.checkout.CheckoutSessionNotCancellableException
 import paytech.practice.pay.application.checkout.CheckoutSessionNotFoundException
@@ -26,6 +27,8 @@ import paytech.practice.pay.application.checkout.ConnectCheckoutWalletResult
 import paytech.practice.pay.application.checkout.ConnectCheckoutWalletUseCase
 import paytech.practice.pay.application.checkout.GetCheckoutSessionUseCase
 import paytech.practice.pay.application.checkout.GetCheckoutStatusUseCase
+import paytech.practice.pay.application.checkout.SubmitCheckoutCustomerResult
+import paytech.practice.pay.application.checkout.SubmitCheckoutCustomerUseCase
 import paytech.practice.pay.application.payment.SubmitPaymentTransactionUseCase
 import paytech.practice.pay.application.port.outbound.CheckoutSessionView
 import paytech.practice.pay.application.port.outbound.CheckoutStatusView
@@ -111,6 +114,9 @@ class CheckoutControllerTest : FunSpec() {
 	lateinit var getCheckoutStatusUseCase: GetCheckoutStatusUseCase
 
 	@MockkBean
+	lateinit var submitCheckoutCustomerUseCase: SubmitCheckoutCustomerUseCase
+
+	@MockkBean
 	lateinit var connectCheckoutWalletUseCase: ConnectCheckoutWalletUseCase
 
 	@MockkBean
@@ -166,6 +172,60 @@ class CheckoutControllerTest : FunSpec() {
 				.perform(get("/checkout/sessions/${SESSION_ID.value}/status"))
 				.andExpect(status().isOk)
 				.andExpect(jsonPath("$.redirectUrl").value("https://merchant.example.com/done"))
+		}
+
+		test("POST customer returns 200 without authentication and echoes masked values only") {
+			every { submitCheckoutCustomerUseCase.execute(any()) } returns
+				SubmitCheckoutCustomerResult(
+					checkoutSessionId = SESSION_ID,
+					checkoutSessionStatus = CheckoutSessionStatus.OPEN,
+					maskedName = "홍*동",
+					maskedEmail = "gi***@example.com",
+					maskedPhone = "010-****-5678",
+				)
+
+			mockMvc
+				.perform(
+					post("/checkout/sessions/${SESSION_ID.value}/customer")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(
+							objectMapper.writeValueAsString(
+								SubmitCustomerRequest("홍길동", "gildong@example.com", "010-1234-5678"),
+							),
+						),
+				).andExpect(status().isOk)
+				.andExpect(jsonPath("$.checkoutSessionStatus").value("OPEN"))
+				.andExpect(jsonPath("$.maskedEmail").value("gi***@example.com"))
+		}
+
+		/** 형식 검증은 도메인 VO가 한다 — 컨트롤러는 그 예외를 400으로 흘려보낸다. */
+		test("a malformed email returns 400") {
+			mockMvc
+				.perform(
+					post("/checkout/sessions/${SESSION_ID.value}/customer")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(
+							objectMapper.writeValueAsString(
+								SubmitCustomerRequest("홍길동", "not-an-email", "010-1234-5678"),
+							),
+						),
+				).andExpect(status().isBadRequest)
+		}
+
+		test("submitting customer info after the payment was submitted returns 409") {
+			every { submitCheckoutCustomerUseCase.execute(any()) } throws
+				CheckoutCustomerNotEditableException(SESSION_ID, CheckoutSessionStatus.PAYMENT_SUBMITTED)
+
+			mockMvc
+				.perform(
+					post("/checkout/sessions/${SESSION_ID.value}/customer")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(
+							objectMapper.writeValueAsString(
+								SubmitCustomerRequest("홍길동", "gildong@example.com", "010-1234-5678"),
+							),
+						),
+				).andExpect(status().isConflict)
 		}
 
 		test("POST wallet returns 200 without authentication") {

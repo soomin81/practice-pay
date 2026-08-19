@@ -36,3 +36,4 @@
 - [ADR-005 정산 경계](decisions/ADR-005-settlement-boundary.md)
 - [ADR-006 관리자 계정과 가맹점 API Key 분리](decisions/ADR-006-identity-api-key-separation.md)
 - [ADR-007 온체인 비가역성과 금액 불일치 처리](decisions/ADR-007-onchain-irreversibility.md)
+- [ADR-008 구매자 개인정보 — 받되, 읽는 경로를 좁힌다](decisions/ADR-008-customer-pii.md)

@@ -13,12 +13,17 @@ import paytech.practice.pay.application.checkout.ConnectCheckoutWalletCommand
 import paytech.practice.pay.application.checkout.ConnectCheckoutWalletUseCase
 import paytech.practice.pay.application.checkout.GetCheckoutSessionUseCase
 import paytech.practice.pay.application.checkout.GetCheckoutStatusUseCase
+import paytech.practice.pay.application.checkout.SubmitCheckoutCustomerCommand
+import paytech.practice.pay.application.checkout.SubmitCheckoutCustomerUseCase
 import paytech.practice.pay.application.payment.PaymentNetworkConfig
 import paytech.practice.pay.application.payment.SubmitPaymentTransactionCommand
 import paytech.practice.pay.application.payment.SubmitPaymentTransactionUseCase
 import paytech.practice.pay.application.port.outbound.CheckoutSessionView
 import paytech.practice.pay.domain.blockchain.TransactionHash
 import paytech.practice.pay.domain.checkout.CheckoutSessionId
+import paytech.practice.pay.domain.customer.CustomerEmail
+import paytech.practice.pay.domain.customer.CustomerName
+import paytech.practice.pay.domain.customer.CustomerPhone
 import paytech.practice.pay.domain.payment.PaymentStatus
 import paytech.practice.pay.domain.shared.WalletAddress
 
@@ -41,6 +46,7 @@ import paytech.practice.pay.domain.shared.WalletAddress
 class CheckoutController(
 	private val getCheckoutSessionUseCase: GetCheckoutSessionUseCase,
 	private val getCheckoutStatusUseCase: GetCheckoutStatusUseCase,
+	private val submitCheckoutCustomerUseCase: SubmitCheckoutCustomerUseCase,
 	private val connectCheckoutWalletUseCase: ConnectCheckoutWalletUseCase,
 	private val submitPaymentTransactionUseCase: SubmitPaymentTransactionUseCase,
 	private val cancelCheckoutSessionUseCase: CancelCheckoutSessionUseCase,
@@ -65,6 +71,36 @@ class CheckoutController(
 			failureReason = view.failureReason?.name,
 			// 성공했을 때만 돌아갈 곳을 알려준다 — 프론트가 리다이렉트 시점을 스스로 추론하지 않게 한다.
 			redirectUrl = view.successUrl.value.takeIf { view.paymentStatus == PaymentStatus.SUCCEEDED },
+		)
+	}
+
+	/**
+	 * 구매자 정보(이름·이메일·휴대전화)를 받는다 — **지갑 연결보다 앞선 단계**다(ADR-008).
+	 *
+	 * 서명 이후에 입력을 요구하면 돈은 나갔는데 결제가 미완인 창이 생긴다. 순서를 강제하는
+	 * 것은 프론트이고, API는 `PAYMENT_SUBMITTED` 전이라면 받는다.
+	 */
+	@PostMapping("/{checkoutSessionId}/customer")
+	fun submitCustomer(
+		@PathVariable checkoutSessionId: String,
+		@Valid @RequestBody request: SubmitCustomerRequest,
+	): SubmitCustomerResponse {
+		val command =
+			SubmitCheckoutCustomerCommand(
+				checkoutSessionId = CheckoutSessionId(checkoutSessionId),
+				name = CustomerName(request.name),
+				email = CustomerEmail(request.email),
+				phone = CustomerPhone(request.phone),
+			)
+
+		val result = submitCheckoutCustomerUseCase.execute(command)
+
+		return SubmitCustomerResponse(
+			checkoutSessionId = result.checkoutSessionId.value,
+			checkoutSessionStatus = result.checkoutSessionStatus.name,
+			maskedName = result.maskedName,
+			maskedEmail = result.maskedEmail,
+			maskedPhone = result.maskedPhone,
 		)
 	}
 

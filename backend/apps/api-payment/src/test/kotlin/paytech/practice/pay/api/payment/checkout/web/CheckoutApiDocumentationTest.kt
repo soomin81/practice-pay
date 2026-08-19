@@ -31,6 +31,8 @@ import paytech.practice.pay.application.checkout.ConnectCheckoutWalletResult
 import paytech.practice.pay.application.checkout.ConnectCheckoutWalletUseCase
 import paytech.practice.pay.application.checkout.GetCheckoutSessionUseCase
 import paytech.practice.pay.application.checkout.GetCheckoutStatusUseCase
+import paytech.practice.pay.application.checkout.SubmitCheckoutCustomerResult
+import paytech.practice.pay.application.checkout.SubmitCheckoutCustomerUseCase
 import paytech.practice.pay.application.payment.SubmitPaymentTransactionResult
 import paytech.practice.pay.application.payment.SubmitPaymentTransactionUseCase
 import paytech.practice.pay.application.port.outbound.CheckoutSessionView
@@ -153,6 +155,9 @@ class CheckoutApiDocumentationTest : FunSpec() {
 
 	@MockkBean
 	lateinit var getCheckoutStatusUseCase: GetCheckoutStatusUseCase
+
+	@MockkBean
+	lateinit var submitCheckoutCustomerUseCase: SubmitCheckoutCustomerUseCase
 
 	@MockkBean
 	lateinit var connectCheckoutWalletUseCase: ConnectCheckoutWalletUseCase
@@ -284,6 +289,54 @@ class CheckoutApiDocumentationTest : FunSpec() {
 				.perform(get("/checkout/sessions/{checkoutSessionId}/status", SESSION_ID.value))
 				.andExpect(status().isOk)
 				.andDo(document("checkout-get-status", snippet))
+		}
+
+		test("document POST submit customer") {
+			every { submitCheckoutCustomerUseCase.execute(any()) } returns
+				SubmitCheckoutCustomerResult(
+					checkoutSessionId = SESSION_ID,
+					checkoutSessionStatus = CheckoutSessionStatus.OPEN,
+					maskedName = "홍*동",
+					maskedEmail = "gi***@example.com",
+					maskedPhone = "010-****-5678",
+				)
+
+			val snippet =
+				checkoutResource(
+					summary = "구매자 정보 입력",
+					description =
+						"고객이 이름·이메일·휴대전화를 직접 입력한다. 지갑 연결보다 앞선 단계다 — 서명 이후에 " +
+							"입력을 요구하면 돈은 나갔는데 결제가 미완인 창이 생긴다. 다시 호출하면 덮어쓰고, " +
+							"결제 전송을 제출한 뒤에는 409다.",
+					requestSchema = "SubmitCustomerRequest",
+					requestFields =
+						listOf(
+							fieldWithPath("name").description("구매자 이름(100자 이내)"),
+							fieldWithPath("email").description("구매자 이메일. 결제에 문제가 생겼을 때의 주 연락 수단이다"),
+							fieldWithPath("phone").description("국내 휴대전화 번호(01X-XXXX-XXXX, 하이픈은 있어도 없어도 된다)"),
+						),
+					responseSchema = "SubmitCustomerResponse",
+					responseFields =
+						listOf(
+							fieldWithPath("checkoutSessionId").description("체크아웃 세션 식별자"),
+							fieldWithPath("checkoutSessionStatus").description("CREATED였다면 이 호출로 OPEN이 된다"),
+							fieldWithPath("maskedName").description("마스킹된 이름. 응답에는 원본이 실리지 않는다"),
+							fieldWithPath("maskedEmail").description("마스킹된 이메일"),
+							fieldWithPath("maskedPhone").description("마스킹된 휴대전화 번호"),
+						),
+				)
+
+			mockMvc
+				.perform(
+					post("/checkout/sessions/{checkoutSessionId}/customer", SESSION_ID.value)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(
+							objectMapper.writeValueAsString(
+								SubmitCustomerRequest("홍길동", "gildong@example.com", "010-1234-5678"),
+							),
+						),
+				).andExpect(status().isOk)
+				.andDo(document("checkout-submit-customer", snippet))
 		}
 
 		test("document POST connect wallet") {

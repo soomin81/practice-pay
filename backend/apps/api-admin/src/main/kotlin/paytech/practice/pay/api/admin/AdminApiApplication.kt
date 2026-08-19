@@ -22,6 +22,9 @@ import org.springframework.boot.runApplication
 		// (PaymentApiApplication의 같은 주석 참고 — 환율 Provider는 이 앱에 필요 없다).
 		"paytech.practice.pay.infra.support.id",
 		"paytech.practice.pay.infra.support.security",
+		// 구매자 개인정보 암복호(AesGcmPiiEncryptor)와 Blind Index(HmacPiiBlindIndexer) — ADR-008.
+		// 이 앱은 원본 조회와 검색을 하므로 둘 다 필요하다.
+		"paytech.practice.pay.infra.support.pii",
 		// 결제 내역 .xlsx 내보내기(XlsxPaymentExportWriter).
 		"paytech.practice.pay.infra.support.export",
 	],
