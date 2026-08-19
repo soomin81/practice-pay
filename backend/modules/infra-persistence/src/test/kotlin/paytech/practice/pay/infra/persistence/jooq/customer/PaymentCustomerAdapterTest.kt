@@ -6,6 +6,7 @@ import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import paytech.practice.pay.application.port.outbound.EncryptedPaymentCustomer
 import paytech.practice.pay.dbcore.jooq.tables.CustomerPiiAccessAudit.Companion.CUSTOMER_PII_ACCESS_AUDIT
+import paytech.practice.pay.dbcore.jooq.tables.Payment.Companion.PAYMENT
 import paytech.practice.pay.dbcore.jooq.tables.PaymentCustomer.Companion.PAYMENT_CUSTOMER
 import paytech.practice.pay.domain.customer.CustomerPiiAccessAudit
 import paytech.practice.pay.domain.customer.CustomerPiiAccessAuditId
@@ -19,6 +20,7 @@ import paytech.practice.pay.infra.persistence.jooq.PersistenceTestSupport
 import paytech.practice.pay.infra.persistence.jooq.identity.InternalUserRepositoryAdapter
 import paytech.practice.pay.infra.persistence.jooq.insertTestMerchant
 import paytech.practice.pay.infra.persistence.jooq.insertTestPayment
+import paytech.practice.pay.infra.persistence.jooq.toUtcLocalDateTime
 import paytech.practice.pay.infra.persistence.jooq.uniqueSuffix
 import java.time.Instant
 
@@ -31,6 +33,14 @@ private val NOW: Instant = Instant.parse("2026-08-19T00:00:00Z")
  */
 private fun ciphertext(): String = "enc." + "A".repeat(200) + uniqueSuffix()
 
+/**
+ * `CHAR(64)`를 채우는 가짜 Blind Index.
+ *
+ * **테스트마다 다른 값이어야 한다** — 검색은 인덱스가 같은 행을 전부 찾으므로, 고정값을 쓰면
+ * 앞 테스트가 넣어 둔 행이 뒤 테스트 결과에 섞인다(같은 DB를 공유한다).
+ */
+private fun index(seed: String = uniqueSuffix()): String = (seed + "0".repeat(64)).take(64)
+
 private fun savedPaymentId(): PaymentId = PaymentId(insertTestPayment(insertTestMerchant()))
 
 private fun encrypted(
@@ -38,6 +48,8 @@ private fun encrypted(
 	id: PaymentCustomerId = PaymentCustomerId("pcu_${uniqueSuffix()}"),
 	emailEncrypted: String = ciphertext(),
 	emailMasked: String = "gi***@example.com",
+	emailIndex: String = index("a"),
+	phoneIndex: String = index("b"),
 	updatedAt: Instant = NOW,
 ): EncryptedPaymentCustomer =
 	EncryptedPaymentCustomer(
@@ -49,10 +61,10 @@ private fun encrypted(
 		emailEncrypted = emailEncrypted,
 		emailMasked = emailMasked,
 		// Blind Index는 CHAR(64)다 — hex SHA-256의 길이와 정확히 같아야 한다.
-		emailIndex = "a".repeat(64),
+		emailIndex = emailIndex,
 		phoneEncrypted = ciphertext(),
 		phoneMasked = "010-****-5678",
-		phoneIndex = "b".repeat(64),
+		phoneIndex = phoneIndex,
 		createdAt = NOW,
 		updatedAt = updatedAt,
 	)
@@ -76,6 +88,7 @@ class PaymentCustomerAdapterTest :
 		val dsl = PersistenceTestSupport.dsl
 		val repository = PaymentCustomerRepositoryAdapter(dsl)
 		val auditRecorder = CustomerPiiAccessAuditRepositoryAdapter(dsl)
+		val searchProjection = PaymentCustomerSearchProjectionAdapter(dsl)
 
 		test("saves and restores every column unchanged") {
 			val paymentId = savedPaymentId()
@@ -148,6 +161,59 @@ class PaymentCustomerAdapterTest :
 			row.shouldNotBeNull()
 			row.reason shouldBe "결제 실패 문의 대응"
 			row.clientIp shouldBe "203.0.113.7"
+		}
+
+		test("search finds a row by its email index and returns masked values only") {
+			val paymentId = savedPaymentId()
+			val emailIndex = index()
+			repository.save(encrypted(paymentId, emailIndex = emailIndex))
+
+			val matches = searchProjection.findByEmailIndex(emailIndex)
+
+			matches.size shouldBe 1
+			matches.first().paymentId shouldBe paymentId
+			matches.first().emailMasked shouldBe "gi***@example.com"
+			// 조인해 온 결제·가맹점 정보도 함께 와야 운영자가 어느 결제인지 알아본다.
+			matches.first().merchantName shouldBe "테스트 가맹점"
+			matches.first().orderName shouldBe "테스트 주문"
+		}
+
+		test("search finds a row by its phone index") {
+			val paymentId = savedPaymentId()
+			val phoneIndex = index()
+			repository.save(encrypted(paymentId, phoneIndex = phoneIndex))
+
+			searchProjection.findByPhoneIndex(phoneIndex).map { it.paymentId } shouldBe listOf(paymentId)
+		}
+
+		/** 같은 사람이 여러 번 결제하는 것이 정상이다 — 문의를 받으면 최근 것부터 본다. */
+		test("search returns every payment of the same person, newest first") {
+			val emailIndex = index()
+			val older = savedPaymentId()
+			val newer = savedPaymentId()
+			repository.save(encrypted(older, emailIndex = emailIndex))
+			repository.save(encrypted(newer, emailIndex = emailIndex))
+			// created_at이 같은 값으로 심기므로 순서를 실제로 벌려 둔다.
+			PersistenceTestSupport.dsl
+				.update(PAYMENT)
+				.set(PAYMENT.CREATED_AT, NOW.minusSeconds(3_600).toUtcLocalDateTime())
+				.where(PAYMENT.PAYMENT_ID.eq(older.value))
+				.execute()
+
+			searchProjection.findByEmailIndex(emailIndex).map { it.paymentId } shouldBe listOf(newer, older)
+		}
+
+		test("an index that matches nothing returns an empty list") {
+			searchProjection.findByEmailIndex(index()) shouldBe emptyList()
+		}
+
+		/** 이메일로 찾을 때 휴대전화 인덱스가 걸리면 두 컬럼을 뒤바꿔 쓴 것이다. */
+		test("the email search does not match on the phone index") {
+			val paymentId = savedPaymentId()
+			val phoneIndex = index()
+			repository.save(encrypted(paymentId, phoneIndex = phoneIndex))
+
+			searchProjection.findByEmailIndex(phoneIndex) shouldBe emptyList()
 		}
 
 		/** 프록시 뒤에서는 IP를 알 수 없을 수 있다 — 없다고 열람을 막지는 않는다. */

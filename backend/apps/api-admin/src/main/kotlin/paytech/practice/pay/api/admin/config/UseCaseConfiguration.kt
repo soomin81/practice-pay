@@ -2,6 +2,9 @@ package paytech.practice.pay.api.admin.config
 
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import paytech.practice.pay.application.customer.PaymentCustomerCrypto
+import paytech.practice.pay.application.customer.RevealPaymentCustomerUseCase
+import paytech.practice.pay.application.customer.SearchPaymentCustomersUseCase
 import paytech.practice.pay.application.identity.AcceptAccountInvitationUseCase
 import paytech.practice.pay.application.identity.AdminChangeMerchantUserRoleUseCase
 import paytech.practice.pay.application.identity.AdminChangeMerchantUserStatusUseCase
@@ -21,6 +24,7 @@ import paytech.practice.pay.application.payment.ListPaymentsUseCase
 import paytech.practice.pay.application.payment.MarkTransactionReorgedUseCase
 import paytech.practice.pay.application.port.outbound.AccountInvitationRepository
 import paytech.practice.pay.application.port.outbound.BlockchainTransactionRepository
+import paytech.practice.pay.application.port.outbound.CustomerPiiAccessAuditRepository
 import paytech.practice.pay.application.port.outbound.IdGenerator
 import paytech.practice.pay.application.port.outbound.InternalLoginAuditProjection
 import paytech.practice.pay.application.port.outbound.InternalLoginAuditRepository
@@ -34,9 +38,14 @@ import paytech.practice.pay.application.port.outbound.MerchantUserListProjection
 import paytech.practice.pay.application.port.outbound.MerchantUserRepository
 import paytech.practice.pay.application.port.outbound.OutboxEventRepository
 import paytech.practice.pay.application.port.outbound.PasswordEncoder
+import paytech.practice.pay.application.port.outbound.PaymentCustomerRepository
+import paytech.practice.pay.application.port.outbound.PaymentCustomerSearchProjection
 import paytech.practice.pay.application.port.outbound.PaymentDetailProjection
 import paytech.practice.pay.application.port.outbound.PaymentExportWriter
 import paytech.practice.pay.application.port.outbound.PaymentListProjection
+import paytech.practice.pay.application.port.outbound.PaymentRepository
+import paytech.practice.pay.application.port.outbound.PiiBlindIndexer
+import paytech.practice.pay.application.port.outbound.PiiEncryptor
 import paytech.practice.pay.application.port.outbound.SettlementExportWriter
 import paytech.practice.pay.application.port.outbound.SettlementHoldAuditProjection
 import paytech.practice.pay.application.port.outbound.SettlementHoldAuditRepository
@@ -270,6 +279,51 @@ class UseCaseConfiguration {
 		RedeliverWebhookUseCase(
 			webhookDeliveryRepository = webhookDeliveryRepository,
 			outboxEventRepository = outboxEventRepository,
+			transactionManager = transactionManager,
+			clock = clock,
+		)
+
+	// ── 구매자 개인정보(ADR-008) ──────────────────────────────────────────────
+	// 이 앱은 **읽는 쪽**이다(쓰는 쪽은 api-payment). 그래서 두 앱만 PaymentCustomerCrypto를
+	// 조립하고, 나머지 두 앱은 AES 키 설정 자체가 필요 없다 — 어댑터가 아니라 여기서
+	// 조립하는 이유다(Port의 KDoc 참고).
+
+	@Bean
+	fun paymentCustomerCrypto(
+		piiEncryptor: PiiEncryptor,
+		piiBlindIndexer: PiiBlindIndexer,
+	): PaymentCustomerCrypto =
+		PaymentCustomerCrypto(
+			piiEncryptor = piiEncryptor,
+			piiBlindIndexer = piiBlindIndexer,
+		)
+
+	@Bean
+	fun searchPaymentCustomersUseCase(
+		paymentCustomerSearchProjection: PaymentCustomerSearchProjection,
+		paymentCustomerCrypto: PaymentCustomerCrypto,
+	): SearchPaymentCustomersUseCase =
+		SearchPaymentCustomersUseCase(
+			paymentCustomerSearchProjection = paymentCustomerSearchProjection,
+			paymentCustomerCrypto = paymentCustomerCrypto,
+		)
+
+	@Bean
+	fun revealPaymentCustomerUseCase(
+		paymentRepository: PaymentRepository,
+		paymentCustomerRepository: PaymentCustomerRepository,
+		paymentCustomerCrypto: PaymentCustomerCrypto,
+		customerPiiAccessAuditRepository: CustomerPiiAccessAuditRepository,
+		idGenerator: IdGenerator,
+		transactionManager: TransactionManager,
+		clock: Clock,
+	): RevealPaymentCustomerUseCase =
+		RevealPaymentCustomerUseCase(
+			paymentRepository = paymentRepository,
+			paymentCustomerRepository = paymentCustomerRepository,
+			paymentCustomerCrypto = paymentCustomerCrypto,
+			customerPiiAccessAuditRepository = customerPiiAccessAuditRepository,
+			idGenerator = idGenerator,
 			transactionManager = transactionManager,
 			clock = clock,
 		)

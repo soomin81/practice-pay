@@ -5,6 +5,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestControllerAdvice
+import paytech.practice.pay.application.customer.PaymentCustomerNotFoundException
 import paytech.practice.pay.application.identity.AccountLockedException
 import paytech.practice.pay.application.identity.DuplicateInternalUserException
 import paytech.practice.pay.application.identity.DuplicateMerchantException
@@ -57,6 +58,14 @@ class AdminApiExceptionHandler {
 	@ExceptionHandler(InternalUserNotFoundException::class)
 	@ResponseStatus(HttpStatus.NOT_FOUND)
 	fun handleInternalUserNotFound(ex: InternalUserNotFoundException): ErrorResponse = ErrorResponse(ex.message ?: "내부 운영자를 찾을 수 없습니다.")
+
+	/**
+	 * 결제가 없는 경우와 **구분하지 않는다**(계약 4.8) — 나눠서 알려주면 "그 결제는 존재한다"가
+	 * 응답으로 새어 나간다.
+	 */
+	@ExceptionHandler(PaymentCustomerNotFoundException::class)
+	@ResponseStatus(HttpStatus.NOT_FOUND)
+	fun handlePaymentCustomerNotFound(ex: PaymentCustomerNotFoundException): ErrorResponse = ErrorResponse(ex.message ?: "구매자 정보를 찾을 수 없습니다.")
 
 	@ExceptionHandler(PaymentNotFoundException::class)
 	@ResponseStatus(HttpStatus.NOT_FOUND)

@@ -116,6 +116,15 @@ class SecurityConfig {
 				// (GET .../hold-history)가 있고, 이력을 읽는 것은 상태를 바꾸는 것과 다른
 				// 권한이라 VIEWER에게도 열어 둔다.
 				authorize(HttpMethod.POST, "/admin/settlement-receivables/**", hasRole("SUPER_ADMIN"))
+				// 구매자 개인정보(ADR-008). **두 줄의 순서가 중요하다** — 더 좁은 규칙이 먼저
+				// 와야 한다. 원본 열람은 응답에 평문이 실리는 유일한 경로라 SUPER_ADMIN
+				// 전용이고, 검색은 마스킹된 값만 돌려주므로 SUPER_ADMIN/OPERATOR다(그 아래로
+				// 좁히면 이 기능을 만든 이유인 CS 대응 자체가 불가능해진다).
+				//
+				// VIEWER는 검색도 막는다 — 개인정보를 키로 삼는 조회는 목록을 훑는 것과
+				// 성격이 다르다.
+				authorize(HttpMethod.POST, "/admin/payment-customers/*/reveal", hasRole("SUPER_ADMIN"))
+				authorize("/admin/payment-customers/**", hasAnyRole("SUPER_ADMIN", "OPERATOR"))
 				authorize(anyRequest, authenticated)
 			}
 		}

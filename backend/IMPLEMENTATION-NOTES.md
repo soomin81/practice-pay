@@ -738,10 +738,88 @@ gap은 **환경변수로 들어온 실제 키로 암호화한 값이 진짜 MySQ
 
 ### 남긴 것
 
-- **원본 열람(`api-admin`)과 Blind Index 검색이 아직 없다.** 도메인
-  `CustomerPiiAccessAudit`과 두 Repository 어댑터까지는 있고, 그것을 부르는 Use Case가 없다 —
-  `CustomerPiiAccessAuditRepositoryAdapter`는 지금 호출부가 없는 상태다.
+- ~~원본 열람과 Blind Index 검색이 없다~~ — 아래 절에서 붙였다.
 - ~~체크아웃 화면에 입력 단계가 없다~~ — `frontend/payment`의 `CustomerForm`이 채웠다(지갑 단계보다 앞에 두고, 순서는 `PayScreen`이 강제한다).
 - **`GET /checkout/sessions/{id}`가 입력 여부를 알려주지 않는다** — 새로고침한 고객은 입력
   화면을 다시 만난다(다시 제출하면 덮어쓰므로 결과는 같다). 판단 근거는
   `docs/architecture/checkout-api.md`의 8절에 적었다.
+
+## 구매자 원본 열람과 검색(`api-admin`) — 읽기에 감사를 붙인 자리
+
+ADR-008이 정한 것(SUPER_ADMIN만, 열람마다 기록, 가맹점 콘솔에는 없음)은 그 문서에 있다.
+여기는 구현하면서 갈렸던 자리다.
+
+### 권한을 한 등급으로 묶지 않았다
+
+`/admin/payment-customers/**`를 통째로 `SUPER_ADMIN`으로 잠그는 편이 규칙은 단순하다
+(`/admin/blockchain-transactions/**`가 그렇게 돼 있다). 그렇게 하지 않은 이유는 **검색까지
+좁히면 이 기능을 만든 이유가 사라지기** 때문이다 — ADR-008이 개인정보를 받기로 한 근거 중
+하나가 "가맹점 CS의 '제 주문 어떻게 됐나요'"인데, 그 대응을 하는 것은 OPERATOR다.
+
+갈라진 기준은 **응답에 원문이 실리는가**다.
+
+| 경로 | 권한 | 응답 |
+|---|---|---|
+| `GET /admin/payment-customers` | SUPER_ADMIN/OPERATOR | 마스킹만 |
+| `POST /admin/payment-customers/{paymentId}/reveal` | **SUPER_ADMIN만** | 원문 + 감사 기록 |
+
+`SecurityConfig`에서 **좁은 규칙을 먼저 쓴다**(`POST .../*/reveal` → 그다음 `/**`). 순서가
+뒤집히면 OPERATOR가 열람까지 하게 되는데, 그 회귀는 테스트가 없으면 조용히 지나간다 —
+`AdminPaymentCustomerControllerTest`의 "OPERATOR can search but cannot reveal"이 그 자리다.
+
+VIEWER는 검색도 막았다. **개인정보를 키로 삼는 조회는 목록을 훑는 것과 성격이 다르다** —
+결제 목록(`GET /admin/payments`)이 VIEWER에게 열려 있는 것과 대비된다.
+
+### 열람이 `GET`이 아니라 `POST`인 이유
+
+읽기처럼 보이지만 **감사 기록을 남기는 쓰기**다. `GET`으로 두면 브라우저 프리페치·링크
+미리보기·캐시가 사람의 의도 없이 열람을 일으킬 수 있는데, 이 자료는 "봤다"는 사실 자체가
+사건이라 그런 경로가 있으면 안 된다. CSRF도 그래서 따라온다.
+
+### 없는 결제를 앞에서 막아야 했다 — 안 그러면 404가 500이 된다
+
+`PaymentCustomerRepositoryAdapter.findByPaymentId`는 `dsl.paymentSeq(paymentId)`로 seq를
+푸는데, 그 공용 헬퍼는 **없는 값이면 `error(...)`로 즉시 실패한다**(FK 대상의 존재를 호출부가
+보장한다는 전제다 — `SeqResolution`의 KDoc). 없는 결제 ID로 열람을 부르면 `404`여야 할
+요청이 `500`으로 나간다.
+
+그래서 Use Case가 `PaymentRepository.findById`로 먼저 확인한다. **공용 헬퍼의 의미를 바꾸지
+않은 것**이 판단의 핵심이다 — nullable 변형을 하나 더 만들면 다른 12개 어댑터가 "어느 쪽을
+써야 하나"를 매번 고르게 된다.
+
+결제가 없는 경우와 구매자 정보가 없는 경우는 **같은 예외**다(`PaymentCustomerNotFoundException`).
+나눠서 알려주면 "그 결제는 존재한다"가 응답으로 새어 나간다.
+
+### 검색 Port는 인덱스 문자열을 받는다
+
+`findByEmailIndex(emailIndex: String)`이지 `findByEmail(email)`이 아니다. 인덱스 계산은
+`PaymentCustomerCrypto`(application)가 하고, 어댑터는 받은 문자열로 컬럼을 비교만 한다 —
+**`modules:infra-persistence`에 Pepper를 주지 않으려는 것**이고, 암복호를 Use Case 경계에 둔
+것과 같은 이유다.
+
+어제 YAGNI로 지웠던 `emailIndex`/`phoneIndex` 헬퍼를 여기서 되살렸다. 지운 판단도 되살린
+판단도 같은 기준이었다 — **호출부가 생겼을 때 만든다.**
+
+### 테스트
+
+- `SearchPaymentCustomersUseCaseTest`(5) — **복호화를 부르면 터지는 가짜 암호화**를 끼웠다.
+  검색이 복호화 경로를 타지 않는다는 약속을 구조로 확인하는 것이지 눈으로 보는 게 아니다.
+  정규화된 값으로 인덱스를 만드는지, 두 조건을 AND로 걸지 못하게 막는지도 고정했다.
+- `RevealPaymentCustomerUseCaseTest`(6) — 누가·왜·어디서를 기록하는지, **기록에 원문이 담기지
+  않는지**, 사유가 비면 복호화 자체를 시도하지 않는지.
+- `PaymentCustomerAdapterTest`에 검색 5개 추가 — 실제 MySQL에서 조인·정렬·컬럼 혼동(이메일
+  검색이 전화 인덱스에 걸리지 않는지)을 본다. **Blind Index 값을 테스트마다 유일하게 만든다**:
+  같은 DB를 공유하므로 고정값을 쓰면 앞 테스트의 행이 뒤 테스트 결과에 섞인다.
+- `AdminPaymentCustomerControllerTest`(13) — 역할 셋을 전부 박았다. 이 컨트롤러에서 가장
+  위험한 회귀는 기능이 안 되는 것이 아니라 **권한이 넓어지는 것**이다.
+
+### 남긴 것
+
+- **결제 상세(4.1.1)에 마스킹된 구매자 정보가 없다.** 지금은 검색이 유일한 입구라, 결제를
+  먼저 찾은 운영자는 그 결제에 구매자 정보가 있는지조차 모른다. 넣으려면 가맹점 콘솔의 같은
+  엔드포인트도 함께 봐야 한다(ADR-008은 가맹점도 마스킹은 본다고 정해 두었다).
+- **열람 감사를 읽는 경로가 없다.** `customer_pii_access_audit`에 쌓이기만 한다 — 로그인
+  감사와 같은 모양이면 된다.
+- **관리자 화면(`frontend/admin`)이 없다.** 백엔드만 붙었다.
+- 검색어가 URL 쿼리로 들어간다(접근 로그에 남는다). 내부 전용이라 지금은 감수하고, 문제가
+  되면 `POST` 검색으로 옮긴다.

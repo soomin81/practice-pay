@@ -71,4 +71,16 @@ class PaymentCustomerCrypto(
 			createdAt = encrypted.createdAt,
 			updatedAt = encrypted.updatedAt,
 		)
+
+	/**
+	 * 검색용 Blind Index를 만든다 — 저장할 때 쓴 것과 **같은 계산**이어야 찾을 수 있다.
+	 *
+	 * `SearchPaymentCustomersUseCase`가 쓴다. 계산을 여기 두는 이유는 [encrypt]와 같다:
+	 * `modules:infra-persistence`에 Pepper를 주지 않으려는 것이다 — 검색 Port는 이미 만들어진
+	 * 인덱스 문자열만 받아 컬럼을 비교한다.
+	 */
+	fun emailIndex(email: CustomerEmail): String = piiBlindIndexer.index(email.normalized)
+
+	/** 검색용 Blind Index를 만든다([emailIndex]와 같은 이유). */
+	fun phoneIndex(phone: CustomerPhone): String = piiBlindIndexer.index(phone.normalized)
 }
